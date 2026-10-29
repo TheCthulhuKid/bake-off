@@ -1,0 +1,100 @@
+{
+  "impl": "pydanticai",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output formatting and the planned help-page customization work",
+        "issues": [
+          3652,
+          2778,
+          3362,
+          3097,
+          3094,
+          3089,
+          3016,
+          3010,
+          2882,
+          2881,
+          2683,
+          2679,
+          561,
+          373
+        ]
+      },
+      {
+        "name": "Rewriting the parser and the Click 9.0 cleanup",
+        "issues": [
+          3156,
+          3154,
+          2834,
+          2835,
+          2205,
+          590,
+          2824,
+          2992,
+          742,
+          730,
+          1279
+        ]
+      },
+      {
+        "name": "Color output and styling of errors",
+        "issues": [
+          3022,
+          2781,
+          944,
+          2419,
+          2740
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2917,
+          2847,
+          2614,
+          2303,
+          2184,
+          2299
+        ]
+      },
+      {
+        "name": "Prompts, the pager, the editor and stdin handling",
+        "issues": [
+          1370,
+          304,
+          2875,
+          3886,
+          3840,
+          2154
+        ]
+      },
+      {
+        "name": "Typing, async support and the public API",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          3036,
+          2493,
+          2033,
+          2360,
+          2361,
+          2706
+        ]
+      }
+    ],
+    "duplicates": [],
+    "top_issues": [],
+    "suggested_labels": {}
+  },
+  "stats": {
+    "tool_calls": 17,
+    "input_tokens": 67733,
+    "output_tokens": 2099,
+    "max_tool_calls": 25,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}

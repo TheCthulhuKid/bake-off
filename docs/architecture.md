@@ -130,9 +130,11 @@ Registered as `pydanticai`.
 
 `runner.run_once(impl, repo)` checks that the recorded repo exists, imports the
 implementation, runs it once inside `collect()` and returns a `RunResult` (impl, repo, report,
-stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out <file>` also writes it to
-a new file, creating parent directories, and refuses a path that exists before the run starts,
-so a taken name costs no tokens. Errors from the run itself, including `ToolLimitExceeded`,
+stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out` also writes it to a new
+file. `runner.result_path` picks the file: a path ending in `.json` is used as given, and any
+other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
+`YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
+before the run starts, so a bad or taken path costs no tokens. Errors from the run itself, including `ToolLimitExceeded`,
 propagate; plan step 5 records them instead and adds `eval` and `report`.
 
 ## Tests

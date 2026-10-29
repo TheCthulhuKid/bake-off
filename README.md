@@ -30,11 +30,14 @@ pull requests. Locally, the same checks are:
 ```
 
 Real-model runs (`bakeoff run`, `bakeoff eval`) need `ANTHROPIC_API_KEY` and are started by hand.
-One run of an implementation on a recorded repo, saved to a new file:
+One run of an implementation on a recorded repo, saved to a new
+`results/smoke/<UTC timestamp>-pydanticai.json`:
 
 ```sh
-.venv/bin/bakeoff run pydanticai click --out results/smoke/<UTC timestamp>-pydanticai.json
+.venv/bin/bakeoff run pydanticai click --out results/smoke
 ```
+
+`--out` also takes a full path ending in `.json`. Existing files are never overwritten.
 
 Implementations are registered by name in `src/bakeoff/impls/__init__.py`; `bakeoff run --help`
 lists them.
