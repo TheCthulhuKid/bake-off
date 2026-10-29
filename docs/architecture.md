@@ -59,11 +59,33 @@ citation validity is a metric. A `DuplicatePair` with the same number twice is r
 `evals/repos/<name>/issues.json` is a `Repo`: the fixture name, the GitHub `owner/repo` it was
 recorded from, the recording time, and a list of open issues with number, title, body, labels,
 state and comments (author and body). `fixtures.load_repo(name)` reads it; the root directory is
-a parameter so tests use `tests/fixtures/` instead.
+a parameter so tests use `tests/fixtures/` instead. When it is omitted, `FIXTURE_ROOT` is
+read at call time, so tests can repoint every caller, the tools included, with one monkeypatch.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
 and is run by hand. It makes one request per 100 issues plus one per commented issue, so set
 `GITHUB_TOKEN` for anything beyond a small repo.
+
+## Tools and telemetry
+
+`tools.py` holds `list_issues(repo, page)`, `get_issue(repo, number)` and
+`search_issues(repo, query)`. Their docstrings are the model-facing tool descriptions in every
+framework, so they are edited as prompt text. Each returns a JSON-serialisable dict:
+
+- `list_issues` pages through the fixture in its recorded order (newest first), `page_size`
+  issues per page, with number, title, labels and comment count, plus the page and issue totals.
+- `get_issue` returns title, labels, state, body and comments. The body and each comment are
+  cut to `body_limit` characters, with a note saying how many characters were left out. An
+  unknown number returns `{"error": ...}` instead of raising, so every framework shows the
+  model the same thing.
+- `search_issues` scores each issue by how many of the query's words appear in its title or
+  body, case-insensitively, and returns the top 20 in fixture order within a score.
+
+`telemetry.py` collects one `RunStats` per run: tool calls, input and output tokens, the
+tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps its work in
+`collect()`. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on the call
+after the limit, and implementations pass token counts to `record_usage()`. Outside `collect()`
+both are no-ops, so the tools work from a shell.
 
 ## Implementations
 

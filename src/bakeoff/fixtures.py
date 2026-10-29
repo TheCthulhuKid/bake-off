@@ -31,13 +31,14 @@ class Repo(BaseModel):
         return next((issue for issue in self.issues if issue.number == number), None)
 
 
-def fixture_path(name: str, root: Path = FIXTURE_ROOT) -> Path:
-    return root / name / "issues.json"
+def fixture_path(name: str, root: Path | None = None) -> Path:
+    # Resolved at call time so tests can point every caller, tools included, at another root.
+    return (root or FIXTURE_ROOT) / name / "issues.json"
 
 
-def load_repo(name: str, root: Path = FIXTURE_ROOT) -> Repo:
+def load_repo(name: str, root: Path | None = None) -> Repo:
     """Load ``<root>/<name>/issues.json``; an unknown name raises FileNotFoundError."""
     path = fixture_path(name, root)
     if not path.is_file():
-        raise FileNotFoundError(f"no recorded repo {name!r} under {root}")
+        raise FileNotFoundError(f"no recorded repo {name!r} under {path.parent.parent}")
     return Repo.model_validate_json(path.read_text())
