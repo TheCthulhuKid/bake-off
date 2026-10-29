@@ -1,16 +1,10 @@
-from pathlib import Path
-
 import pytest
 
-from bakeoff import fixtures
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import ToolLimitExceeded, collect, record_usage
 from bakeoff.tools import get_issue, list_issues, search_issues
 
-
-@pytest.fixture(autouse=True)
-def tiny_root(monkeypatch):
-    monkeypatch.setattr(fixtures, "FIXTURE_ROOT", Path(__file__).parent / "fixtures")
+pytestmark = pytest.mark.usefixtures("tiny_root")
 
 
 def test_list_issues_pages_through_summaries(monkeypatch):

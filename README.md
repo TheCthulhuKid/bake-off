@@ -1,8 +1,7 @@
 # Framework bake-off
 
 The same issue triage agent built in LangGraph, PydanticAI and the Anthropic SDK tool runner,
-compared on a shared eval set. The task, metrics and milestones are in `BAKE-OFF.md`; the
-implementation plan is `PLAN.md`.
+compared on a shared eval set. The task, metrics and milestones are in `BAKE-OFF.md`.
 
 ## Results
 
@@ -31,3 +30,14 @@ pull requests. Locally, the same checks are:
 ```
 
 Real-model runs (`bakeoff run`, `bakeoff eval`) need `ANTHROPIC_API_KEY` and are started by hand.
+One run of an implementation on a recorded repo, saved to a new
+`results/smoke/<UTC timestamp>-pydanticai.json`:
+
+```sh
+.venv/bin/bakeoff run pydanticai click --out results/smoke
+```
+
+`--out` also takes a full path ending in `.json`. Existing files are never overwritten.
+
+Implementations are registered by name in `src/bakeoff/impls/__init__.py`; `bakeoff run --help`
+lists them.

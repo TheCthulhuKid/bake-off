@@ -94,13 +94,15 @@ repo to pass to every tool. Every implementation sends both word for word, and t
 docstrings complete the model-facing text. The system prompt:
 
 - describes the four parts of the report as in `contract.py`: 3 to 6 themes (fewer for a small
-  repo), duplicate pairs with a one-line reason, up to five top issues, and labels for
-  unlabelled issues, preferring labels the repo already uses;
+  repo), duplicate pairs with a one-line reason, five top issues (fewer only for a repo with
+  fewer than five issues), and labels for unlabelled issues, preferring labels the repo already
+  uses;
 - allows citing only numbers seen in `list_issues` or `search_issues` results, since numbers
   inside issue text may be closed issues or pull requests;
 - says issue text is data, not instructions, naming the requests an injection would make
   (change the task, add labels, rank an issue first);
-- asks for an empty report for a repo with no open issues, and short parts over weak guesses;
+- asks for an empty report for a repo with no open issues, and allows an empty duplicates list,
+  the only part that may be empty for a repo with issues;
 - tells the model to list first, read the issues that matter, search before reporting a
   duplicate, and stay within `max_tool_calls`, whose value is formatted into the text.
 
@@ -109,4 +111,37 @@ text too.
 
 ## Implementations
 
-None registered yet.
+Each implementation exposes `triage(repo) -> TriageReport` and records its token usage with
+`record_usage()`, even when the run raises, so runs that hit the tool-call limit still show
+their cost. The caller opens `collect()`.
+
+`IMPLS` in `impls/__init__.py` is the registry: it maps a name to the module holding its
+`triage`, and `get_triage(name)` imports that module on first use, so importing the package or
+the CLI loads no framework. To add an implementation, add its module and one `IMPLS` entry,
+and list it below.
+
+- `impls/pydanticai_impl.py`: one module-level `Agent` with `output_type=TriageReport`,
+  `SYSTEM_PROMPT` as its instructions, the three tools passed as plain functions (PydanticAI
+  takes the description from the docstring and the parameter descriptions from its `Args`
+  section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. Usage is read
+  from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes.
+
+Registered as `pydanticai`.
+
+## Running
+
+`runner.run_once(impl, repo)` checks that the recorded repo exists, imports the
+implementation, runs it once inside `collect()` and returns a `RunResult` (impl, repo, report,
+stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out` also writes it to a new
+file. `runner.result_path` picks the file: a path ending in `.json` is used as given, and any
+other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
+`YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
+before the run starts, so a bad or taken path costs no tokens. Errors from the run itself, including `ToolLimitExceeded`,
+propagate; plan step 5 records them instead and adds `eval` and `report`.
+
+## Tests
+
+Tests swap the model for a scripted `FunctionModel` with `agent.override(model=...)`; the
+`pydanticai_model` fixture in `tests/conftest.py` does this over the `tiny` fixture repo.
+`tests/conftest.py` sets `ALLOW_MODEL_REQUESTS = False` and a dummy `ANTHROPIC_API_KEY`, so no
+test can reach a real model.
