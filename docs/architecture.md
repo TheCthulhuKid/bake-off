@@ -111,7 +111,12 @@ text too.
 
 Each implementation exposes `triage(repo) -> TriageReport` and records its token usage with
 `record_usage()`, even when the run raises, so runs that hit the tool-call limit still show
-their cost. The caller opens `collect()`. Not registered yet; the registry comes in plan step 2b.
+their cost. The caller opens `collect()`.
+
+`IMPLS` in `impls/__init__.py` is the registry: it maps a name to the module holding its
+`triage`, and `get_triage(name)` imports that module on first use, so importing the package or
+the CLI loads no framework. To add an implementation, add its module and one `IMPLS` entry,
+and list it below.
 
 - `impls/pydanticai_impl.py`: one module-level `Agent` with `output_type=TriageReport`,
   `SYSTEM_PROMPT` as its instructions, the three tools passed as plain functions (PydanticAI
@@ -119,6 +124,20 @@ their cost. The caller opens `collect()`. Not registered yet; the registry comes
   section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. Usage is read
   from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes.
 
-Tests swap the model for a scripted `FunctionModel` with `agent.override(model=...)`.
+Registered as `pydanticai`.
+
+## Running
+
+`runner.run_once(impl, repo)` checks that the recorded repo exists, imports the
+implementation, runs it once inside `collect()` and returns a `RunResult` (impl, repo, report,
+stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out <file>` also writes it to
+a new file, creating parent directories, and refuses a path that exists before the run starts,
+so a taken name costs no tokens. Errors from the run itself, including `ToolLimitExceeded`,
+propagate; plan step 5 records them instead and adds `eval` and `report`.
+
+## Tests
+
+Tests swap the model for a scripted `FunctionModel` with `agent.override(model=...)`; the
+`pydanticai_model` fixture in `tests/conftest.py` does this over the `tiny` fixture repo.
 `tests/conftest.py` sets `ALLOW_MODEL_REQUESTS = False` and a dummy `ANTHROPIC_API_KEY`, so no
 test can reach a real model.
