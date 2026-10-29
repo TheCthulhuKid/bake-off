@@ -1,7 +1,7 @@
 # Fairness notes
 
-Every implementation uses the same model, effort level, system prompt, tool functions and
-tool-call limit, all read from `settings.py`, `prompt.py` and `tools.py`.
+Every implementation uses the same model, effort level, system prompt, opening user message,
+tool functions and tool-call limit, all read from `settings.py`, `prompt.py` and `tools.py`.
 
 ## Framework defaults that affect results
 

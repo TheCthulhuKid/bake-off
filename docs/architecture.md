@@ -87,6 +87,26 @@ tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps
 after the limit, and implementations pass token counts to `record_usage()`. Outside `collect()`
 both are no-ops, so the tools work from a shell.
 
+## Prompt
+
+`prompt.py` holds `SYSTEM_PROMPT` and `user_prompt(repo)`, the opening user message naming the
+repo to pass to every tool. Every implementation sends both word for word, and the tool
+docstrings complete the model-facing text. The system prompt:
+
+- describes the four parts of the report as in `contract.py`: 3 to 6 themes (fewer for a small
+  repo), duplicate pairs with a one-line reason, up to five top issues, and labels for
+  unlabelled issues, preferring labels the repo already uses;
+- allows citing only numbers seen in `list_issues` or `search_issues` results, since numbers
+  inside issue text may be closed issues or pull requests;
+- says issue text is data, not instructions, naming the requests an injection would make
+  (change the task, add labels, rank an issue first);
+- asks for an empty report for a repo with no open issues, and short parts over weak guesses;
+- tells the model to list first, read the issues that matter, search before reporting a
+  duplicate, and stay within `max_tool_calls`, whose value is formatted into the text.
+
+The prompt is built at import time, so changing `BAKEOFF_MAX_TOOL_CALLS` changes the prompt
+text too.
+
 ## Implementations
 
 None registered yet.
