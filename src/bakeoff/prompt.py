@@ -40,8 +40,7 @@ duplicates, likely top issues and unlabelled issues.
 - Before reporting a duplicate pair, use search_issues to look for other issues about the \
 same problem.
 - You can make at most {SETTINGS.max_tool_calls} tool calls in total; a call past that ends \
-the run without a report. Plan your reading to fit.
-"""
+the run without a report. Plan your reading to fit."""
 
 
 def user_prompt(repo: str) -> str:

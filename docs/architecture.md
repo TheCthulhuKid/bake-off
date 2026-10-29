@@ -109,4 +109,16 @@ text too.
 
 ## Implementations
 
-None registered yet.
+Each implementation exposes `triage(repo) -> TriageReport` and records its token usage with
+`record_usage()`, even when the run raises, so runs that hit the tool-call limit still show
+their cost. The caller opens `collect()`. Not registered yet; the registry comes in plan step 2b.
+
+- `impls/pydanticai_impl.py`: one module-level `Agent` with `output_type=TriageReport`,
+  `SYSTEM_PROMPT` as its instructions, the three tools passed as plain functions (PydanticAI
+  takes the description from the docstring and the parameter descriptions from its `Args`
+  section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. Usage is read
+  from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes.
+
+Tests swap the model for a scripted `FunctionModel` with `agent.override(model=...)`.
+`tests/conftest.py` sets `ALLOW_MODEL_REQUESTS = False` and a dummy `ANTHROPIC_API_KEY`, so no
+test can reach a real model.
