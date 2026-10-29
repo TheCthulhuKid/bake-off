@@ -1,12 +1,9 @@
-name: CI
+name: Tests
 
-on:
-  push:
-    branches: [main]
-  pull_request:
+on: push
 
 jobs:
-  checks:
+  tests:
     runs-on: ubuntu-latest
     env:
       # Dummy key so client construction never fails; tests must not call a model.
@@ -17,6 +14,4 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync --locked --group dev
-      - run: .venv/bin/python -m pytest
-      - run: .venv/bin/python -m ruff check .
-      - run: .venv/bin/python -m ruff format --check .
+      - run: .venv/bin/python -m pytest -n 4

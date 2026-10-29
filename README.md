@@ -20,7 +20,9 @@ uv sync --locked --group dev
 .venv/bin/bakeoff --help
 ```
 
-Tests and CI never call a model:
+Tests and CI never call a model. CI has two workflows: `tests.yml` runs pytest with coverage
+on four workers on every push, and `quality.yml` runs the Ruff checks on pushes to `main` and on
+pull requests. Locally, the same checks are:
 
 ```sh
 .venv/bin/python -m pytest
