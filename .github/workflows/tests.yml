@@ -1,0 +1,17 @@
+name: Tests
+
+on: push
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy key so client construction never fails; tests must not call a model.
+      ANTHROPIC_API_KEY: test-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked --group dev
+      - run: .venv/bin/python -m pytest -n 4

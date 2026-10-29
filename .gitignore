@@ -10,3 +10,12 @@ wheels/
 .venv
 
 .idea/
+
+# Tooling
+.idea/
+.coverage
+.pytest_cache/
+.ruff_cache/
+
+# Local secrets
+.env

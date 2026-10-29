@@ -1,0 +1,17 @@
+name: Quality
+
+on:
+  push:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      # Ruff needs no project dependencies, so skip installing the frameworks.
+      - run: uv sync --locked --only-group dev
+      - run: .venv/bin/python -m ruff check .
+      - run: .venv/bin/python -m ruff format --check .
