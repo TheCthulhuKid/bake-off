@@ -1,7 +1,11 @@
-"""Shared run settings. Every implementation reads these so differences come from the framework."""
+"""Shared run settings. Every implementation reads these so differences come from the framework.
 
-import os
-from dataclasses import dataclass
+Variables are read from the environment and from a local ``.env`` (see ``.env.example``).
+Run settings use the ``BAKEOFF_`` prefix; the two credentials keep their conventional names.
+"""
+
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # USD per million tokens, Anthropic first-party rates.
 PRICES = {
@@ -11,24 +15,18 @@ PRICES = {
 }
 
 
-@dataclass(frozen=True)
-class Settings:
+class Settings(BaseSettings):
     model: str = "claude-opus-5-5"
     effort: str = "medium"
     max_tool_calls: int = 25
     body_limit: int = 4000
     page_size: int = 30
+    anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    github_token: SecretStr | None = Field(default=None, validation_alias="GITHUB_TOKEN")
 
-    @classmethod
-    def from_env(cls) -> "Settings":
-        defaults = cls()
-        return cls(
-            model=os.environ.get("BAKEOFF_MODEL", defaults.model),
-            effort=os.environ.get("BAKEOFF_EFFORT", defaults.effort),
-            max_tool_calls=int(os.environ.get("BAKEOFF_MAX_TOOL_CALLS", defaults.max_tool_calls)),
-            body_limit=int(os.environ.get("BAKEOFF_BODY_LIMIT", defaults.body_limit)),
-            page_size=int(os.environ.get("BAKEOFF_PAGE_SIZE", defaults.page_size)),
-        )
+    model_config = SettingsConfigDict(
+        env_prefix="BAKEOFF_", env_file=".env", extra="ignore", validate_by_name=True
+    )
 
     def cost(self, input_tokens: int, output_tokens: int) -> float:
         """Price of a run in USD; zero for a model not in the table rather than a guess."""
@@ -38,4 +36,4 @@ class Settings:
         return (input_tokens * per_input + output_tokens * per_output) / 1_000_000
 
 
-SETTINGS = Settings.from_env()
+SETTINGS = Settings()

@@ -16,3 +16,6 @@ wheels/
 .coverage
 .pytest_cache/
 .ruff_cache/
+
+# Local secrets
+.env

@@ -1,0 +1,23 @@
+{
+  "name": "tiny",
+  "source": "example/tiny",
+  "recorded_at": "2026-10-29T00:00:00+00:00",
+  "issues": [
+    {
+      "number": 1,
+      "title": "Crash on startup",
+      "body": "The app crashes when launched with an empty config.",
+      "labels": ["bug"],
+      "state": "open",
+      "comments": [{"author": "alice", "body": "Reproduced on 1.2."}]
+    },
+    {
+      "number": 2,
+      "title": "Add dark mode",
+      "body": "Please add a dark theme.",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    }
+  ]
+}

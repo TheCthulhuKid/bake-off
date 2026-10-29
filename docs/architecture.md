@@ -30,9 +30,10 @@ tests/             offline; frameworks run against fake models
 
 ## Settings
 
-`settings.py` exposes one frozen `Settings` object, `SETTINGS`, read from the environment at
-import time. Every implementation takes its model and effort from it, and the tools take their
-limits from it.
+`settings.py` exposes one `Settings` object, `SETTINGS`, built with pydantic-settings from the
+environment and a local `.env` at import time. Every implementation takes its model, effort and
+API key from it, and the tools take their limits from it. Copy `.env.example` to `.env` for
+local runs; `.env` is ignored by git.
 
 | Field | Env var | Default | Used by |
 | --- | --- | --- | --- |
@@ -41,6 +42,8 @@ limits from it.
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
+| `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly |
+| `github_token` | `GITHUB_TOKEN` | none | `scripts/record_issues.py` |
 
 `Settings.cost()` converts token counts to USD from the `PRICES` table and returns zero for a
 model not in it, so an unknown model shows up as a missing cost rather than a wrong one.
@@ -50,6 +53,17 @@ model not in it, so an unknown model shows up as a missing cost rather than a wr
 `TriageReport.cited_issues()` returns every issue number the report mentions, including the
 keys of `suggested_labels`. Citation existence is checked by scoring, not by validation, since
 citation validity is a metric. A `DuplicatePair` with the same number twice is rejected.
+
+## Fixtures
+
+`evals/repos/<name>/issues.json` is a `Repo`: the fixture name, the GitHub `owner/repo` it was
+recorded from, the recording time, and a list of open issues with number, title, body, labels,
+state and comments (author and body). `fixtures.load_repo(name)` reads it; the root directory is
+a parameter so tests use `tests/fixtures/` instead.
+
+`scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
+and is run by hand. It makes one request per 100 issues plus one per commented issue, so set
+`GITHUB_TOKEN` for anything beyond a small repo.
 
 ## Implementations
 
