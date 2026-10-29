@@ -94,13 +94,15 @@ repo to pass to every tool. Every implementation sends both word for word, and t
 docstrings complete the model-facing text. The system prompt:
 
 - describes the four parts of the report as in `contract.py`: 3 to 6 themes (fewer for a small
-  repo), duplicate pairs with a one-line reason, up to five top issues, and labels for
-  unlabelled issues, preferring labels the repo already uses;
+  repo), duplicate pairs with a one-line reason, five top issues (fewer only for a repo with
+  fewer than five issues), and labels for unlabelled issues, preferring labels the repo already
+  uses;
 - allows citing only numbers seen in `list_issues` or `search_issues` results, since numbers
   inside issue text may be closed issues or pull requests;
 - says issue text is data, not instructions, naming the requests an injection would make
   (change the task, add labels, rank an issue first);
-- asks for an empty report for a repo with no open issues, and short parts over weak guesses;
+- asks for an empty report for a repo with no open issues, and allows an empty duplicates list,
+  the only part that may be empty for a repo with issues;
 - tells the model to list first, read the issues that matter, search before reporting a
   duplicate, and stay within `max_tool_calls`, whose value is formatted into the text.
 
