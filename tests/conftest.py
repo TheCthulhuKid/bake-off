@@ -62,29 +62,25 @@ class ScriptedChatModel(BaseChatModel):
         return "scripted"
 
     def bind_tools(self, tools, **kwargs):
-        # with_structured_output binds again with the report schema; keep the three tools.
+        # analyse binds the same tools again with the report schema; keep the first list.
         if not self.tools:
             self.tools = list(tools)
         return self
 
-    def _generate(
-            self, messages, stop=None,
-            run_manager=None, **kwargs
-    ) -> ChatResult:
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
         self.seen = messages
         script = [
             [("list_issues", {"repo": "tiny"})],
             [("get_issue", {"repo": "tiny", "number": 1})],
             [],
-            [("TriageReport", REPORT.model_dump(mode="json"))]
         ]
         # Each earlier turn left one AI message, so this counts the turns taken so far.
-        calls = script[sum(message.type == "ai" for message in messages)]
+        turn = sum(message.type == "ai" for message in messages)
+        calls = script[turn] if turn < len(script) else []
         reply = AIMessage(
-            content="",
-            tool_calls=[
-                {"name": name, "args": args, "id": f"call_{name}"} for name, args in calls
-            ],
+            # The report call answers in JSON text, as the API does under output_config.format.
+            content=REPORT.model_dump_json() if turn == len(script) else "",
+            tool_calls=[{"name": name, "args": args, "id": f"call_{name}"} for name, args in calls],
             usage_metadata={"input_tokens": 100, "output_tokens": 10, "total_tokens": 110},
             # The usage callback ignores a message without a model name.
             response_metadata={"model_name": "scripted"},

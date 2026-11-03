@@ -1,7 +1,8 @@
 """The system prompt and opening user message every implementation sends, word for word.
 
-Both are part of the experiment: a change here makes later results incomparable with earlier
-ones, so edit them deliberately and note the change in ``docs/fairness.md``.
+``REPORT_PROMPT`` is sent only by implementations that ask for the report in a separate model
+call. All of them are part of the experiment: a change here makes later results incomparable
+with earlier ones, so edit them deliberately and note the change in ``docs/fairness.md``.
 """
 
 from bakeoff.settings import SETTINGS
@@ -17,9 +18,9 @@ theme to reach three.
 - duplicates: pairs of issues that describe the same problem, each with a one-line reason. \
 Issues that only look alike, such as similar titles about different problems, are not \
 duplicates.
-- top_issues: the five issues a maintainer should look at first, most important first, \
-each with a one-line reason. Always fill this part; list fewer than five only when the \
-repository has fewer than five open issues.
+- top_issues: the issues a maintainer should look at first, most important first, each \
+with a one-line reason. Name at least one and up to five, unless the repository has no open \
+issues.
 - suggested_labels: for issues that have no labels, the issue number and the labels you \
 suggest for it, one entry per issue. Prefer labels the repository already uses.
 
@@ -43,6 +44,11 @@ duplicates, likely top issues and unlabelled issues.
 same problem.
 - You can make at most {SETTINGS.max_tool_calls} tool calls in total; a call past that ends \
 the run without a report. Plan your reading to fit."""
+
+
+# Claude 5 models reject a conversation that ends on the model's own reply, so a separate
+# report call needs a user turn after the tool loop.
+REPORT_PROMPT = "Write the triage report from the issues you have read."
 
 
 def user_prompt(repo: str) -> str:

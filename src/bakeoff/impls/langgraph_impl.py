@@ -5,13 +5,13 @@ from typing import Any
 from langchain_anthropic import ChatAnthropic
 from langchain_core.callbacks import UsageMetadataCallbackHandler
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from bakeoff.contract import TriageReport
-from bakeoff.prompt import SYSTEM_PROMPT, user_prompt
+from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
 from bakeoff.tools import get_issue, list_issues, search_issues
@@ -20,27 +20,28 @@ TOOLS = [list_issues, get_issue, search_issues]
 
 
 class State(MessagesState):
-    # with_structured_output(include_raw=True) result: "raw", "parsed" and "parsing_error"
-    analysis: dict[str, Any]
+    answer: AIMessage
+    triage_report: TriageReport
 
 
 def build_graph(model: BaseChatModel) -> CompiledStateGraph:
     """The fetch, analyse and report graph over ``model``; tests pass a scripted one."""
     fetch_model = model.bind_tools(TOOLS)
-    analyse_model = model.with_structured_output(
-        TriageReport, method="json_schema", include_raw=True
+    # The same tools as fetch: the API rejects fetch's thinking blocks under a different tools
+    # list. tool_choice "none" stops tool calls, and response_format sends the report schema.
+    analyse_model = model.bind_tools(
+        TOOLS, tool_choice={"type": "none"}, response_format=TriageReport
     )
 
     def fetch(state: State) -> dict[str, Any]:
         return {"messages": [fetch_model.invoke(state["messages"])]}
 
     def analyse(state: State) -> dict[str, Any]:
-        return {"analysis": analyse_model.invoke(state["messages"])}
+        messages = [*state["messages"], HumanMessage(REPORT_PROMPT)]
+        return {"answer": analyse_model.invoke(messages)}
 
     def report(state: State) -> dict[str, Any]:
-        if error := state["analysis"]["parsing_error"]:
-            raise error
-        return {}
+        return {"triage_report": TriageReport.model_validate_json(state["answer"].text)}
 
     graph = StateGraph(State)
     graph.add_node("fetch", fetch)
@@ -66,7 +67,7 @@ def triage(repo: str) -> TriageReport:
     messages = [SystemMessage(SYSTEM_PROMPT), HumanMessage(user_prompt(repo))]
     try:
         state = graph.invoke({"messages": messages}, config={"callbacks": [usage]})
-        return state["analysis"]["parsed"]
+        return state["triage_report"]
     finally:
         for counts in usage.usage_metadata.values():
             record_usage(counts["input_tokens"], counts["output_tokens"])

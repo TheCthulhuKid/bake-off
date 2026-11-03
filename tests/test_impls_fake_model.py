@@ -5,7 +5,7 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from bakeoff import tools
 from bakeoff.impls import get_triage
-from bakeoff.prompt import SYSTEM_PROMPT
+from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT
 from bakeoff.telemetry import ToolLimitExceeded, collect
 
 
@@ -30,6 +30,8 @@ def test_langgraph_returns_report_and_records_stats(langgraph_model):
     # One more model call than PydanticAI: analyse runs after fetch ends.
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 400, 40)
     assert langgraph_model.seen[0].content == SYSTEM_PROMPT
+    # The API rejects a report call that ends on the model's own reply.
+    assert langgraph_model.seen[-1].content == REPORT_PROMPT
     # LangChain joins the docstring's lines with spaces, so compare with whitespace normalised.
     for tool in langgraph_model.tools:
         description = convert_to_openai_tool(tool)["function"]["description"]

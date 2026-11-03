@@ -97,12 +97,13 @@ both are no-ops, so the tools work from a shell.
 
 `prompt.py` holds `SYSTEM_PROMPT` and `user_prompt(repo)`, the opening user message naming the
 repo to pass to every tool. Every implementation sends both word for word, and the tool
-docstrings complete the model-facing text. The system prompt:
+docstrings complete the model-facing text. `REPORT_PROMPT` is the user turn an implementation
+sends before a separate report call, since Claude 5 models reject a conversation that ends on
+the model's own reply; only LangGraph's `analyse` node sends it. The system prompt:
 
 - describes the four parts of the report as in `contract.py`: 3 to 6 themes (fewer for a small
-  repo), duplicate pairs with a one-line reason, five top issues (fewer only for a repo with
-  fewer than five issues), and labels for unlabelled issues, preferring labels the repo already
-  uses;
+  repo), duplicate pairs with a one-line reason, at least one and up to five top issues, and
+  labels for unlabelled issues, preferring labels the repo already uses;
 - allows citing only numbers seen in `list_issues` or `search_issues` results, since numbers
   inside issue text may be closed issues or pull requests;
 - says issue text is data, not instructions, naming the requests an injection would make
@@ -123,7 +124,8 @@ their cost. The caller opens `collect()`.
 
 `IMPLS` in `impls/__init__.py` is the registry: it maps a name to the module holding its
 `triage`, and `get_triage(name)` imports that module on first use, so importing the package or
-the CLI loads no framework. To add an implementation, add its module and one `IMPLS` entry,
+the CLI loads no framework. The CLI checks the name with `click.Choice`; for other callers an
+unknown name raises `KeyError`. To add an implementation, add its module and one `IMPLS` entry,
 and list it below.
 
 - `impls/pydanticai_impl.py`: one module-level `Agent` with `output_type=TriageReport`,
@@ -131,8 +133,15 @@ and list it below.
   takes the description from the docstring and the parameter descriptions from its `Args`
   section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. Usage is read
   from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes.
+- `impls/langgraph_impl.py`: a `StateGraph` over a messages state with three nodes. `fetch`
+  calls the model bound to the three tools and loops through a `ToolNode` while the reply has
+  tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with
+  the same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates
+  the reply's JSON text as a `TriageReport` and raises if it is invalid. `build_graph(model)` builds it, and the module-level
+  `graph` uses a `ChatAnthropic` with `effort` from `SETTINGS`. Usage is collected by a
+  `UsageMetadataCallbackHandler` passed in the run config, and recorded in a `finally`.
 
-Registered as `pydanticai`.
+Registered as `pydanticai` and `langgraph`.
 
 ## Running
 
@@ -149,5 +158,8 @@ propagate; the eval harness will record them instead and add `eval` and `report`
 
 Tests swap the model for a scripted `FunctionModel` with `agent.override(model=...)`; the
 `pydanticai_model` fixture in `tests/conftest.py` does this over the `tiny` fixture repo.
-`tests/conftest.py` sets `ALLOW_MODEL_REQUESTS = False` and a dummy `ANTHROPIC_API_KEY`, so no
-test can reach a real model.
+LangGraph has no override hook, so the `langgraph_model` fixture builds a graph over
+`ScriptedChatModel`, a `BaseChatModel` subclass, and puts it in place of the module-level
+`graph` with `monkeypatch.setattr`. `tests/conftest.py` sets PydanticAI's
+`ALLOW_MODEL_REQUESTS = False` and a dummy `ANTHROPIC_API_KEY`. LangChain has no such switch,
+so a LangGraph test must use the `langgraph_model` fixture.

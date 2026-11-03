@@ -17,6 +17,4 @@ IMPLS = {
 
 def get_triage(name: str) -> Callable[[str], TriageReport]:
     """Import the named implementation and return its ``triage``."""
-    if name not in IMPLS:
-        raise KeyError(f"unknown implementation {name!r}; known: {', '.join(sorted(IMPLS))}")
     return import_module(IMPLS[name]).triage
