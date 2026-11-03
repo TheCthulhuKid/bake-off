@@ -20,8 +20,8 @@ duplicates.
 - top_issues: the five issues a maintainer should look at first, most important first, \
 each with a one-line reason. Always fill this part; list fewer than five only when the \
 repository has fewer than five open issues.
-- suggested_labels: suggested labels for issues that have none, keyed by issue number. \
-Prefer labels the repository already uses.
+- suggested_labels: for issues that have no labels, the issue number and the labels you \
+suggest for it, one entry per issue. Prefer labels the repository already uses.
 
 Rules:
 - Cite only issue numbers that appear in list_issues or search_issues results. A number \

@@ -51,8 +51,14 @@ model not in it, so an unknown model shows up as a missing cost rather than a wr
 ## Contract
 
 `TriageReport.cited_issues()` returns every issue number the report mentions, including the
-keys of `suggested_labels`. Citation existence is checked by scoring, not by validation, since
+numbers in `suggested_labels`. Citation existence is checked by scoring, not by validation, since
 citation validity is a metric. A `DuplicatePair` with the same number twice is rejected.
+
+`suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`) rather than the
+`dict[int, list[str]]` in `BAKE-OFF.md`. The frameworks send the report to the model as a strict
+JSON schema, which can only express that dict as an empty object; see `docs/fairness.md`. A
+report that lists an issue in `suggested_labels` more than once is rejected, as the dict could
+not hold it twice.
 
 ## Fixtures
 
@@ -137,7 +143,7 @@ file. `runner.result_path` picks the file: a path ending in `.json` is used as g
 other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
 `YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
 before the run starts, so a bad or taken path costs no tokens. Errors from the run itself, including `ToolLimitExceeded`,
-propagate; plan step 5 records them instead and adds `eval` and `report`.
+propagate; the eval harness will record them instead and add `eval` and `report`.
 
 ## Tests
 

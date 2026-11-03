@@ -46,6 +46,7 @@ class TriageReport(BaseModel):
     def cited_issues(self) -> set[int]:
         """Every issue number the report mentions, for citation checks."""
         cited = {number for theme in self.themes for number in theme.issues}
+        cited.update(number for pair in self.duplicates for number in (pair.a, pair.b))
         cited.update(suggestion.number for suggestion in self.suggested_labels)
         cited.update(top.number for top in self.top_issues)
         return cited

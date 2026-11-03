@@ -14,6 +14,9 @@ def test_pydanticai_returns_report_and_records_stats(pydanticai_model):
     assert report == pydanticai_model.report
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 300, 30)
     assert pydanticai_model.seen.instructions == SYSTEM_PROMPT
+    # A dict is sent to the API as an object that can only be {}.
+    schema = pydanticai_model.seen.output_tools[0].parameters_json_schema
+    assert schema["properties"]["suggested_labels"]["type"] == "array"
     # Descriptions are the docstrings without their Args sections, which go into the schema.
     for tool in pydanticai_model.seen.function_tools:
         assert tool.description in inspect.getdoc(getattr(tools, tool.name))

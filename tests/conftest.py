@@ -11,7 +11,7 @@ from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.usage import RequestUsage
 
-from bakeoff.contract import Theme, TopIssue, TriageReport
+from bakeoff.contract import LabelSuggestion, Theme, TopIssue, TriageReport
 
 # Set before bakeoff.settings is imported, so clients build without a real key.
 os.environ["ANTHROPIC_API_KEY"] = "test-key"
@@ -22,7 +22,7 @@ REPORT = TriageReport(
     themes=[Theme(name="Startup crashes", issues=[1])],
     duplicates=[],
     top_issues=[TopIssue(number=1, reason="Crashes on launch")],
-    suggested_labels={2: ["enhancement"]},
+    suggested_labels=[LabelSuggestion(number=2, labels=["enhancement"])],
 )
 
 
