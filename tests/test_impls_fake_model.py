@@ -38,7 +38,19 @@ def test_langgraph_returns_report_and_records_stats(langgraph_model):
         assert " ".join(description.split()) in " ".join(inspect.getdoc(tool).split())
 
 
-@pytest.mark.parametrize("impl", ["pydanticai", "langgraph"])
+def test_anthropic_returns_report_and_records_stats(anthropic_model):
+    with collect() as stats:
+        report = get_triage("anthropic")("tiny")
+    assert report == anthropic_model.report
+    assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 300, 30)
+    # Under message threads, later requests leave out the system prompt and tools.
+    first = anthropic_model.sent[0]
+    assert first["system"] == SYSTEM_PROMPT
+    for tool in first["tools"]:
+        assert tool["description"] in inspect.getdoc(getattr(tools, tool["name"]))
+
+
+@pytest.mark.parametrize("impl", ["pydanticai", "langgraph", "anthropic"])
 def test_tool_limit_ends_the_run(impl, request):
     request.getfixturevalue(f"{impl}_model")
     with collect(max_tool_calls=1) as stats, pytest.raises(ToolLimitExceeded):
