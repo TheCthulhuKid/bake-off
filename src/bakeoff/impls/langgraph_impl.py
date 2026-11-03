@@ -58,3 +58,15 @@ def build_graph(model: BaseChatModel) -> CompiledStateGraph:
 graph = build_graph(
     ChatAnthropic(model=SETTINGS.model, api_key=SETTINGS.anthropic_api_key, effort=SETTINGS.effort)
 )
+
+
+def triage(repo: str) -> TriageReport:
+    """Run the graph on ``repo`` and return its report."""
+    usage = UsageMetadataCallbackHandler()
+    messages = [SystemMessage(SYSTEM_PROMPT), HumanMessage(user_prompt(repo))]
+    try:
+        state = graph.invoke({"messages": messages}, config={"callbacks": [usage]})
+        return state["analysis"]["parsed"]
+    finally:
+        for counts in usage.usage_metadata.values():
+            record_usage(counts["input_tokens"], counts["output_tokens"])
