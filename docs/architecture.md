@@ -145,8 +145,9 @@ and list it below.
   and recorded in a `finally`.
 - `impls/anthropic_impl.py`: the Anthropic SDK's beta tool runner, streamed, over the three
   tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
-  its `Args` section), with `SYSTEM_PROMPT` as `system` and the strict `TriageReport` schema
-  from `transform_schema` in `output_config.format`. The runner turns tool exceptions into
+  its `Args` section) and with `as_json`, which returns their dicts as JSON text, with
+  `SYSTEM_PROMPT` as `system` and the strict `TriageReport` schema from `transform_schema` in
+  `output_config.format`. The runner turns tool exceptions into
   error results, so `triage` calls `telemetry.raise_if_limit_fired()` after each reply's tools
   have run. Usage is recorded from each reply as it arrives, and the last reply's text is
   validated as a `TriageReport`.

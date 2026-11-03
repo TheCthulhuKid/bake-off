@@ -43,6 +43,7 @@ marked "Read from source" were not run.
 | Anthropic SDK (tool runner) | `thinking` is not sent, so the model uses its default. Checked offline. | The same as PydanticAI. | No |
 | Anthropic SDK (tool runner) | No prompt caching. Checked offline. | The same as PydanticAI and LangGraph. | No |
 | Anthropic SDK (tool runner) | Tool descriptions are the docstring with its line breaks and without `Args:`, which goes into the parameter descriptions. Checked offline. | The same text as PydanticAI; LangGraph joins the lines with spaces. | No |
+| Anthropic SDK (tool runner) | A tool result must be a string or a list of content blocks; a dict is turned into a list of its keys, which the API rejects with a 400 (first Anthropic smoke run). Checked by a run. | The tools' dicts are sent as `json.dumps(..., ensure_ascii=False)` text, as LangGraph's `ToolNode` does. PydanticAI serialises them with pydantic, without spaces, so the model reads the same data with different whitespace. | Yes, see deviations |
 | Anthropic SDK (tool runner) | The report schema from `transform_schema` turns `top_issues`' `maxItems: 5` into a description. Checked offline. | The same as the other two: a sixth top issue fails validation rather than being prevented. | No |
 | Anthropic SDK (tool runner) | Two retries on connection errors, 408, 409, 429 and 5xx; 600 s read timeout. Checked offline. | The same as PydanticAI's client; LangGraph's has no timeout. | No |
 
@@ -81,3 +82,7 @@ marked "Read from source" were not run.
   SDK refuses a non-streaming request with the 128,000 the other implementations send. The
   report schema goes in `output_config.format` rather than `output_format`, which would parse
   the report mid-stream and lose the usage of a reply that fails validation.
+- The Anthropic implementation wraps each tool in `as_json`, which returns its dict as JSON
+  text. The tool runner sends only a string or content blocks as a tool result, and turns a
+  dict into a list of its keys, which the API rejects ("tool_result.content.0: Input should be
+  an object", first Anthropic smoke run). The tools themselves are unchanged.
