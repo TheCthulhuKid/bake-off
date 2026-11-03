@@ -4,6 +4,8 @@ Variables are read from the environment and from a local ``.env`` (see ``.env.ex
 Run settings use the ``BAKEOFF_`` prefix; the two credentials keep their conventional names.
 """
 
+from typing import Literal
+
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,7 +19,7 @@ PRICES = {
 
 class Settings(BaseSettings):
     model: str = "claude-opus-5-5"
-    effort: str = "medium"
+    effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     max_tool_calls: int = 25
     body_limit: int = 4000
     page_size: int = 30

@@ -38,7 +38,7 @@ local runs; `.env` is ignored by git.
 | Field | Env var | Default | Used by |
 | --- | --- | --- | --- |
 | `model` | `BAKEOFF_MODEL` | `claude-opus-5-5` | implementations, judge, cost |
-| `effort` | `BAKEOFF_EFFORT` | `medium` | implementations |
+| `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
@@ -51,8 +51,14 @@ model not in it, so an unknown model shows up as a missing cost rather than a wr
 ## Contract
 
 `TriageReport.cited_issues()` returns every issue number the report mentions, including the
-keys of `suggested_labels`. Citation existence is checked by scoring, not by validation, since
+numbers in `suggested_labels`. Citation existence is checked by scoring, not by validation, since
 citation validity is a metric. A `DuplicatePair` with the same number twice is rejected.
+
+`suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`) rather than the
+`dict[int, list[str]]` in `BAKE-OFF.md`. The frameworks send the report to the model as a strict
+JSON schema, which can only express that dict as an empty object; see `docs/fairness.md`. A
+report that lists an issue in `suggested_labels` more than once is rejected, as the dict could
+not hold it twice.
 
 ## Fixtures
 
@@ -85,18 +91,21 @@ framework, so they are edited as prompt text. Each returns a JSON-serialisable d
 tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps its work in
 `collect()`. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on the call
 after the limit, and implementations pass token counts to `record_usage()`. Outside `collect()`
-both are no-ops, so the tools work from a shell.
+both are no-ops, so the tools work from a shell. For a framework that turns a tool's exception
+into an error result for the model, `raise_if_limit_fired()` raises `ToolLimitExceeded` again
+once the limit has fired.
 
 ## Prompt
 
 `prompt.py` holds `SYSTEM_PROMPT` and `user_prompt(repo)`, the opening user message naming the
 repo to pass to every tool. Every implementation sends both word for word, and the tool
-docstrings complete the model-facing text. The system prompt:
+docstrings complete the model-facing text. `REPORT_PROMPT` is the user turn an implementation
+sends before a separate report call, since Claude 5 models reject a conversation that ends on
+the model's own reply; only LangGraph's `analyse` node sends it. The system prompt:
 
 - describes the four parts of the report as in `contract.py`: 3 to 6 themes (fewer for a small
-  repo), duplicate pairs with a one-line reason, five top issues (fewer only for a repo with
-  fewer than five issues), and labels for unlabelled issues, preferring labels the repo already
-  uses;
+  repo), duplicate pairs with a one-line reason, at least one and up to five top issues, and
+  labels for unlabelled issues, preferring labels the repo already uses;
 - allows citing only numbers seen in `list_issues` or `search_issues` results, since numbers
   inside issue text may be closed issues or pull requests;
 - says issue text is data, not instructions, naming the requests an injection would make
@@ -117,7 +126,8 @@ their cost. The caller opens `collect()`.
 
 `IMPLS` in `impls/__init__.py` is the registry: it maps a name to the module holding its
 `triage`, and `get_triage(name)` imports that module on first use, so importing the package or
-the CLI loads no framework. To add an implementation, add its module and one `IMPLS` entry,
+the CLI loads no framework. The CLI checks the name with `click.Choice`; for other callers an
+unknown name raises `KeyError`. To add an implementation, add its module and one `IMPLS` entry,
 and list it below.
 
 - `impls/pydanticai_impl.py`: one module-level `Agent` with `output_type=TriageReport`,
@@ -125,8 +135,24 @@ and list it below.
   takes the description from the docstring and the parameter descriptions from its `Args`
   section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. Usage is read
   from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes.
+- `impls/langgraph_impl.py`: a `StateGraph` over a messages state with three nodes. `fetch`
+  calls the model bound to the three tools and loops through a `ToolNode` while the reply has
+  tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with
+  the same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates
+  the reply's JSON text as a `TriageReport` and raises if it is invalid. `build_graph(model)`
+  builds it, and the module-level `graph` uses a `ChatAnthropic` with `effort` from
+  `SETTINGS`. Usage is collected by a `UsageMetadataCallbackHandler` passed in the run config,
+  and recorded in a `finally`.
+- `impls/anthropic_impl.py`: the Anthropic SDK's beta tool runner, streamed, over the three
+  tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
+  its `Args` section) and with `as_json`, which returns their dicts as JSON text, with
+  `SYSTEM_PROMPT` as `system` and the strict `TriageReport` schema from `transform_schema` in
+  `output_config.format`. The runner turns tool exceptions into
+  error results, so `triage` calls `telemetry.raise_if_limit_fired()` after each reply's tools
+  have run. Usage is recorded from each reply as it arrives, and the last reply's text is
+  validated as a `TriageReport`.
 
-Registered as `pydanticai`.
+Registered as `pydanticai`, `langgraph` and `anthropic`.
 
 ## Running
 
@@ -136,12 +162,21 @@ stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out` also wri
 file. `runner.result_path` picks the file: a path ending in `.json` is used as given, and any
 other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
 `YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
-before the run starts, so a bad or taken path costs no tokens. Errors from the run itself, including `ToolLimitExceeded`,
-propagate; plan step 5 records them instead and adds `eval` and `report`.
+before the run starts, so a bad or taken path costs no tokens. Errors from the run itself,
+including `ToolLimitExceeded`, propagate; the eval harness will record them instead and add
+`eval` and `report`.
 
 ## Tests
 
 Tests swap the model for a scripted `FunctionModel` with `agent.override(model=...)`; the
 `pydanticai_model` fixture in `tests/conftest.py` does this over the `tiny` fixture repo.
-`tests/conftest.py` sets `ALLOW_MODEL_REQUESTS = False` and a dummy `ANTHROPIC_API_KEY`, so no
-test can reach a real model.
+LangGraph has no override hook, so the `langgraph_model` fixture builds a graph over
+`ScriptedChatModel`, a `BaseChatModel` subclass, and puts it in place of the module-level
+`graph` with `monkeypatch.setattr`. `tests/conftest.py` sets PydanticAI's
+`ALLOW_MODEL_REQUESTS = False` and a dummy `ANTHROPIC_API_KEY`. LangChain has no such switch,
+so a LangGraph test must use the `langgraph_model` fixture.
+
+The tool runner talks HTTP through its client, so the `anthropic_model` fixture puts an
+`anthropic.Anthropic` over `ScriptedTransport`, an `httpx2.MockTransport` that answers with
+scripted streamed replies and records each request body, in place of the module-level
+`client`. A test of this implementation must use the fixture.

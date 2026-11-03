@@ -5,7 +5,7 @@ compared on a shared eval set. The task, metrics and milestones are in `BAKE-OFF
 
 ## Results
 
-Not run yet. The table lands here after the full eval (plan step 7).
+Not run yet. The table lands here after the full eval.
 
 ## Layout
 
