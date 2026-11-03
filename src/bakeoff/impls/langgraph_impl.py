@@ -25,8 +25,11 @@ class State(MessagesState):
 
 
 def build_graph(model: BaseChatModel) -> CompiledStateGraph:
+    """The fetch, analyse and report graph over ``model``; tests pass a scripted one."""
     fetch_model = model.bind_tools(TOOLS)
-    analyse_model = model.with_structured_output(TriageReport, method="json_schema", include_raw=True)
+    analyse_model = model.with_structured_output(
+        TriageReport, method="json_schema", include_raw=True
+    )
 
     def fetch(state: State) -> dict[str, Any]:
         return {"messages": [fetch_model.invoke(state["messages"])]}
