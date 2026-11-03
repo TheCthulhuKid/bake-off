@@ -38,7 +38,7 @@ local runs; `.env` is ignored by git.
 | Field | Env var | Default | Used by |
 | --- | --- | --- | --- |
 | `model` | `BAKEOFF_MODEL` | `claude-opus-5-5` | implementations, judge, cost |
-| `effort` | `BAKEOFF_EFFORT` | `medium` | implementations |
+| `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
