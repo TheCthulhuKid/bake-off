@@ -58,6 +58,12 @@ def record_tool_call() -> None:
     stats.tool_calls += 1
 
 
+def raise_if_limit_fired() -> None:
+    stats = _current.get()
+    if stats is not None and stats.limit_fired:
+        raise ToolLimitExceeded(f"tool-call limit of {stats.max_tool_calls} reached")
+
+
 def record_usage(input_tokens: int, output_tokens: int) -> None:
     """Add one model response's token counts to the current run."""
     stats = _current.get()
