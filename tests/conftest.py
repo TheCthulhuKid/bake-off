@@ -1,7 +1,11 @@
 import os
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic_ai import models
 from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
@@ -43,6 +47,50 @@ class ScriptedModel(FunctionModel):
         return ModelResponse(parts=[part], usage=RequestUsage(input_tokens=100, output_tokens=10))
 
 
+class ScriptedChatModel(BaseChatModel):
+    """
+    Calls list_issues, then get_issue, ends the loop, then returns ``REPORT``, using 100 + 10 tokens a turn.
+    """
+
+    report: ClassVar[TriageReport] = REPORT
+    tools: list = []
+    seen: list = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted"
+
+    def bind_tools(self, tools, **kwargs):
+        # with_structured_output binds again with the report schema; keep the three tools.
+        if not self.tools:
+            self.tools = list(tools)
+        return self
+
+    def _generate(
+            self, messages, stop=None,
+            run_manager=None, **kwargs
+    ) -> ChatResult:
+        self.seen = messages
+        script = [
+            [("list_issues", {"repo": "tiny"})],
+            [("get_issue", {"repo": "tiny", "number": 1})],
+            [],
+            [("TriageReport", REPORT.model_dump(mode="json"))]
+        ]
+        # Each earlier turn left one AI message, so this counts the turns taken so far.
+        calls = script[sum(message.type == "ai" for message in messages)]
+        reply = AIMessage(
+            content="",
+            tool_calls=[
+                {"name": name, "args": args, "id": f"call_{name}"} for name, args in calls
+            ],
+            usage_metadata={"input_tokens": 100, "output_tokens": 10, "total_tokens": 110},
+            # The usage callback ignores a message without a model name.
+            response_metadata={"model_name": "scripted"},
+        )
+        return ChatResult(generations=[ChatGeneration(message=reply)])
+
+
 @pytest.fixture
 def tiny_root(monkeypatch):
     """Point every fixture lookup, the tools included, at ``tests/fixtures``."""
@@ -57,3 +105,13 @@ def pydanticai_model(tiny_root):
     model = ScriptedModel()
     with pydanticai_impl.agent.override(model=model):
         yield model
+
+
+@pytest.fixture
+def langgraph_model(tiny_root, monkeypatch):
+    """Run the LangGraph graph on a fresh ``ScriptedChatModel`` over the tiny fixture."""
+    from bakeoff.impls import langgraph_impl
+
+    model = ScriptedChatModel()
+    monkeypatch.setattr(langgraph_impl, "graph", langgraph_impl.build_graph(model))
+    return model
