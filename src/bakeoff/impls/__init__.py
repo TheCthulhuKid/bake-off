@@ -12,6 +12,7 @@ from bakeoff.contract import TriageReport
 IMPLS = {
     "pydanticai": "bakeoff.impls.pydanticai_impl",
     "langgraph": "bakeoff.impls.langgraph_impl",
+    "anthropic": "bakeoff.impls.anthropic_impl",
 }
 
 
