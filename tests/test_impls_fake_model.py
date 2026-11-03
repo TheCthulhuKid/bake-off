@@ -1,4 +1,5 @@
 import inspect
+import json
 
 import pytest
 from langchain_core.utils.function_calling import convert_to_openai_tool
@@ -48,6 +49,9 @@ def test_anthropic_returns_report_and_records_stats(anthropic_model):
     assert first["system"] == SYSTEM_PROMPT
     for tool in first["tools"]:
         assert tool["description"] in inspect.getdoc(getattr(tools, tool["name"]))
+    # The runner sends a dict result's keys as content blocks, which the API rejects.
+    result = anthropic_model.sent[1]["messages"][-1]["content"][0]
+    assert json.loads(result["content"]) == tools.list_issues("tiny")
 
 
 @pytest.mark.parametrize("impl", ["pydanticai", "langgraph", "anthropic"])

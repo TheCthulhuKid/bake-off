@@ -1,5 +1,9 @@
 """Anthropic SDK version"""
 
+import functools
+import json
+from collections.abc import Callable
+
 import anthropic
 from anthropic import beta_tool, transform_schema
 from anthropic.types.beta import BetaJSONOutputFormatParam
@@ -10,7 +14,22 @@ from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import raise_if_limit_fired, record_usage
 from bakeoff.tools import get_issue, list_issues, search_issues
 
-TOOLS = [beta_tool(list_issues), beta_tool(get_issue), beta_tool(search_issues)]
+
+def as_json(tool: Callable[..., dict]) -> Callable[..., str]:
+    """``tool`` with its dict result as JSON text, which the runner sends as the result.
+
+    The runner takes only a string or content blocks. It sends a dict's keys as blocks, and the
+    API rejects them. ``json.dumps`` is what LangGraph's ``ToolNode`` uses for a dict.
+    """
+
+    @functools.wraps(tool)
+    def wrapper(*args, **kwargs) -> str:
+        return json.dumps(tool(*args, **kwargs), ensure_ascii=False)
+
+    return wrapper
+
+
+TOOLS = [beta_tool(as_json(tool)) for tool in (list_issues, get_issue, search_issues)]
 REPORT_FORMAT: BetaJSONOutputFormatParam = {
     "type": "json_schema",
     "schema": transform_schema(TriageReport),
