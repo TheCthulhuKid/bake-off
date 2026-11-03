@@ -49,7 +49,8 @@ class ScriptedModel(FunctionModel):
 
 class ScriptedChatModel(BaseChatModel):
     """
-    Calls list_issues, then get_issue, ends the loop, then returns ``REPORT``, using 100 + 10 tokens a turn.
+    Calls list_issues, then get_issue, ends the loop, then returns ``REPORT``,
+    using 100 + 10 tokens a turn.
     """
 
     report: ClassVar[TriageReport] = REPORT
