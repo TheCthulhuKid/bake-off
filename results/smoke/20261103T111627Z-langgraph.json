@@ -1,0 +1,163 @@
+{
+  "impl": "langgraph",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output formatting and customization",
+        "issues": [
+          373,
+          561,
+          2679,
+          2683,
+          2778,
+          2881,
+          2882,
+          3010,
+          3016,
+          3089,
+          3094,
+          3097,
+          3362,
+          3652
+        ]
+      },
+      {
+        "name": "Colour output and terminal UI (colour, pager, editor)",
+        "issues": [
+          944,
+          2154,
+          2419,
+          2781,
+          3022,
+          3840,
+          3886
+        ]
+      },
+      {
+        "name": "Parser design, rewrite and the 9.0 roadmap",
+        "issues": [
+          590,
+          742,
+          730,
+          1279,
+          2205,
+          2771,
+          2824,
+          2834,
+          2835,
+          3154,
+          3156
+        ]
+      },
+      {
+        "name": "Context, invocation and parameter-handling bugs",
+        "issues": [
+          473,
+          1269,
+          1322,
+          1574,
+          2402,
+          2753,
+          2768,
+          2786,
+          2801,
+          2853,
+          2645,
+          2429,
+          1428,
+          3888
+        ]
+      },
+      {
+        "name": "Shell completion and testing",
+        "issues": [
+          1997,
+          2184,
+          2299,
+          2303,
+          2614,
+          2847,
+          2917
+        ]
+      },
+      {
+        "name": "Typing, async and embedding Click",
+        "issues": [
+          2033,
+          2360,
+          2361,
+          2493,
+          3036,
+          3406,
+          3696,
+          3847
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 2778,
+        "b": 3652,
+        "reason": "Both ask for '...' to be appended to the metavar when an option has multiple=True, so help shows the option can be repeated."
+      },
+      {
+        "a": 304,
+        "b": 1370,
+        "reason": "Both report that confirm/prompts read from piped stdin instead of the terminal, so prompting breaks when input is piped in."
+      }
+    ],
+    "top_issues": [
+      {
+        "number": 3154,
+        "reason": "Release-planning issue for Click 9.0; decides what goes into the next major version."
+      },
+      {
+        "number": 3156,
+        "reason": "Removing deprecated code is concrete work that the 9.0 release depends on."
+      },
+      {
+        "number": 3840,
+        "reason": "Unlabelled crash report: click.edit fails on Windows about half the time; needs a decision to fix, document a workaround or close as a Windows platform bug."
+      },
+      {
+        "number": 2847,
+        "reason": "User-facing bug: shell completion of long options written with '=' is broken."
+      },
+      {
+        "number": 473,
+        "reason": "Long-standing behaviour bug (empty leftover args in Context since 6.0) with 28 comments, affecting many users."
+      }
+    ],
+    "suggested_labels": [
+      {
+        "number": 3888,
+        "labels": [
+          "parsing",
+          "docs"
+        ]
+      },
+      {
+        "number": 3886,
+        "labels": [
+          "help output"
+        ]
+      },
+      {
+        "number": 3840,
+        "labels": [
+          "bug",
+          "windows"
+        ]
+      }
+    ]
+  },
+  "stats": {
+    "tool_calls": 17,
+    "input_tokens": 107516,
+    "output_tokens": 3993,
+    "max_tool_calls": 25,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}

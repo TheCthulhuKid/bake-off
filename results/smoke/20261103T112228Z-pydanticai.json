@@ -1,0 +1,177 @@
+{
+  "impl": "pydanticai",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output formatting and customization",
+        "issues": [
+          3652,
+          2778,
+          3362,
+          3097,
+          3094,
+          3089,
+          3016,
+          3010,
+          2882,
+          2881,
+          2683,
+          2679,
+          561,
+          373,
+          2992
+        ]
+      },
+      {
+        "name": "Parser behaviour, rewrite and Click 9.0 cleanup",
+        "issues": [
+          3156,
+          3154,
+          2834,
+          2835,
+          2205,
+          590,
+          2824,
+          2786,
+          2771,
+          2768,
+          2753,
+          2402,
+          1574,
+          1322,
+          1269,
+          1279,
+          742,
+          730,
+          680,
+          473,
+          2676,
+          2801,
+          928,
+          2783
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2917,
+          2847,
+          2614,
+          2303,
+          2184,
+          2299
+        ]
+      },
+      {
+        "name": "Typing, private API and utilities",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          3036,
+          2493,
+          2706
+        ]
+      },
+      {
+        "name": "Terminal UI: prompts, colour, pager, editor, files",
+        "issues": [
+          1370,
+          304,
+          2875,
+          3022,
+          2781,
+          2419,
+          944,
+          2740,
+          3886,
+          3840,
+          2154,
+          3888,
+          1428,
+          2645,
+          2429,
+          1378,
+          1997
+        ]
+      },
+      {
+        "name": "Docs, tutorials and async/embedding",
+        "issues": [
+          3081,
+          3077,
+          3076,
+          2823,
+          2033,
+          2360,
+          2361,
+          2853,
+          531
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 2778,
+        "b": 3652,
+        "reason": "Both ask for '...' to be added to the metavar in help when an option has multiple=True."
+      },
+      {
+        "a": 304,
+        "b": 1370,
+        "reason": "Both report that confirmation prompts read from piped stdin instead of the terminal, and ask for them to read from /dev/tty."
+      }
+    ],
+    "top_issues": [
+      {
+        "number": 3154,
+        "reason": "Tracking issue for the Click 9.0 release, which a lot of other parser and deprecation work depends on."
+      },
+      {
+        "number": 3156,
+        "reason": "Removing deprecated code is a concrete blocker for 9.0."
+      },
+      {
+        "number": 2847,
+        "reason": "Bug: completing a long option written with '=' is broken, which affects users of shell completion."
+      },
+      {
+        "number": 3840,
+        "reason": "New bug report: click.edit fails on Windows about half the time. It needs a maintainer to decide whether this is a Windows platform bug."
+      },
+      {
+        "number": 2834,
+        "reason": "Meta issue (15 comments) for future parser changes. It ties together many long-standing parsing issues."
+      }
+    ],
+    "suggested_labels": [
+      {
+        "number": 3888,
+        "labels": [
+          "parsing"
+        ]
+      },
+      {
+        "number": 3886,
+        "labels": [
+          "prompt"
+        ]
+      },
+      {
+        "number": 3840,
+        "labels": [
+          "prompt"
+        ]
+      }
+    ]
+  },
+  "stats": {
+    "tool_calls": 12,
+    "input_tokens": 43669,
+    "output_tokens": 1916,
+    "max_tool_calls": 25,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}
