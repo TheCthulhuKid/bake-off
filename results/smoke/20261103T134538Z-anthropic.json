@@ -1,0 +1,171 @@
+{
+  "impl": "anthropic",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output formatting and customization",
+        "issues": [
+          3652,
+          2778,
+          3362,
+          3097,
+          3094,
+          3089,
+          3016,
+          3010,
+          2882,
+          2881,
+          2683,
+          2679,
+          561,
+          373,
+          2992
+        ]
+      },
+      {
+        "name": "Parser behaviour, rewrite and Click 9.0 cleanup",
+        "issues": [
+          3156,
+          3154,
+          2834,
+          2835,
+          2205,
+          590,
+          2824,
+          2786,
+          2771,
+          2768,
+          2753,
+          1269,
+          1322,
+          742,
+          730,
+          1279,
+          473,
+          1574,
+          680,
+          2402,
+          2853,
+          531
+        ]
+      },
+      {
+        "name": "Terminal UI: prompts, colors, pager, editor and launch",
+        "issues": [
+          1370,
+          304,
+          2875,
+          3022,
+          2781,
+          2419,
+          944,
+          2740,
+          3886,
+          3840,
+          2154
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2847,
+          2614,
+          2303,
+          2184,
+          2917,
+          2299
+        ]
+      },
+      {
+        "name": "Typing, utilities and API surface",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          2493,
+          3036,
+          2706,
+          2783,
+          928
+        ]
+      },
+      {
+        "name": "Files, paths, async and embedding",
+        "issues": [
+          3888,
+          1428,
+          1378,
+          2645,
+          2429,
+          2033,
+          2360,
+          2361,
+          1997
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 3652,
+        "b": 2778,
+        "reason": "Both ask for '...' to be added to the metavar of options with multiple=True so help output shows the option can be repeated."
+      },
+      {
+        "a": 1370,
+        "b": 304,
+        "reason": "Both report that confirm prompts read from piped stdin instead of the terminal, and both want prompts to read from the tty."
+      }
+    ],
+    "top_issues": [
+      {
+        "number": 3154,
+        "reason": "Tracking issue for the Click 9.0 release. Much parser and deprecation work depends on it (see also 3156)."
+      },
+      {
+        "number": 2847,
+        "reason": "Bug: completing a long option written with '=' is broken, which affects users of shell completion."
+      },
+      {
+        "number": 3840,
+        "reason": "New, unlabelled bug report: click.edit fails on Windows about half the time. It needs triage to decide whether this is a Click problem or a Windows platform bug."
+      },
+      {
+        "number": 2786,
+        "reason": "Bug where multi-value options override the value returned by the callback, so users get wrong parameter values without any error."
+      },
+      {
+        "number": 3010,
+        "reason": "Common help-text complaint (9 comments): there is no way to get single newlines in help text."
+      }
+    ],
+    "suggested_labels": [
+      {
+        "number": 3888,
+        "labels": [
+          "parsing"
+        ]
+      },
+      {
+        "number": 3886,
+        "labels": [
+          "help output"
+        ]
+      },
+      {
+        "number": 3840,
+        "labels": [
+          "prompt"
+        ]
+      }
+    ]
+  },
+  "stats": {
+    "tool_calls": 14,
+    "input_tokens": 66831,
+    "output_tokens": 2213,
+    "max_tool_calls": 25,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}
