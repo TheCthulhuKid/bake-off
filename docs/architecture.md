@@ -91,7 +91,9 @@ framework, so they are edited as prompt text. Each returns a JSON-serialisable d
 tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps its work in
 `collect()`. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on the call
 after the limit, and implementations pass token counts to `record_usage()`. Outside `collect()`
-both are no-ops, so the tools work from a shell.
+both are no-ops, so the tools work from a shell. For a framework that turns a tool's exception
+into an error result for the model, `raise_if_limit_fired()` raises `ToolLimitExceeded` again
+once the limit has fired.
 
 ## Prompt
 
@@ -137,11 +139,19 @@ and list it below.
   calls the model bound to the three tools and loops through a `ToolNode` while the reply has
   tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with
   the same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates
-  the reply's JSON text as a `TriageReport` and raises if it is invalid. `build_graph(model)` builds it, and the module-level
-  `graph` uses a `ChatAnthropic` with `effort` from `SETTINGS`. Usage is collected by a
-  `UsageMetadataCallbackHandler` passed in the run config, and recorded in a `finally`.
+  the reply's JSON text as a `TriageReport` and raises if it is invalid. `build_graph(model)`
+  builds it, and the module-level `graph` uses a `ChatAnthropic` with `effort` from
+  `SETTINGS`. Usage is collected by a `UsageMetadataCallbackHandler` passed in the run config,
+  and recorded in a `finally`.
+- `impls/anthropic_impl.py`: the Anthropic SDK's beta tool runner, streamed, over the three
+  tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
+  its `Args` section), with `SYSTEM_PROMPT` as `system` and the strict `TriageReport` schema
+  from `transform_schema` in `output_config.format`. The runner turns tool exceptions into
+  error results, so `triage` calls `telemetry.raise_if_limit_fired()` after each reply's tools
+  have run. Usage is recorded from each reply as it arrives, and the last reply's text is
+  validated as a `TriageReport`.
 
-Registered as `pydanticai` and `langgraph`.
+Registered as `pydanticai`, `langgraph` and `anthropic`.
 
 ## Running
 
@@ -151,8 +161,9 @@ stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out` also wri
 file. `runner.result_path` picks the file: a path ending in `.json` is used as given, and any
 other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
 `YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
-before the run starts, so a bad or taken path costs no tokens. Errors from the run itself, including `ToolLimitExceeded`,
-propagate; the eval harness will record them instead and add `eval` and `report`.
+before the run starts, so a bad or taken path costs no tokens. Errors from the run itself,
+including `ToolLimitExceeded`, propagate; the eval harness will record them instead and add
+`eval` and `report`.
 
 ## Tests
 
@@ -163,3 +174,8 @@ LangGraph has no override hook, so the `langgraph_model` fixture builds a graph 
 `graph` with `monkeypatch.setattr`. `tests/conftest.py` sets PydanticAI's
 `ALLOW_MODEL_REQUESTS = False` and a dummy `ANTHROPIC_API_KEY`. LangChain has no such switch,
 so a LangGraph test must use the `langgraph_model` fixture.
+
+The tool runner talks HTTP through its client, so the `anthropic_model` fixture puts an
+`anthropic.Anthropic` over `ScriptedTransport`, an `httpx2.MockTransport` that answers with
+scripted streamed replies and records each request body, in place of the module-level
+`client`. A test of this implementation must use the fixture.

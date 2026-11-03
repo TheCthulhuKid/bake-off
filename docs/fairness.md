@@ -33,6 +33,18 @@ marked "Read from source" were not run.
 | LangChain (`ChatAnthropic`) | The report is sent as a strict JSON schema in `output_config.format` (`response_format`). Checked offline. | As in PydanticAI, `top_issues`' `maxItems: 5` becomes a description. With no retry, an overlong list ends the run. | Yes, see deviations |
 | LangChain | Tool descriptions join the docstring's lines with spaces. Checked by a run. | The model sees the same words as under PydanticAI, which keeps the line breaks, but not the same text. | No |
 | Anthropic SDK (under `ChatAnthropic`) | Two retries on connection errors, 429 and 5xx; no request timeout, because `ChatAnthropic` passes `timeout=None`. Checked offline. | A stalled request waits forever, where PydanticAI's client gives up after 600 s, so a hung LangGraph run ends only when the caller stops it. | No |
+| Anthropic tool runner | A tool's exception, `ToolLimitExceeded` included, is sent to the model as an error result. Checked by a run. | Without a check, the tool-call limit would not end the run. `triage` re-raises it once the reply's tools have run and before the next request, so the run ends where the other implementations' runs end. | No; worked around in `triage` |
+| Anthropic tool runner | Tool arguments that fail validation are returned as an error result reading only `Invalid arguments for function <name>`, with no cap. Checked by a run. | Such calls never reach the tool, so they do not count towards the tool-call limit. The model is not told which argument was wrong, unlike under PydanticAI and LangGraph. | No |
+| Anthropic tool runner | `max_iterations` has no limit by default. Read from source. | With the row above, a model that keeps sending invalid arguments is not stopped, as under LangGraph; the shared per-run cap planned for the eval harness covers it. | No |
+| Anthropic tool runner | No retry when the report fails validation. Checked by a run. | `TriageReport.model_validate_json` raises after the last reply, whose tokens are already recorded. | No |
+| Anthropic tool runner | Tool calls from one reply run one at a time, in order. Read from source; the limit firing mid-batch checked by a run. | Each call counts towards the limit as elsewhere, but parallel reads are not parallel, so latency is higher than under the other two for the same calls. | No |
+| Anthropic tool runner | Message threads are on: after the first request, only new messages are sent, with the `message-threads-2026-08-12` beta. Checked offline. | Smaller requests and lower time to first token, billed the same according to the SDK docs. Favours this implementation on latency. Not available under zero data retention. | No |
+| Anthropic tool runner | `stream` is off by default, and a non-streaming request with `max_tokens` 128,000 is refused by the SDK. Checked offline. | Streaming is turned on so that `max_tokens` matches the other two. It changes how the reply arrives, not what it holds. | Yes, see deviations |
+| Anthropic SDK (tool runner) | `thinking` is not sent, so the model uses its default. Checked offline. | The same as PydanticAI. | No |
+| Anthropic SDK (tool runner) | No prompt caching. Checked offline. | The same as PydanticAI and LangGraph. | No |
+| Anthropic SDK (tool runner) | Tool descriptions are the docstring with its line breaks and without `Args:`, which goes into the parameter descriptions. Checked offline. | The same text as PydanticAI; LangGraph joins the lines with spaces. | No |
+| Anthropic SDK (tool runner) | The report schema from `transform_schema` turns `top_issues`' `maxItems: 5` into a description. Checked offline. | The same as the other two: a sixth top issue fails validation rather than being prevented. | No |
+| Anthropic SDK (tool runner) | Two retries on connection errors, 408, 409, 429 and 5xx; 600 s read timeout. Checked offline. | The same as PydanticAI's client; LangGraph's has no timeout. | No |
 
 ## Usage reporting
 
@@ -43,11 +55,13 @@ marked "Read from source" were not run.
   every model call in the graph, keyed by model name, and `triage` records the totals in a
   `finally`, so a run that raises still reports its cost. Totals include the `analyse` call
   and requests made before the tool-call limit fired.
+- Anthropic tool runner: `triage` records each reply's `usage` as it arrives, before running
+  its tools or validating the report, so a run that raises still reports its cost.
 
 ## Deliberate deviations
 
 - `TriageReport.suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`),
-  one per issue, instead of the brief's `dict[int, list[str]]`. Both frameworks send the
+  one per issue, instead of the brief's `dict[int, list[str]]`. Every framework sends the
   report as a strict JSON schema, which can only express that dict as an empty object, so the
   model could never suggest a label. This applies to every implementation equally.
 - LangGraph's `analyse` node does not use `with_structured_output`. Its default,
@@ -63,3 +77,7 @@ marked "Read from source" were not run.
   conversation would otherwise end on the model's last `fetch` reply, and `claude-opus-5-5`
   rejects that with "This model does not support assistant message prefill" (seen in the first
   LangGraph smoke run). The message is only added to that call, not to the graph's state.
+- The Anthropic tool runner runs with `stream=True`. Every request needs `max_tokens`, and the
+  SDK refuses a non-streaming request with the 128,000 the other implementations send. The
+  report schema goes in `output_config.format` rather than `output_format`, which would parse
+  the report mid-stream and lose the usage of a reply that fails validation.
