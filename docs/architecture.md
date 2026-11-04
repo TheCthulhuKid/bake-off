@@ -60,7 +60,7 @@ numbers in `suggested_labels`. Citation existence is checked by scoring, not by 
 citation validity is a metric. A `DuplicatePair` with the same number twice is rejected.
 
 `suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`) rather than the
-`dict[int, list[str]]` in `BAKE-OFF.md`. The frameworks send the report to the model as a strict
+`dict[int, list[str]]` first planned. The frameworks send the report to the model as a strict
 JSON schema, which can only express that dict as an empty object; see `docs/fairness.md`. A
 report that lists an issue in `suggested_labels` more than once is rejected, as the dict could
 not hold it twice.

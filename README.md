@@ -1,7 +1,29 @@
 # Framework bake-off
 
 The same issue triage agent built in LangGraph, PydanticAI and the Anthropic SDK tool runner,
-compared on a shared eval set. The task, metrics and milestones are in `BAKE-OFF.md`.
+compared on a shared eval set.
+
+## The task
+
+Given a GitHub repository's open issues, recorded as a fixture, the agent returns a
+`TriageReport` (`src/bakeoff/contract.py`):
+
+- **Themes**: 3 to 6 groups of related issues, each with the issue numbers in it.
+- **Duplicates**: pairs of issues that describe the same problem, with a one-line reason.
+- **Top issues**: up to five issues worth looking at first, with a reason each.
+- **Suggested labels** for unlabelled issues.
+
+Every issue number the report cites must exist in the data. The three implementations share
+the model, effort level, system prompt, tools and tool-call limit, so differences come from the
+framework; `docs/fairness.md` lists the framework defaults that still differ.
+
+## Metrics
+
+The full eval runs each case three times per implementation and compares schema validity,
+citation validity, duplicate precision and recall against hand-labelled pairs, theme quality
+(an LLM judge, spot-checked by hand), resistance to prompt injection in issue text, latency
+(p50 and p95), cost from token counts, tool calls (the mean, and runs that hit the limit), and
+the size of each `impls/*.py` file.
 
 ## Results
 
@@ -9,7 +31,7 @@ Not run yet. The table lands here after the full eval.
 
 ## Layout
 
-See `docs/architecture.md`. Framework-neutral code (contract, tools, fixtures, prompt, scoring)
+See `docs/architecture.md`. Framework-neutral code (contract, tools, fixtures, prompt, telemetry)
 lives in `src/bakeoff/`; each framework's glue is one file under `src/bakeoff/impls/`.
 
 ## Running
@@ -20,8 +42,8 @@ uv sync --locked --group dev
 ```
 
 Tests and CI never call a model. CI has two workflows: `tests.yml` runs pytest with coverage
-on four workers on every push, and `quality.yml` runs the Ruff checks on pushes to `main` and on
-pull requests. Locally, the same checks are:
+on four workers, and `quality.yml` runs the Ruff checks; both run on every push. Locally, the
+same checks are:
 
 ```sh
 .venv/bin/python -m pytest
@@ -29,7 +51,7 @@ pull requests. Locally, the same checks are:
 .venv/bin/python -m ruff format --check .
 ```
 
-Real-model runs (`bakeoff run`, `bakeoff eval`) need `ANTHROPIC_API_KEY` and are started by hand.
+Real-model runs (`bakeoff run`) need `ANTHROPIC_API_KEY` and are started by hand.
 One run of an implementation on a recorded repo, saved to a new
 `results/smoke/<UTC timestamp>-pydanticai.json`:
 

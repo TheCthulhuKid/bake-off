@@ -22,7 +22,7 @@ marked "Read from source" were not run.
 | PydanticAI | No prompt caching (no `anthropic_cache_*` setting). Read from source. | Each request pays full input price for the whole conversation so far, including the system prompt and tool definitions. | No |
 | PydanticAI | The report is sent as a strict JSON schema in `output_config.format`. Checked offline. | Constraints strict mode cannot express are moved into descriptions: `top_issues`' `maxItems: 5` becomes a hint, so an overlong list fails validation and is retried once rather than being prevented. | No |
 | Anthropic SDK (under PydanticAI) | Two retries on connection errors, 429 and 5xx; 600 s read timeout. Read from source. | Affects latency and, after a transient error, the chance a run completes. Not counted as model retries. | No |
-| LangGraph | `analyse` is a separate model call after `fetch` ends: the brief's three-node design, not a framework default. Checked by a run. | Every run makes one more model request than a single-agent loop, and that request sends the whole conversation again, so input tokens are higher for the same reading. | No |
+| LangGraph | `analyse` is a separate model call after `fetch` ends: the planned three-node design (fetch, analyse, report), not a framework default. Checked by a run. | Every run makes one more model request than a single-agent loop, and that request sends the whole conversation again, so input tokens are higher for the same reading. | No |
 | LangGraph | No retry when the report fails validation. Checked by a run. | The `report` node raises pydantic's `ValidationError` on the first invalid report, where PydanticAI sends it back once. Schema validity compares the frameworks' retry policies as well as their output. | No |
 | LangGraph (`ToolNode`) | Tool arguments that fail validation are returned to the model as an error `ToolMessage`, with no cap. Checked by a run. | Such calls never reach the tool, so they do not count towards the tool-call limit. PydanticAI allows one such retry per tool and then raises. | No |
 | LangGraph | Recursion limit of 10,007 supersteps (`LANGGRAPH_DEFAULT_RECURSION_LIMIT`). Read from source. | Each fetch and tools round takes two supersteps, so on valid calls the tool-call limit always fires first. On invalid calls, which the limit does not count, a run can make about 5,000 model requests before it is stopped. | No |
@@ -69,7 +69,7 @@ implementation ends the run on it.
 ## Deliberate deviations
 
 - `TriageReport.suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`),
-  one per issue, instead of the brief's `dict[int, list[str]]`. Every framework sends the
+  one per issue, instead of the planned `dict[int, list[str]]`. Every framework sends the
   report as a strict JSON schema, which can only express that dict as an empty object, so the
   model could never suggest a label. This applies to every implementation equally.
 - LangGraph's `analyse` node does not use `with_structured_output`. Its default,
