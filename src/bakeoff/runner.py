@@ -19,7 +19,7 @@ class RunResult(BaseModel):
 
 
 def run_once(impl: str, repo: str) -> RunResult:
-    """Run ``impl`` on ``repo`` once; an unknown name raises before any model is called."""
+    """Run ``impl`` on ``repo`` once; an unknown repo or impl raises before any model is called."""
     # The repo first: it is the cheap check, and importing a framework can fail on a missing key.
     load_repo(repo)
     triage = get_triage(impl)

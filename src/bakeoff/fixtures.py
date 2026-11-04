@@ -4,7 +4,13 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "evals" / "repos"
+from bakeoff.settings import PROJECT_ROOT
+
+FIXTURE_ROOT = PROJECT_ROOT / "evals" / "repos"
+
+
+class UnknownRepoError(FileNotFoundError):
+    """Raised by ``load_repo`` for a name with no recorded fixture."""
 
 
 class Comment(BaseModel):
@@ -37,9 +43,9 @@ def fixture_path(name: str, root: Path | None = None) -> Path:
 
 
 def load_repo(name: str, root: Path | None = None) -> Repo:
-    """Load ``<root>/<name>/issues.json``; an unknown name raises FileNotFoundError."""
+    """Load ``<root>/<name>/issues.json``; an unknown name raises UnknownRepoError."""
     root = root or FIXTURE_ROOT
     path = fixture_path(name, root)
     if not path.is_file():
-        raise FileNotFoundError(f"no recorded repo {name!r} under {root}")
+        raise UnknownRepoError(f"no recorded repo {name!r} under {root}")
     return Repo.model_validate_json(path.read_text())

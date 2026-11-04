@@ -1,13 +1,19 @@
 """Shared run settings. Every implementation reads these so differences come from the framework.
 
-Variables are read from the environment and from a local ``.env`` (see ``.env.example``).
-Run settings use the ``BAKEOFF_`` prefix; the two credentials keep their conventional names.
+Variables are read from the environment and from ``.env`` at the project root (see
+``.env.example``). Run settings use the ``BAKEOFF_`` prefix; the two credentials keep their
+conventional names.
 """
 
+from pathlib import Path
 from typing import Literal, NamedTuple
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# The checkout root, so .env and the fixtures are found from any working directory. This needs a
+# source checkout or editable install, as `uv sync` gives.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ModelSpec(NamedTuple):
@@ -35,7 +41,7 @@ class Settings(BaseSettings):
     github_token: SecretStr | None = Field(default=None, validation_alias="GITHUB_TOKEN")
 
     model_config = SettingsConfigDict(
-        env_prefix="BAKEOFF_", env_file=".env", extra="ignore", validate_by_name=True
+        env_prefix="BAKEOFF_", env_file=PROJECT_ROOT / ".env", extra="ignore", validate_by_name=True
     )
 
     def api_key(self) -> str | None:

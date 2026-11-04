@@ -1,4 +1,4 @@
-"""Anthropic SDK version"""
+"""Anthropic SDK version: the beta tool runner, streamed, over the shared tools."""
 
 import functools
 import json
@@ -39,7 +39,7 @@ client = anthropic.Anthropic(api_key=SETTINGS.api_key())
 
 
 def triage(repo: str) -> TriageReport:
-    """Triage a repository"""
+    """Run the tool runner on ``repo`` and return the last reply's report."""
     runner = client.beta.messages.tool_runner(
         model=SETTINGS.model,
         # The other frameworks send the model's maximum output by default. The SDK only allows a

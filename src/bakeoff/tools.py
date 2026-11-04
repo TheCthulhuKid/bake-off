@@ -8,10 +8,11 @@ error), so this keeps a wrong argument reaching the model the same way in every 
 """
 
 import functools
+import math
 from collections.abc import Callable
 from typing import Any
 
-from bakeoff.fixtures import Issue, load_repo
+from bakeoff.fixtures import Issue, UnknownRepoError, load_repo
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_tool_call
 
@@ -29,7 +30,7 @@ def _tool(function: Callable[..., dict[str, Any]]) -> Callable[..., dict[str, An
         record_tool_call()
         try:
             return function(repo, *args, **kwargs)
-        except FileNotFoundError:
+        except UnknownRepoError:
             return {"error": f"repository {repo} does not exist"}
 
     return wrapper
@@ -52,7 +53,7 @@ def list_issues(repo: str, page: int = 1) -> dict[str, Any]:
     selected = issues[start : start + size] if page >= 1 else []
     return {
         "page": page,
-        "pages": -(-len(issues) // size),
+        "pages": math.ceil(len(issues) / size),
         "total_issues": len(issues),
         "issues": [_summary(issue) | {"comments": len(issue.comments)} for issue in selected],
     }

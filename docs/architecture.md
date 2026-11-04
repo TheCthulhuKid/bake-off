@@ -34,9 +34,11 @@ The eval harness will add `evals/cases.yaml` (hand-labelled ground truth per cas
 ## Settings
 
 `settings.py` exposes one `Settings` object, `SETTINGS`, built with pydantic-settings from the
-environment and a local `.env` at import time. Every implementation takes its model, effort and
-API key from it, and the tools take their limits from it. Copy `.env.example` to `.env` for
-local runs; `.env` is ignored by git.
+environment and the `.env` at the project root at import time, whatever the working directory.
+Every implementation takes its model, effort and API key from it, and the tools take their
+limits from it. Copy `.env.example` to `.env` for local runs; `.env` is ignored by git.
+`PROJECT_ROOT`, which places both `.env` and the fixtures, is found from the source file, so it
+needs a source checkout or an editable install, which is what `uv sync` gives.
 
 | Field | Env var | Default | Used by |
 | --- | --- | --- | --- |
@@ -90,10 +92,11 @@ since hand-labelled ground truth refers to the recorded issues. Its test gives t
 `tools.py` holds `list_issues(repo, page)`, `get_issue(repo, number)` and
 `search_issues(repo, query)`, and `TOOLS`, the list every implementation passes to its
 framework. Their docstrings are the model-facing tool descriptions in every framework, so they
-are edited as prompt text. Each returns a JSON-serialisable dict. An
-unknown repo name returns `{"error": ...}` from every tool instead of raising, since PydanticAI
-and LangGraph end the run on a tool's exception while the Anthropic tool runner shows it to the
-model; `fixtures.load_repo` itself still raises `FileNotFoundError` for the runner and CLI.
+are edited as prompt text. Each returns a JSON-serialisable dict. An unknown repo name returns
+`{"error": ...}` from every tool instead of raising, since PydanticAI and LangGraph end the run
+on a tool's exception while the Anthropic tool runner shows it to the model.
+`fixtures.load_repo` itself raises `UnknownRepoError`, a `FileNotFoundError`, which the CLI
+turns into an error message; the tools and the CLI catch only that, not other missing files.
 
 - `list_issues` pages through the fixture in its recorded order (newest first), `page_size`
   issues per page, with number, title, labels and comment count, plus the page and issue totals.
@@ -102,7 +105,10 @@ model; `fixtures.load_repo` itself still raises `FileNotFoundError` for the runn
   unknown number returns `{"error": ...}` instead of raising, so every framework shows the
   model the same thing.
 - `search_issues` scores each issue by how many of the query's words appear in its title or
-  body, case-insensitively, and returns the top 20 in fixture order within a score.
+  body, case-insensitively, and returns the top 20 in fixture order within a score. Words match
+  as substrings, so `log` also matches `login`: a simple, predictable rule that is the same for
+  every framework. The docstring states the limit of 20 literally, as prompt text, and a test
+  checks it against `SEARCH_LIMIT`.
 
 `telemetry.py` collects one `RunStats` per run: tool calls, input and output tokens, the
 tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps its work in
@@ -134,7 +140,8 @@ the model's own reply; only LangGraph's `analyse` node sends it. The system prom
   duplicate, and stay within `max_tool_calls`, whose value is formatted into the text.
 
 The prompt is built at import time, so changing `BAKEOFF_MAX_TOOL_CALLS` changes the prompt
-text too.
+text too. `collect(max_tool_calls=n)` changes only the enforced limit, not the number the prompt
+states, so a per-run override would need the prompt rebuilt to match.
 
 ## Implementations
 

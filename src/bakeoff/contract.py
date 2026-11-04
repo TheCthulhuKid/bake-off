@@ -1,5 +1,7 @@
 """The output every implementation must return. Imports nothing from the project."""
 
+from collections import Counter
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -38,8 +40,8 @@ class TriageReport(BaseModel):
 
     @model_validator(mode="after")
     def _one_suggestion_per_issue(self) -> "TriageReport":
-        numbers = [suggestion.number for suggestion in self.suggested_labels]
-        if repeated := {number for number in numbers if numbers.count(number) > 1}:
+        counts = Counter(suggestion.number for suggestion in self.suggested_labels)
+        if repeated := {number for number, count in counts.items() if count > 1}:
             raise ValueError(f"repeated issue numbers in label suggestions: {repeated}")
         return self
 

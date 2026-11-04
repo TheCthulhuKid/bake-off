@@ -9,6 +9,7 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Literal
 
 from pydantic import BaseModel, computed_field
 
@@ -24,7 +25,7 @@ class RunStats(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     max_tool_calls: int
-    limit_fired: str | None = None
+    limit_fired: Literal["tool_calls"] | None = None
 
     @computed_field
     @property
