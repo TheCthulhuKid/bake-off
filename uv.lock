@@ -95,6 +95,7 @@ name = "bake-off"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anthropic" },
     { name = "click" },
     { name = "langchain-anthropic" },
     { name = "langgraph" },
@@ -115,6 +116,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=2.3.0" },
     { name = "click", specifier = ">=8.5.0" },
     { name = "langchain-anthropic", specifier = ">=1.7.7" },
     { name = "langgraph", specifier = ">=1.2.18" },
