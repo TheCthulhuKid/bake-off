@@ -38,7 +38,8 @@ def fixture_path(name: str, root: Path | None = None) -> Path:
 
 def load_repo(name: str, root: Path | None = None) -> Repo:
     """Load ``<root>/<name>/issues.json``; an unknown name raises FileNotFoundError."""
+    root = root or FIXTURE_ROOT
     path = fixture_path(name, root)
     if not path.is_file():
-        raise FileNotFoundError(f"no recorded repo {name!r} under {path.parent.parent}")
+        raise FileNotFoundError(f"no recorded repo {name!r} under {root}")
     return Repo.model_validate_json(path.read_text())

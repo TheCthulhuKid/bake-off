@@ -2,10 +2,13 @@
 
 The docstrings are the model-facing tool descriptions in every framework, so edit them as
 prompt text. Every call counts towards the run's tool-call limit, including calls that return
-an error. An unknown issue number returns an error object rather than raising, so a cited
-number that does not exist reaches the model the same way in every framework.
+an error. An unknown repository or issue number returns an error object rather than raising:
+the frameworks treat a raising tool differently (some end the run, one shows the model the
+error), so this keeps a wrong argument reaching the model the same way in every framework.
 """
 
+import functools
+from collections.abc import Callable
 from typing import Any
 
 from bakeoff.fixtures import Issue, load_repo
@@ -15,6 +18,24 @@ from bakeoff.telemetry import record_tool_call
 SEARCH_LIMIT = 20
 
 
+def _tool(function: Callable[..., dict[str, Any]]) -> Callable[..., dict[str, Any]]:
+    """Count each call of ``function`` and turn an unknown repo into an error result.
+
+    ``functools.wraps`` keeps the signature and docstring the frameworks build the tool from.
+    """
+
+    @functools.wraps(function)
+    def wrapper(repo: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        record_tool_call()
+        try:
+            return function(repo, *args, **kwargs)
+        except FileNotFoundError:
+            return {"error": f"repository {repo} does not exist"}
+
+    return wrapper
+
+
+@_tool
 def list_issues(repo: str, page: int = 1) -> dict[str, Any]:
     """List the open issues in a repository, one page at a time, newest first.
 
@@ -25,7 +46,6 @@ def list_issues(repo: str, page: int = 1) -> dict[str, Any]:
         repo: Name of the repository, exactly as given in the task.
         page: Page number, starting at 1. The result says how many pages there are.
     """
-    record_tool_call()
     issues = load_repo(repo).issues
     size = SETTINGS.page_size
     start = (page - 1) * size
@@ -38,6 +58,7 @@ def list_issues(repo: str, page: int = 1) -> dict[str, Any]:
     }
 
 
+@_tool
 def get_issue(repo: str, number: int) -> dict[str, Any]:
     """Read one issue in full: title, labels, body and comments.
 
@@ -48,7 +69,6 @@ def get_issue(repo: str, number: int) -> dict[str, Any]:
         repo: Name of the repository, exactly as given in the task.
         number: The issue number, as shown by list_issues or search_issues.
     """
-    record_tool_call()
     issue = load_repo(repo).issue(number)
     if issue is None:
         return {"error": f"issue #{number} does not exist in {repo}"}
@@ -62,6 +82,7 @@ def get_issue(repo: str, number: int) -> dict[str, Any]:
     }
 
 
+@_tool
 def search_issues(repo: str, query: str) -> dict[str, Any]:
     """Search issue titles and bodies for keywords, case-insensitively.
 
@@ -72,7 +93,6 @@ def search_issues(repo: str, query: str) -> dict[str, Any]:
         repo: Name of the repository, exactly as given in the task.
         query: One or more keywords separated by spaces, for example "unicode error windows".
     """
-    record_tool_call()
     words = set(query.lower().split())
     scored = []
     for issue in load_repo(repo).issues:

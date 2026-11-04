@@ -76,7 +76,10 @@ and is run by hand. It makes one request per 100 issues plus one per commented i
 
 `tools.py` holds `list_issues(repo, page)`, `get_issue(repo, number)` and
 `search_issues(repo, query)`. Their docstrings are the model-facing tool descriptions in every
-framework, so they are edited as prompt text. Each returns a JSON-serialisable dict:
+framework, so they are edited as prompt text. Each returns a JSON-serialisable dict. An
+unknown repo name returns `{"error": ...}` from every tool instead of raising, since PydanticAI
+and LangGraph end the run on a tool's exception while the Anthropic tool runner shows it to the
+model; `fixtures.load_repo` itself still raises `FileNotFoundError` for the runner and CLI.
 
 - `list_issues` pages through the fixture in its recorded order (newest first), `page_size`
   issues per page, with number, title, labels and comment count, plus the page and issue totals.

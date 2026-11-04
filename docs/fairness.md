@@ -47,6 +47,13 @@ marked "Read from source" were not run.
 | Anthropic SDK (tool runner) | The report schema from `transform_schema` turns `top_issues`' `maxItems: 5` into a description. Checked offline. | The same as the other two: a sixth top issue fails validation rather than being prevented. | No |
 | Anthropic SDK (tool runner) | Two retries on connection errors, 408, 409, 429 and 5xx; 600 s read timeout. Checked offline. | The same as PydanticAI's client; LangGraph's has no timeout. | No |
 
+## Tool errors
+
+A wrong argument the model can recover from, an unknown repo name or issue number, comes back
+from the tool as an `{"error": ...}` result rather than an exception, so it reaches the model
+the same way in every implementation. Only `ToolLimitExceeded` is raised, and every
+implementation ends the run on it.
+
 ## Usage reporting
 
 - PydanticAI: `triage` passes a `RunUsage` into `run_sync`, which PydanticAI updates after
