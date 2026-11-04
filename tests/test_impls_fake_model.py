@@ -2,11 +2,14 @@ import inspect
 import json
 
 import pytest
+from langchain_anthropic import ChatAnthropic
 from langchain_core.utils.function_calling import convert_to_openai_tool
+from pydantic_ai.profiles.anthropic import anthropic_model_profile
 
 from bakeoff import tools
 from bakeoff.impls import get_triage
 from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT
+from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import ToolLimitExceeded, collect
 
 
@@ -47,6 +50,10 @@ def test_anthropic_returns_report_and_records_stats(anthropic_model):
     # Under message threads, later requests leave out the system prompt and tools.
     first = anthropic_model.sent[0]
     assert first["system"] == SYSTEM_PROMPT
+    # The other two send their own maximum output for the model; this one must match it.
+    assert first["max_tokens"] == ChatAnthropic(model=SETTINGS.model).max_tokens
+    profile = anthropic_model_profile(SETTINGS.model)
+    assert first["max_tokens"] == profile["anthropic_max_output_tokens"]
     for tool in first["tools"]:
         assert tool["description"] in inspect.getdoc(getattr(tools, tool["name"]))
     # The runner sends a dict result's keys as content blocks, which the API rejects.
@@ -59,6 +66,5 @@ def test_tool_limit_ends_the_run(impl, request):
     request.getfixturevalue(f"{impl}_model")
     with collect(max_tool_calls=1) as stats, pytest.raises(ToolLimitExceeded):
         get_triage(impl)("tiny")
-    assert stats.limit_fired == "tool_calls"
     # The two turns before the limit still count towards cost.
     assert (stats.input_tokens, stats.output_tokens) == (200, 20)

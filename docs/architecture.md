@@ -3,21 +3,24 @@
 ```text
 src/bakeoff/
   contract.py      TriageReport and friends: the output every implementation returns
-  settings.py      model, effort, tool-call limit, truncation limit, price table
-  prompt.py        the one shared system prompt
+  settings.py      model, effort, tool-call limit, truncation limit, prices and max output per model
+  prompt.py        the shared system prompt, opening user message and report prompt
   fixtures.py      loads recorded repo data from evals/repos/<name>/issues.json
   tools.py         list_issues, get_issue, search_issues over fixture data
   telemetry.py     per-run collector for tool calls and token usage
   impls/           one file per framework, each exposing triage(repo) -> TriageReport
-  runner.py        runs an implementation on a case, with timings and token counts
-  cli.py           bakeoff run / eval / report; input and output handling only
+  runner.py        runs an implementation once on a recorded repo and collects its stats
+  cli.py           bakeoff run; input and output handling only
 evals/
   repos/<name>/    recorded issues, one directory per fixture repo
-  cases.yaml       hand-labelled ground truth per case
-  scoring.py       metrics over saved runs
-results/           saved eval runs, append-only
+results/           saved runs, never overwritten
+scripts/           record_issues.py, which records a fixture from GitHub
 tests/             offline; frameworks run against fake models
 ```
+
+The eval harness will add `evals/cases.yaml` (hand-labelled ground truth per case),
+`evals/scoring.py` (metrics over saved runs), run timings, and the `bakeoff eval` and
+`bakeoff report` commands.
 
 ## Layers
 
@@ -31,31 +34,38 @@ tests/             offline; frameworks run against fake models
 ## Settings
 
 `settings.py` exposes one `Settings` object, `SETTINGS`, built with pydantic-settings from the
-environment and a local `.env` at import time. Every implementation takes its model, effort and
-API key from it, and the tools take their limits from it. Copy `.env.example` to `.env` for
-local runs; `.env` is ignored by git.
+environment and the `.env` at the project root at import time, whatever the working directory.
+Every implementation takes its model, effort and API key from it, and the tools take their
+limits from it. Copy `.env.example` to `.env` for local runs; `.env` is ignored by git.
+`PROJECT_ROOT`, which places both `.env` and the fixtures, is found from the source file, so it
+needs a source checkout or an editable install, which is what `uv sync` gives.
 
 | Field | Env var | Default | Used by |
 | --- | --- | --- | --- |
-| `model` | `BAKEOFF_MODEL` | `claude-opus-5-5` | implementations, judge, cost |
+| `model` | `BAKEOFF_MODEL` | `claude-opus-5-5` | implementations, `cost()`, `max_output_tokens()` |
 | `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
-| `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly |
+| `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly as `Settings.api_key()` |
 | `github_token` | `GITHUB_TOKEN` | none | `scripts/record_issues.py` |
 
-`Settings.cost()` converts token counts to USD from the `PRICES` table and returns zero for a
-model not in it, so an unknown model shows up as a missing cost rather than a wrong one.
+`MODELS` maps each supported model to a `ModelSpec`: input and output price per million tokens,
+and the maximum output that PydanticAI and LangChain send as `max_tokens` when none is set.
+`Settings.cost()` converts token counts to USD from it and returns zero for a model not in it,
+so an unknown model shows up as a missing cost rather than a wrong one.
+`Settings.max_output_tokens()` gives the Anthropic implementation the `max_tokens` the other two
+send, and raises `ValueError` for a model not in the table rather than guessing; add a row to
+run another model there.
 
 ## Contract
 
 `TriageReport.cited_issues()` returns every issue number the report mentions, including the
-numbers in `suggested_labels`. Citation existence is checked by scoring, not by validation, since
+numbers in `suggested_labels`. Citation existence is left to scoring, not validation, since
 citation validity is a metric. A `DuplicatePair` with the same number twice is rejected.
 
 `suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`) rather than the
-`dict[int, list[str]]` in `BAKE-OFF.md`. The frameworks send the report to the model as a strict
+`dict[int, list[str]]` first planned. The frameworks send the report to the model as a strict
 JSON schema, which can only express that dict as an empty object; see `docs/fairness.md`. A
 report that lists an issue in `suggested_labels` more than once is rejected, as the dict could
 not hold it twice.
@@ -64,19 +74,29 @@ not hold it twice.
 
 `evals/repos/<name>/issues.json` is a `Repo`: the fixture name, the GitHub `owner/repo` it was
 recorded from, the recording time, and a list of open issues with number, title, body, labels,
-state and comments (author and body). `fixtures.load_repo(name)` reads it; the root directory is
-a parameter so tests use `tests/fixtures/` instead. When it is omitted, `FIXTURE_ROOT` is
-read at call time, so tests can repoint every caller, the tools included, with one monkeypatch.
+state and comments (author and body). `fixtures.load_repo(name)` reads it from `FIXTURE_ROOT`,
+which is read at call time, so the `tiny_root` test fixture repoints every caller, the tools
+included, at `tests/fixtures/` with one monkeypatch.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
-and is run by hand. It makes one request per 100 issues plus one per commented issue, so set
-`GITHUB_TOKEN` for anything beyond a small repo.
+and is run by hand. It uses `httpx2`, which is in the dev dependency group, so it needs
+`uv sync --group dev`. It pages through both the issues and each issue's comments 100 at a time,
+following the `Link` header's next page, so it makes one request per 100 issues plus one per
+100 comments on each commented issue. Set `GITHUB_TOKEN` for anything beyond a small repo. It
+refuses to replace an existing fixture, before making any request, unless `--force` is passed,
+since hand-labelled ground truth refers to the recorded issues. Its test gives the client an
+`httpx2.MockTransport` with scripted pages, so it never reaches GitHub.
 
 ## Tools and telemetry
 
 `tools.py` holds `list_issues(repo, page)`, `get_issue(repo, number)` and
-`search_issues(repo, query)`. Their docstrings are the model-facing tool descriptions in every
-framework, so they are edited as prompt text. Each returns a JSON-serialisable dict:
+`search_issues(repo, query)`, and `TOOLS`, the list every implementation passes to its
+framework. Their docstrings are the model-facing tool descriptions in every framework, so they
+are edited as prompt text. Each returns a JSON-serialisable dict. An unknown repo name returns
+`{"error": ...}` from every tool instead of raising, since PydanticAI and LangGraph end the run
+on a tool's exception while the Anthropic tool runner shows it to the model.
+`fixtures.load_repo` itself raises `UnknownRepoError`, a `FileNotFoundError`, which the CLI
+turns into an error message; the tools and the CLI catch only that, not other missing files.
 
 - `list_issues` pages through the fixture in its recorded order (newest first), `page_size`
   issues per page, with number, title, labels and comment count, plus the page and issue totals.
@@ -85,15 +105,19 @@ framework, so they are edited as prompt text. Each returns a JSON-serialisable d
   unknown number returns `{"error": ...}` instead of raising, so every framework shows the
   model the same thing.
 - `search_issues` scores each issue by how many of the query's words appear in its title or
-  body, case-insensitively, and returns the top 20 in fixture order within a score.
+  body, case-insensitively, and returns the top 20 in fixture order within a score. Words match
+  as substrings, so `log` also matches `login`: a simple, predictable rule that is the same for
+  every framework. The docstring states the limit of 20 literally, as prompt text, and a test
+  checks it against `SEARCH_LIMIT`.
 
 `telemetry.py` collects one `RunStats` per run: tool calls, input and output tokens, the
 tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps its work in
 `collect()`. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on the call
-after the limit, and implementations pass token counts to `record_usage()`. Outside `collect()`
-both are no-ops, so the tools work from a shell. For a framework that turns a tool's exception
-into an error result for the model, `raise_if_limit_fired()` raises `ToolLimitExceeded` again
-once the limit has fired.
+after the limit, and implementations pass token counts to `record_usage()`. The limit check and
+the count happen under one lock, since PydanticAI and LangGraph run a reply's tool calls in
+threads that share the run's `RunStats`. Outside `collect()` both are no-ops, so the tools work
+from a shell. For a framework that turns a tool's exception into an error result for the model,
+`raise_if_limit_fired()` raises `ToolLimitExceeded` again once the limit has fired.
 
 ## Prompt
 
@@ -116,7 +140,8 @@ the model's own reply; only LangGraph's `analyse` node sends it. The system prom
   duplicate, and stay within `max_tool_calls`, whose value is formatted into the text.
 
 The prompt is built at import time, so changing `BAKEOFF_MAX_TOOL_CALLS` changes the prompt
-text too.
+text too. `collect(max_tool_calls=n)` changes only the enforced limit, not the number the prompt
+states, so a per-run override would need the prompt rebuilt to match.
 
 ## Implementations
 
@@ -147,10 +172,10 @@ and list it below.
   tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
   its `Args` section) and with `as_json`, which returns their dicts as JSON text, with
   `SYSTEM_PROMPT` as `system` and the strict `TriageReport` schema from `transform_schema` in
-  `output_config.format`. The runner turns tool exceptions into
-  error results, so `triage` calls `telemetry.raise_if_limit_fired()` after each reply's tools
-  have run. Usage is recorded from each reply as it arrives, and the last reply's text is
-  validated as a `TriageReport`.
+  `output_config.format`, and `max_tokens` from `Settings.max_output_tokens()`. The runner
+  turns tool exceptions into error results, so `triage` calls `telemetry.raise_if_limit_fired()`
+  after each reply's tools have run. Usage is recorded from each reply as it arrives, and the
+  last reply's text is validated as a `TriageReport`.
 
 Registered as `pydanticai`, `langgraph` and `anthropic`.
 

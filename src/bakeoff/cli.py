@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 
+from bakeoff.fixtures import UnknownRepoError
 from bakeoff.impls import IMPLS
 from bakeoff.runner import result_path, run_once
 
@@ -35,7 +36,7 @@ def run(impl: str, repo: str, out: Path | None) -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
     try:
         result = run_once(impl, repo)
-    except FileNotFoundError as error:
+    except UnknownRepoError as error:
         raise click.ClickException(str(error)) from error
     text = result.model_dump_json(indent=2)
     click.echo(text)

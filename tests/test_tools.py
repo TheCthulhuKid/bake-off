@@ -2,7 +2,7 @@ import pytest
 
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import ToolLimitExceeded, collect, record_usage
-from bakeoff.tools import get_issue, list_issues, search_issues
+from bakeoff.tools import SEARCH_LIMIT, get_issue, list_issues, search_issues
 
 pytestmark = pytest.mark.usefixtures("tiny_root")
 
@@ -24,11 +24,15 @@ def test_get_issue_marks_truncation_and_reports_unknown_numbers(monkeypatch):
     assert issue["body"] == "The app crashes when\n[truncated: 31 of 51 characters omitted]"
     assert issue["comments"] == [{"author": "alice", "body": "Reproduced on 1.2."}]
     assert "error" in get_issue("tiny", 99)
+    # A wrong repo name is shown to the model rather than ending the run in some frameworks.
+    assert "error" in get_issue("example/tiny", 1)
 
 
 def test_search_issues_matches_title_and_body_ignoring_case():
     assert [hit["number"] for hit in search_issues("tiny", "CRASH config")["issues"]] == [1]
     assert [hit["number"] for hit in search_issues("tiny", "theme")["issues"]] == [2]
+    # The docstring is prompt text, so it states the limit literally.
+    assert f"at most {SEARCH_LIMIT} matches" in search_issues.__doc__
 
 
 def test_tool_limit_raises_inside_collect_and_usage_adds_up():

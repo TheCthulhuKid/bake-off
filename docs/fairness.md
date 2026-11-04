@@ -22,14 +22,14 @@ marked "Read from source" were not run.
 | PydanticAI | No prompt caching (no `anthropic_cache_*` setting). Read from source. | Each request pays full input price for the whole conversation so far, including the system prompt and tool definitions. | No |
 | PydanticAI | The report is sent as a strict JSON schema in `output_config.format`. Checked offline. | Constraints strict mode cannot express are moved into descriptions: `top_issues`' `maxItems: 5` becomes a hint, so an overlong list fails validation and is retried once rather than being prevented. | No |
 | Anthropic SDK (under PydanticAI) | Two retries on connection errors, 429 and 5xx; 600 s read timeout. Read from source. | Affects latency and, after a transient error, the chance a run completes. Not counted as model retries. | No |
-| LangGraph | `analyse` is a separate model call after `fetch` ends: the brief's three-node design, not a framework default. Checked by a run. | Every run makes one more model request than a single-agent loop, and that request sends the whole conversation again, so input tokens are higher for the same reading. | No |
+| LangGraph | `analyse` is a separate model call after `fetch` ends: the planned three-node design (fetch, analyse, report), not a framework default. Checked by a run. | Every run makes one more model request than a single-agent loop, and that request sends the whole conversation again, so input tokens are higher for the same reading. | No |
 | LangGraph | No retry when the report fails validation. Checked by a run. | The `report` node raises pydantic's `ValidationError` on the first invalid report, where PydanticAI sends it back once. Schema validity compares the frameworks' retry policies as well as their output. | No |
 | LangGraph (`ToolNode`) | Tool arguments that fail validation are returned to the model as an error `ToolMessage`, with no cap. Checked by a run. | Such calls never reach the tool, so they do not count towards the tool-call limit. PydanticAI allows one such retry per tool and then raises. | No |
 | LangGraph | Recursion limit of 10,007 supersteps (`LANGGRAPH_DEFAULT_RECURSION_LIMIT`). Read from source. | Each fetch and tools round takes two supersteps, so on valid calls the tool-call limit always fires first. On invalid calls, which the limit does not count, a run can make about 5,000 model requests before it is stopped. | No |
 | LangGraph (`ToolNode`) | Tool calls from one model response run concurrently in a thread pool. Read from source; the limit firing mid-batch checked by a run. | As in PydanticAI: each call counts towards the limit, which fires mid-batch. | No |
 | LangChain (`ChatAnthropic`) | `max_tokens` is the model's maximum output (128,000 for `claude-opus-5-5`). Checked offline. | As in PydanticAI, no report is cut off by a framework-chosen limit. | No |
 | LangChain (`ChatAnthropic`) | No prompt caching (no `cache_control` in the request). Checked offline. | As in PydanticAI, each request pays full input price for the whole conversation so far. | No |
-| LangChain (`ChatAnthropic`) | Setting `effort` also sends `thinking: {"type": "adaptive", "display": "summarized"}`. Checked offline. | PydanticAI omits `thinking`, so the model uses its default. Whether the default is also adaptive is not checked yet; the smoke runs will show it. | No |
+| LangChain (`ChatAnthropic`) | Setting `effort` also sends `thinking: {"type": "adaptive", "display": "summarized"}`. Checked offline. | PydanticAI omits `thinking`, so the model uses its default. Whether the default is also adaptive is still open: the result files do not record thinking, so it needs checking in the Anthropic console for a PydanticAI run. | No |
 | LangChain (`ChatAnthropic`) | The report is sent as a strict JSON schema in `output_config.format` (`response_format`). Checked offline. | As in PydanticAI, `top_issues`' `maxItems: 5` becomes a description. With no retry, an overlong list ends the run. | Yes, see deviations |
 | LangChain | Tool descriptions join the docstring's lines with spaces. Checked by a run. | The model sees the same words as under PydanticAI, which keeps the line breaks, but not the same text. | No |
 | Anthropic SDK (under `ChatAnthropic`) | Two retries on connection errors, 429 and 5xx; no request timeout, because `ChatAnthropic` passes `timeout=None`. Checked offline. | A stalled request waits forever, where PydanticAI's client gives up after 600 s, so a hung LangGraph run ends only when the caller stops it. | No |
@@ -47,6 +47,13 @@ marked "Read from source" were not run.
 | Anthropic SDK (tool runner) | The report schema from `transform_schema` turns `top_issues`' `maxItems: 5` into a description. Checked offline. | The same as the other two: a sixth top issue fails validation rather than being prevented. | No |
 | Anthropic SDK (tool runner) | Two retries on connection errors, 408, 409, 429 and 5xx; 600 s read timeout. Checked offline. | The same as PydanticAI's client; LangGraph's has no timeout. | No |
 
+## Tool errors
+
+A wrong argument the model can recover from, an unknown repo name or issue number, comes back
+from the tool as an `{"error": ...}` result rather than an exception, so it reaches the model
+the same way in every implementation. Only `ToolLimitExceeded` is raised, and every
+implementation ends the run on it.
+
 ## Usage reporting
 
 - PydanticAI: `triage` passes a `RunUsage` into `run_sync`, which PydanticAI updates after
@@ -62,7 +69,7 @@ marked "Read from source" were not run.
 ## Deliberate deviations
 
 - `TriageReport.suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`),
-  one per issue, instead of the brief's `dict[int, list[str]]`. Every framework sends the
+  one per issue, instead of the planned `dict[int, list[str]]`. Every framework sends the
   report as a strict JSON schema, which can only express that dict as an empty object, so the
   model could never suggest a label. This applies to every implementation equally.
 - LangGraph's `analyse` node does not use `with_structured_output`. Its default,
@@ -79,7 +86,10 @@ marked "Read from source" were not run.
   rejects that with "This model does not support assistant message prefill" (seen in the first
   LangGraph smoke run). The message is only added to that call, not to the graph's state.
 - The Anthropic tool runner runs with `stream=True`. Every request needs `max_tokens`, and the
-  SDK refuses a non-streaming request with the 128,000 the other implementations send. The
+  SDK refuses a non-streaming request with the 128,000 the other implementations send. That
+  value comes from `MODELS` in `settings.py`, which holds the maximum output PydanticAI and
+  LangChain use for each model; a test checks the three agree for the configured model, and a
+  model missing from the table is refused rather than sent a guessed limit. The
   report schema goes in `output_config.format` rather than `output_format`, which would parse
   the report mid-stream and lose the usage of a reply that fails validation.
 - The Anthropic implementation wraps each tool in `as_json`, which returns its dict as JSON

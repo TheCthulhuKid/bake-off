@@ -1,4 +1,4 @@
-"""Anthropic SDK version"""
+"""Anthropic SDK version: the beta tool runner, streamed, over the shared tools."""
 
 import functools
 import json
@@ -12,7 +12,7 @@ from bakeoff.contract import TriageReport
 from bakeoff.prompt import SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import raise_if_limit_fired, record_usage
-from bakeoff.tools import get_issue, list_issues, search_issues
+from bakeoff.tools import TOOLS
 
 
 def as_json(tool: Callable[..., dict]) -> Callable[..., str]:
@@ -29,27 +29,26 @@ def as_json(tool: Callable[..., dict]) -> Callable[..., str]:
     return wrapper
 
 
-TOOLS = [beta_tool(as_json(tool)) for tool in (list_issues, get_issue, search_issues)]
+RUNNER_TOOLS = [beta_tool(as_json(tool)) for tool in TOOLS]
 REPORT_FORMAT: BetaJSONOutputFormatParam = {
     "type": "json_schema",
     "schema": transform_schema(TriageReport),
 }
 
-_key = SETTINGS.anthropic_api_key
-client = anthropic.Anthropic(api_key=_key.get_secret_value() if _key else None)
+client = anthropic.Anthropic(api_key=SETTINGS.api_key())
 
 
 def triage(repo: str) -> TriageReport:
-    """Triage a repository"""
+    """Run the tool runner on ``repo`` and return the last reply's report."""
     runner = client.beta.messages.tool_runner(
         model=SETTINGS.model,
-        # The model's maximum output, which the other frameworks send by default. The SDK only
-        # allows a request this large when it is streamed.
-        max_tokens=128_000,
+        # The other frameworks send the model's maximum output by default. The SDK only allows a
+        # request this large when it is streamed.
+        max_tokens=SETTINGS.max_output_tokens(),
         stream=True,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt(repo)}],
-        tools=TOOLS,
+        tools=RUNNER_TOOLS,
         output_config={"effort": SETTINGS.effort, "format": REPORT_FORMAT},
     )
     for stream in runner:

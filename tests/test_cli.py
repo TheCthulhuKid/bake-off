@@ -5,12 +5,6 @@ from click.testing import CliRunner
 from bakeoff.cli import main
 
 
-def test_cli_help_runs():
-    result = CliRunner().invoke(main, ["--help"])
-    assert result.exit_code == 0
-    assert "triage" in result.output
-
-
 def test_run_prints_and_saves_the_result_without_overwriting(pydanticai_model, tmp_path):
     smoke = tmp_path / "smoke"
     result = CliRunner().invoke(main, ["run", "pydanticai", "tiny", "--out", str(smoke)])

@@ -27,6 +27,8 @@ REPORT = TriageReport(
     top_issues=[TopIssue(number=1, reason="Crashes on launch")],
     suggested_labels=[LabelSuggestion(number=2, labels=["enhancement"])],
 )
+# The tool calls every scripted model makes, in order, before it returns ``REPORT``.
+CALLS = [("list_issues", {"repo": "tiny"}), ("get_issue", {"repo": "tiny", "number": 1})]
 
 
 class ScriptedModel(FunctionModel):
@@ -40,20 +42,17 @@ class ScriptedModel(FunctionModel):
 
     def respond(self, messages, info: AgentInfo) -> ModelResponse:
         self.seen = info
-        script = [
-            ToolCallPart("list_issues", {"repo": "tiny"}),
-            ToolCallPart("get_issue", {"repo": "tiny", "number": 1}),
-            ToolCallPart(info.output_tools[0].name, REPORT.model_dump(mode="json")),
-        ]
+        script = [ToolCallPart(name, args) for name, args in CALLS]
+        script.append(ToolCallPart(info.output_tools[0].name, REPORT.model_dump(mode="json")))
         # Requests and responses alternate, so this counts the turns taken so far.
         part = script[len(messages) // 2]
         return ModelResponse(parts=[part], usage=RequestUsage(input_tokens=100, output_tokens=10))
 
 
 class ScriptedChatModel(BaseChatModel):
-    """
-    Calls list_issues, then get_issue, ends the loop, then returns ``REPORT``,
-    using 100 + 10 tokens a turn.
+    """Calls list_issues, then get_issue, ends the loop, then returns ``REPORT``.
+
+    Uses 100 + 10 tokens a turn.
     """
 
     report: ClassVar[TriageReport] = REPORT
@@ -72,17 +71,13 @@ class ScriptedChatModel(BaseChatModel):
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
         self.seen = messages
-        script = [
-            [("list_issues", {"repo": "tiny"})],
-            [("get_issue", {"repo": "tiny", "number": 1})],
-            [],
-        ]
         # Each earlier turn left one AI message, so this counts the turns taken so far.
         turn = sum(message.type == "ai" for message in messages)
-        calls = script[turn] if turn < len(script) else []
+        # A turn with no call ends fetch; the turn after it is analyse's report call.
+        calls = CALLS[turn : turn + 1]
         reply = AIMessage(
             # The report call answers in JSON text, as the API does under output_config.format.
-            content=REPORT.model_dump_json() if turn == len(script) else "",
+            content=REPORT.model_dump_json() if turn > len(CALLS) else "",
             tool_calls=[{"name": name, "args": args, "id": f"call_{name}"} for name, args in calls],
             usage_metadata={"input_tokens": 100, "output_tokens": 10, "total_tokens": 110},
             # The usage callback ignores a message without a model name.
@@ -134,10 +129,9 @@ class ScriptedTransport(httpx2.MockTransport):
 
     def respond(self, request: httpx2.Request) -> httpx2.Response:
         self.sent.append(json.loads(request.content))
-        calls = [("list_issues", {"repo": "tiny"}), ("get_issue", {"repo": "tiny", "number": 1})]
         turn = len(self.sent) - 1
-        if turn < len(calls):
-            name, args = calls[turn]
+        if turn < len(CALLS):
+            name, args = CALLS[turn]
             block = {"type": "tool_use", "id": f"call_{turn}", "name": name, "input": args}
             body = _sse(turn, block, "tool_use")
         else:
