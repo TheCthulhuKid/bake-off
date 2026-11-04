@@ -12,7 +12,7 @@ from bakeoff.contract import TriageReport
 from bakeoff.prompt import SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import raise_if_limit_fired, record_usage
-from bakeoff.tools import get_issue, list_issues, search_issues
+from bakeoff.tools import TOOLS
 
 
 def as_json(tool: Callable[..., dict]) -> Callable[..., str]:
@@ -29,14 +29,13 @@ def as_json(tool: Callable[..., dict]) -> Callable[..., str]:
     return wrapper
 
 
-TOOLS = [beta_tool(as_json(tool)) for tool in (list_issues, get_issue, search_issues)]
+RUNNER_TOOLS = [beta_tool(as_json(tool)) for tool in TOOLS]
 REPORT_FORMAT: BetaJSONOutputFormatParam = {
     "type": "json_schema",
     "schema": transform_schema(TriageReport),
 }
 
-_key = SETTINGS.anthropic_api_key
-client = anthropic.Anthropic(api_key=_key.get_secret_value() if _key else None)
+client = anthropic.Anthropic(api_key=SETTINGS.api_key())
 
 
 def triage(repo: str) -> TriageReport:
@@ -49,7 +48,7 @@ def triage(repo: str) -> TriageReport:
         stream=True,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt(repo)}],
-        tools=TOOLS,
+        tools=RUNNER_TOOLS,
         output_config={"effort": SETTINGS.effort, "format": REPORT_FORMAT},
     )
     for stream in runner:

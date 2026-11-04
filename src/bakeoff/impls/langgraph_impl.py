@@ -14,9 +14,7 @@ from bakeoff.contract import TriageReport
 from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
-from bakeoff.tools import get_issue, list_issues, search_issues
-
-TOOLS = [list_issues, get_issue, search_issues]
+from bakeoff.tools import TOOLS
 
 
 class State(MessagesState):
@@ -57,7 +55,7 @@ def build_graph(model: BaseChatModel) -> CompiledStateGraph:
 
 
 graph = build_graph(
-    ChatAnthropic(model=SETTINGS.model, api_key=SETTINGS.anthropic_api_key, effort=SETTINGS.effort)
+    ChatAnthropic(model=SETTINGS.model, api_key=SETTINGS.api_key(), effort=SETTINGS.effort)
 )
 
 

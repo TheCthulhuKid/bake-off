@@ -105,6 +105,10 @@ def search_issues(repo: str, query: str) -> dict[str, Any]:
     return {"query": query, "issues": [_summary(issue) for _, issue in ranked]}
 
 
+# The tool set every implementation passes to its framework, in one place so they stay the same.
+TOOLS = [list_issues, get_issue, search_issues]
+
+
 def _summary(issue: Issue) -> dict[str, Any]:
     return {"number": issue.number, "title": issue.title, "labels": issue.labels}
 

@@ -3,7 +3,7 @@
 ```text
 src/bakeoff/
   contract.py      TriageReport and friends: the output every implementation returns
-  settings.py      model, effort, tool-call limit, truncation limit, model table (prices, max output)
+  settings.py      model, effort, tool-call limit, truncation limit, prices and max output per model
   prompt.py        the shared system prompt, opening user message and report prompt
   fixtures.py      loads recorded repo data from evals/repos/<name>/issues.json
   tools.py         list_issues, get_issue, search_issues over fixture data
@@ -45,7 +45,7 @@ local runs; `.env` is ignored by git.
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
-| `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly |
+| `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly as `Settings.api_key()` |
 | `github_token` | `GITHUB_TOKEN` | none | `scripts/record_issues.py` |
 
 `MODELS` maps each supported model to a `ModelSpec`: input and output price per million tokens,
@@ -88,8 +88,9 @@ since hand-labelled ground truth refers to the recorded issues. Its test gives t
 ## Tools and telemetry
 
 `tools.py` holds `list_issues(repo, page)`, `get_issue(repo, number)` and
-`search_issues(repo, query)`. Their docstrings are the model-facing tool descriptions in every
-framework, so they are edited as prompt text. Each returns a JSON-serialisable dict. An
+`search_issues(repo, query)`, and `TOOLS`, the list every implementation passes to its
+framework. Their docstrings are the model-facing tool descriptions in every framework, so they
+are edited as prompt text. Each returns a JSON-serialisable dict. An
 unknown repo name returns `{"error": ...}` from every tool instead of raising, since PydanticAI
 and LangGraph end the run on a tool's exception while the Anthropic tool runner shows it to the
 model; `fixtures.load_repo` itself still raises `FileNotFoundError` for the runner and CLI.

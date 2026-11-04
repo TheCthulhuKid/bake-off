@@ -9,17 +9,16 @@ from bakeoff.contract import TriageReport
 from bakeoff.prompt import SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
-from bakeoff.tools import get_issue, list_issues, search_issues
+from bakeoff.tools import TOOLS
 
-_key = SETTINGS.anthropic_api_key
 agent = Agent(
     AnthropicModel(
         SETTINGS.model,
-        provider=AnthropicProvider(api_key=_key.get_secret_value() if _key else None),
+        provider=AnthropicProvider(api_key=SETTINGS.api_key()),
     ),
     output_type=TriageReport,
     instructions=SYSTEM_PROMPT,
-    tools=[list_issues, get_issue, search_issues],
+    tools=TOOLS,
     model_settings=AnthropicModelSettings(anthropic_effort=SETTINGS.effort),
 )
 

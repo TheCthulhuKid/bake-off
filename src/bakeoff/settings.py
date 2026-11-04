@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         env_prefix="BAKEOFF_", env_file=".env", extra="ignore", validate_by_name=True
     )
 
+    def api_key(self) -> str | None:
+        """The Anthropic API key as plain text, for clients that take a string."""
+        return self.anthropic_api_key.get_secret_value() if self.anthropic_api_key else None
+
     def cost(self, input_tokens: int, output_tokens: int) -> float:
         """Price of a run in USD; zero for a model not in the table rather than a guess."""
         if self.model not in MODELS:

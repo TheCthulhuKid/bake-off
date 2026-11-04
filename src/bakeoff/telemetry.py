@@ -59,14 +59,22 @@ def record_tool_call() -> None:
     with _tool_call_lock:
         if stats.tool_calls >= stats.max_tool_calls:
             stats.limit_fired = "tool_calls"
-            raise ToolLimitExceeded(f"tool-call limit of {stats.max_tool_calls} reached")
+            raise _limit_exceeded(stats)
         stats.tool_calls += 1
 
 
 def raise_if_limit_fired() -> None:
+    """Raise ``ToolLimitExceeded`` again once the run's limit has fired.
+
+    For a framework that turns a tool's exception into an error result for the model.
+    """
     stats = _current.get()
     if stats is not None and stats.limit_fired:
-        raise ToolLimitExceeded(f"tool-call limit of {stats.max_tool_calls} reached")
+        raise _limit_exceeded(stats)
+
+
+def _limit_exceeded(stats: RunStats) -> ToolLimitExceeded:
+    return ToolLimitExceeded(f"tool-call limit of {stats.max_tool_calls} reached")
 
 
 def record_usage(input_tokens: int, output_tokens: int) -> None:
