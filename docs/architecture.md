@@ -98,10 +98,11 @@ model; `fixtures.load_repo` itself still raises `FileNotFoundError` for the runn
 `telemetry.py` collects one `RunStats` per run: tool calls, input and output tokens, the
 tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps its work in
 `collect()`. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on the call
-after the limit, and implementations pass token counts to `record_usage()`. Outside `collect()`
-both are no-ops, so the tools work from a shell. For a framework that turns a tool's exception
-into an error result for the model, `raise_if_limit_fired()` raises `ToolLimitExceeded` again
-once the limit has fired.
+after the limit, and implementations pass token counts to `record_usage()`. The limit check and
+the count happen under one lock, since PydanticAI and LangGraph run a reply's tool calls in
+threads that share the run's `RunStats`. Outside `collect()` both are no-ops, so the tools work
+from a shell. For a framework that turns a tool's exception into an error result for the model,
+`raise_if_limit_fired()` raises `ToolLimitExceeded` again once the limit has fired.
 
 ## Prompt
 

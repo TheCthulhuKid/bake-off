@@ -5,6 +5,7 @@ pass token counts to ``record_usage()``. Outside a ``collect()`` block both are 
 the tools also work from a shell.
 """
 
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -32,6 +33,9 @@ class RunStats(BaseModel):
 
 
 _current: ContextVar[RunStats | None] = ContextVar("run_stats", default=None)
+# PydanticAI and LangGraph run one reply's tool calls in threads that share the run's RunStats,
+# so the limit check and the count must happen as one step.
+_tool_call_lock = threading.Lock()
 
 
 @contextmanager
@@ -52,10 +56,11 @@ def record_tool_call() -> None:
     stats = _current.get()
     if stats is None:
         return
-    if stats.tool_calls >= stats.max_tool_calls:
-        stats.limit_fired = "tool_calls"
-        raise ToolLimitExceeded(f"tool-call limit of {stats.max_tool_calls} reached")
-    stats.tool_calls += 1
+    with _tool_call_lock:
+        if stats.tool_calls >= stats.max_tool_calls:
+            stats.limit_fired = "tool_calls"
+            raise ToolLimitExceeded(f"tool-call limit of {stats.max_tool_calls} reached")
+        stats.tool_calls += 1
 
 
 def raise_if_limit_fired() -> None:
