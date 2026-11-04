@@ -1,7 +1,8 @@
+import functools
 import importlib.util
 from pathlib import Path
-from urllib.parse import parse_qs
 
+import httpx2
 from click.testing import CliRunner
 
 from bakeoff.fixtures import load_repo
@@ -26,24 +27,27 @@ def test_records_issues_skipping_pull_requests_and_pages_through_comments(monkey
         "comments_url": comments_url,
     }
     pull = {"number": 2, "pull_request": {}}
-    # GitHub serves at most PER_PAGE items a page, so 130 comments take two pages.
+    # GitHub names the next page in a Link header; the last page has none.
     pages = {
-        ("https://api.github.com/repos/o/r/issues", "1"): [issue, pull],
-        (comments_url, "1"): [comment] * 100,
-        (comments_url, "2"): [comment] * 30,
+        ("/repos/o/r/issues", "1"): ([issue, pull], None),
+        ("/repos/o/r/issues/1/comments", "1"): ([comment] * 100, f"{comments_url}?page=2"),
+        ("/repos/o/r/issues/1/comments", "2"): ([comment] * 30, None),
     }
     requested = []
 
-    def fake_get(url):
-        base, _, query = url.partition("?")
-        page = parse_qs(query)["page"][0]
-        requested.append((base, page))
-        return pages[base, page]
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        key = (request.url.path, request.url.params.get("page", "1"))
+        requested.append(key)
+        body, next_url = pages[key]
+        headers = {"Link": f'<{next_url}>; rel="next"'} if next_url else {}
+        return httpx2.Response(200, json=body, headers=headers)
 
-    monkeypatch.setattr(record_issues, "_get", fake_get)
+    transport = httpx2.MockTransport(respond)
+    monkeypatch.setattr(
+        record_issues, "_client", functools.partial(record_issues._client, transport)
+    )
     result = CliRunner().invoke(record_issues.main, ["o/r", "--name", "r"])
     assert result.exit_code == 0, result.output
     [recorded] = load_repo("r").issues
     assert (recorded.number, recorded.body, len(recorded.comments)) == (1, "", 130)
-    # A short page ends the paging without asking for an empty one.
     assert requested == list(pages)

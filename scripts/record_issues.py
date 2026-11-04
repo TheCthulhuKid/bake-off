@@ -4,48 +4,41 @@ Usage: .venv/bin/python scripts/record_issues.py owner/repo --name <fixture-name
 Set GITHUB_TOKEN (environment or .env) to raise the unauthenticated rate limit.
 """
 
-import json
-import urllib.parse
-import urllib.request
 from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import click
+import httpx2
 
 from bakeoff.fixtures import Comment, Issue, Repo, fixture_path
 from bakeoff.settings import SETTINGS
 
 API = "https://api.github.com"
 PER_PAGE = 100
-TIMEOUT = 30
 
 
-def _get(url: str) -> list[dict]:
+def _client(transport: httpx2.BaseTransport | None = None) -> httpx2.Client:
+    """A GitHub API client; tests pass a mock ``transport``."""
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "bakeoff-recorder"}
     if SETTINGS.github_token:
         headers["Authorization"] = f"Bearer {SETTINGS.github_token.get_secret_value()}"
-    request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-        return json.load(response)
+    return httpx2.Client(base_url=API, headers=headers, timeout=30, transport=transport)
 
 
-def _pages(url: str, **params: str) -> Iterator[list[dict]]:
-    """Every page of a GitHub list endpoint, ``PER_PAGE`` items at a time."""
-    page = 1
+def _pages(client: httpx2.Client, url: str, **params: str) -> Iterator[list[dict]]:
+    """Every page of a GitHub list endpoint, following the ``Link`` header's next page."""
+    response = client.get(url, params={**params, "per_page": PER_PAGE})
     while True:
-        query = urllib.parse.urlencode({**params, "per_page": PER_PAGE, "page": page})
-        batch = _get(f"{url}?{query}")
-        if batch:
-            yield batch
-        # A short page is the last one, which saves a request for an empty page.
-        if len(batch) < PER_PAGE:
+        response.raise_for_status()
+        yield response.json()
+        if "next" not in response.links:
             return
-        page += 1
+        response = client.get(response.links["next"]["url"])
 
 
-def _open_issues(source: str, limit: int) -> list[dict]:
+def _open_issues(client: httpx2.Client, source: str, limit: int) -> list[dict]:
     issues: list[dict] = []
-    for batch in _pages(f"{API}/repos/{source}/issues", state="open"):
+    for batch in _pages(client, f"/repos/{source}/issues", state="open"):
         # The issues endpoint also returns pull requests; they are not issues.
         issues.extend(item for item in batch if "pull_request" not in item)
         if len(issues) >= limit:
@@ -53,12 +46,12 @@ def _open_issues(source: str, limit: int) -> list[dict]:
     return issues[:limit]
 
 
-def _comments(issue: dict) -> list[Comment]:
+def _comments(client: httpx2.Client, issue: dict) -> list[Comment]:
     if not issue["comments"]:
         return []
     return [
         Comment(author=c["user"]["login"], body=c["body"] or "")
-        for batch in _pages(issue["comments_url"])
+        for batch in _pages(client, issue["comments_url"])
         for c in batch
     ]
 
@@ -69,23 +62,24 @@ def _comments(issue: dict) -> list[Comment]:
 @click.option("--limit", default=80, show_default=True, help="Maximum issues to record.")
 def main(source: str, name: str, limit: int) -> None:
     """Fetch open issues and comments for SOURCE (owner/repo) into a fixture."""
-    raw = _open_issues(source, limit)
-    repo = Repo(
-        name=name,
-        source=source,
-        recorded_at=datetime.now(UTC).isoformat(timespec="seconds"),
-        issues=[
-            Issue(
-                number=item["number"],
-                title=item["title"],
-                body=item["body"] or "",
-                labels=[label["name"] for label in item["labels"]],
-                state=item["state"],
-                comments=_comments(item),
-            )
-            for item in raw
-        ],
-    )
+    with _client() as client:
+        raw = _open_issues(client, source, limit)
+        repo = Repo(
+            name=name,
+            source=source,
+            recorded_at=datetime.now(UTC).isoformat(timespec="seconds"),
+            issues=[
+                Issue(
+                    number=item["number"],
+                    title=item["title"],
+                    body=item["body"] or "",
+                    labels=[label["name"] for label in item["labels"]],
+                    state=item["state"],
+                    comments=_comments(client, item),
+                )
+                for item in raw
+            ],
+        )
     path = fixture_path(name)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(repo.model_dump_json(indent=2) + "\n")
