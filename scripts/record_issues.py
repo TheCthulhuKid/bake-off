@@ -1,11 +1,13 @@
-"""Record a GitHub repository's open issues as a fixture. Run by hand, never by tests.
+"""Record a GitHub repository's open issues as a fixture. Run by hand; tests fake its requests.
 
 Usage: .venv/bin/python scripts/record_issues.py owner/repo --name <fixture-name> [--limit 80]
 Set GITHUB_TOKEN (environment or .env) to raise the unauthenticated rate limit.
 """
 
 import json
+import urllib.parse
 import urllib.request
+from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import click
@@ -14,34 +16,51 @@ from bakeoff.fixtures import Comment, Issue, Repo, fixture_path
 from bakeoff.settings import SETTINGS
 
 API = "https://api.github.com"
+PER_PAGE = 100
+TIMEOUT = 30
 
 
 def _get(url: str) -> list[dict]:
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "bakeoff-recorder"}
     if SETTINGS.github_token:
         headers["Authorization"] = f"Bearer {SETTINGS.github_token.get_secret_value()}"
-    with urllib.request.urlopen(urllib.request.Request(url, headers=headers)) as response:
+    request = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
         return json.load(response)
+
+
+def _pages(url: str, **params: str) -> Iterator[list[dict]]:
+    """Every page of a GitHub list endpoint, ``PER_PAGE`` items at a time."""
+    page = 1
+    while True:
+        query = urllib.parse.urlencode({**params, "per_page": PER_PAGE, "page": page})
+        batch = _get(f"{url}?{query}")
+        if batch:
+            yield batch
+        # A short page is the last one, which saves a request for an empty page.
+        if len(batch) < PER_PAGE:
+            return
+        page += 1
 
 
 def _open_issues(source: str, limit: int) -> list[dict]:
     issues: list[dict] = []
-    page = 1
-    while len(issues) < limit:
-        batch = _get(f"{API}/repos/{source}/issues?state=open&per_page=100&page={page}")
-        if not batch:
-            break
+    for batch in _pages(f"{API}/repos/{source}/issues", state="open"):
         # The issues endpoint also returns pull requests; they are not issues.
         issues.extend(item for item in batch if "pull_request" not in item)
-        page += 1
+        if len(issues) >= limit:
+            break
     return issues[:limit]
 
 
 def _comments(issue: dict) -> list[Comment]:
     if not issue["comments"]:
         return []
-    comments = _get(issue["comments_url"])
-    return [Comment(author=c["user"]["login"], body=c["body"] or "") for c in comments]
+    return [
+        Comment(author=c["user"]["login"], body=c["body"] or "")
+        for batch in _pages(issue["comments_url"])
+        for c in batch
+    ]
 
 
 @click.command()

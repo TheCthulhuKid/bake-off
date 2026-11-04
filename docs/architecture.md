@@ -74,8 +74,10 @@ a parameter so tests use `tests/fixtures/` instead. When it is omitted, `FIXTURE
 read at call time, so tests can repoint every caller, the tools included, with one monkeypatch.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
-and is run by hand. It makes one request per 100 issues plus one per commented issue, so set
-`GITHUB_TOKEN` for anything beyond a small repo.
+and is run by hand. It pages through both the issues and each issue's comments 100 at a time,
+stopping at the first short page, so it makes one request per 100 issues plus one per 100
+comments on each commented issue. Set `GITHUB_TOKEN` for anything beyond a small repo. Its test
+replaces the HTTP call with scripted pages, so it never reaches GitHub.
 
 ## Tools and telemetry
 
