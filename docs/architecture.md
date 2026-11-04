@@ -77,8 +77,10 @@ read at call time, so tests can repoint every caller, the tools included, with o
 and is run by hand. It uses `httpx2`, which is in the dev dependency group, so it needs
 `uv sync --group dev`. It pages through both the issues and each issue's comments 100 at a time,
 following the `Link` header's next page, so it makes one request per 100 issues plus one per
-100 comments on each commented issue. Set `GITHUB_TOKEN` for anything beyond a small repo. Its
-test gives the client an `httpx2.MockTransport` with scripted pages, so it never reaches GitHub.
+100 comments on each commented issue. Set `GITHUB_TOKEN` for anything beyond a small repo. It
+refuses to replace an existing fixture, before making any request, unless `--force` is passed,
+since hand-labelled ground truth refers to the recorded issues. Its test gives the client an
+`httpx2.MockTransport` with scripted pages, so it never reaches GitHub.
 
 ## Tools and telemetry
 

@@ -51,3 +51,9 @@ def test_records_issues_skipping_pull_requests_and_pages_through_comments(monkey
     [recorded] = load_repo("r").issues
     assert (recorded.number, recorded.body, len(recorded.comments)) == (1, "", 130)
     assert requested == list(pages)
+    # A second recording refuses before making any request, unless forced.
+    again = CliRunner().invoke(record_issues.main, ["o/r", "--name", "r"])
+    assert again.exit_code != 0 and "already exists" in again.output
+    assert len(requested) == len(pages)
+    forced = CliRunner().invoke(record_issues.main, ["o/r", "--name", "r", "--force"])
+    assert forced.exit_code == 0, forced.output

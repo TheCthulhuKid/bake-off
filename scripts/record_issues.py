@@ -1,6 +1,7 @@
 """Record a GitHub repository's open issues as a fixture. Run by hand; tests fake its requests.
 
 Usage: .venv/bin/python scripts/record_issues.py owner/repo --name <fixture-name> [--limit 80]
+An existing fixture is never replaced unless --force is passed.
 Set GITHUB_TOKEN (environment or .env) to raise the unauthenticated rate limit.
 """
 
@@ -60,8 +61,13 @@ def _comments(client: httpx2.Client, issue: dict) -> list[Comment]:
 @click.argument("source")
 @click.option("--name", required=True, help="Fixture directory name under evals/repos.")
 @click.option("--limit", default=80, show_default=True, help="Maximum issues to record.")
-def main(source: str, name: str, limit: int) -> None:
+@click.option("--force", is_flag=True, help="Replace an existing fixture.")
+def main(source: str, name: str, limit: int, force: bool) -> None:
     """Fetch open issues and comments for SOURCE (owner/repo) into a fixture."""
+    path = fixture_path(name)
+    # Checked before any request: ground truth is labelled against the recorded issues.
+    if path.exists() and not force:
+        raise click.ClickException(f"{path} already exists; pass --force to replace it")
     with _client() as client:
         raw = _open_issues(client, source, limit)
         repo = Repo(
@@ -80,7 +86,6 @@ def main(source: str, name: str, limit: int) -> None:
                 for item in raw
             ],
         )
-    path = fixture_path(name)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(repo.model_dump_json(indent=2) + "\n")
     click.echo(f"recorded {len(repo.issues)} issues from {source} to {path}")
