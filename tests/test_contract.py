@@ -45,4 +45,7 @@ def test_settings_read_env_and_price_runs(monkeypatch):
     assert settings.max_tool_calls == 5
     assert settings.github_token.get_secret_value() == "tok"
     assert settings.cost(1_000_000, 100_000) == pytest.approx(3.0)
-    assert Settings(model="unknown", _env_file=None).cost(10, 10) == 0.0
+    unknown = Settings(model="unknown", _env_file=None)
+    assert unknown.cost(10, 10) == 0.0
+    with pytest.raises(ValueError):
+        unknown.max_output_tokens()

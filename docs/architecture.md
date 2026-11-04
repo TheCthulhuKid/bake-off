@@ -3,7 +3,7 @@
 ```text
 src/bakeoff/
   contract.py      TriageReport and friends: the output every implementation returns
-  settings.py      model, effort, tool-call limit, truncation limit, price table
+  settings.py      model, effort, tool-call limit, truncation limit, model table (prices, max output)
   prompt.py        the one shared system prompt
   fixtures.py      loads recorded repo data from evals/repos/<name>/issues.json
   tools.py         list_issues, get_issue, search_issues over fixture data
@@ -45,8 +45,13 @@ local runs; `.env` is ignored by git.
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly |
 | `github_token` | `GITHUB_TOKEN` | none | `scripts/record_issues.py` |
 
-`Settings.cost()` converts token counts to USD from the `PRICES` table and returns zero for a
-model not in it, so an unknown model shows up as a missing cost rather than a wrong one.
+`MODELS` maps each supported model to a `ModelSpec`: input and output price per million tokens,
+and the maximum output that PydanticAI and LangChain send as `max_tokens` when none is set.
+`Settings.cost()` converts token counts to USD from it and returns zero for a model not in it,
+so an unknown model shows up as a missing cost rather than a wrong one.
+`Settings.max_output_tokens()` gives the Anthropic implementation the `max_tokens` the other two
+send, and raises `ValueError` for a model not in the table rather than guessing; add a row to
+run another model there.
 
 ## Contract
 
@@ -150,10 +155,10 @@ and list it below.
   tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
   its `Args` section) and with `as_json`, which returns their dicts as JSON text, with
   `SYSTEM_PROMPT` as `system` and the strict `TriageReport` schema from `transform_schema` in
-  `output_config.format`. The runner turns tool exceptions into
-  error results, so `triage` calls `telemetry.raise_if_limit_fired()` after each reply's tools
-  have run. Usage is recorded from each reply as it arrives, and the last reply's text is
-  validated as a `TriageReport`.
+  `output_config.format`, and `max_tokens` from `Settings.max_output_tokens()`. The runner
+  turns tool exceptions into error results, so `triage` calls `telemetry.raise_if_limit_fired()`
+  after each reply's tools have run. Usage is recorded from each reply as it arrives, and the
+  last reply's text is validated as a `TriageReport`.
 
 Registered as `pydanticai`, `langgraph` and `anthropic`.
 

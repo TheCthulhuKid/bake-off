@@ -86,7 +86,10 @@ implementation ends the run on it.
   rejects that with "This model does not support assistant message prefill" (seen in the first
   LangGraph smoke run). The message is only added to that call, not to the graph's state.
 - The Anthropic tool runner runs with `stream=True`. Every request needs `max_tokens`, and the
-  SDK refuses a non-streaming request with the 128,000 the other implementations send. The
+  SDK refuses a non-streaming request with the 128,000 the other implementations send. That
+  value comes from `MODELS` in `settings.py`, which holds the maximum output PydanticAI and
+  LangChain use for each model; a test checks the three agree for the configured model, and a
+  model missing from the table is refused rather than sent a guessed limit. The
   report schema goes in `output_config.format` rather than `output_format`, which would parse
   the report mid-stream and lose the usage of a reply that fails validation.
 - The Anthropic implementation wraps each tool in `as_json`, which returns its dict as JSON

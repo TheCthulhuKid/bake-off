@@ -43,9 +43,9 @@ def triage(repo: str) -> TriageReport:
     """Triage a repository"""
     runner = client.beta.messages.tool_runner(
         model=SETTINGS.model,
-        # The model's maximum output, which the other frameworks send by default. The SDK only
-        # allows a request this large when it is streamed.
-        max_tokens=128_000,
+        # The other frameworks send the model's maximum output by default. The SDK only allows a
+        # request this large when it is streamed.
+        max_tokens=SETTINGS.max_output_tokens(),
         stream=True,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt(repo)}],
