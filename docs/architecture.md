@@ -4,20 +4,23 @@
 src/bakeoff/
   contract.py      TriageReport and friends: the output every implementation returns
   settings.py      model, effort, tool-call limit, truncation limit, model table (prices, max output)
-  prompt.py        the one shared system prompt
+  prompt.py        the shared system prompt, opening user message and report prompt
   fixtures.py      loads recorded repo data from evals/repos/<name>/issues.json
   tools.py         list_issues, get_issue, search_issues over fixture data
   telemetry.py     per-run collector for tool calls and token usage
   impls/           one file per framework, each exposing triage(repo) -> TriageReport
-  runner.py        runs an implementation on a case, with timings and token counts
-  cli.py           bakeoff run / eval / report; input and output handling only
+  runner.py        runs an implementation once on a recorded repo and collects its stats
+  cli.py           bakeoff run; input and output handling only
 evals/
   repos/<name>/    recorded issues, one directory per fixture repo
-  cases.yaml       hand-labelled ground truth per case
-  scoring.py       metrics over saved runs
-results/           saved eval runs, append-only
+results/           saved runs, never overwritten
+scripts/           record_issues.py, which records a fixture from GitHub
 tests/             offline; frameworks run against fake models
 ```
+
+The eval harness will add `evals/cases.yaml` (hand-labelled ground truth per case),
+`evals/scoring.py` (metrics over saved runs), run timings, and the `bakeoff eval` and
+`bakeoff report` commands.
 
 ## Layers
 
@@ -37,7 +40,7 @@ local runs; `.env` is ignored by git.
 
 | Field | Env var | Default | Used by |
 | --- | --- | --- | --- |
-| `model` | `BAKEOFF_MODEL` | `claude-opus-5-5` | implementations, judge, cost |
+| `model` | `BAKEOFF_MODEL` | `claude-opus-5-5` | implementations, `cost()`, `max_output_tokens()` |
 | `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
@@ -56,7 +59,7 @@ run another model there.
 ## Contract
 
 `TriageReport.cited_issues()` returns every issue number the report mentions, including the
-numbers in `suggested_labels`. Citation existence is checked by scoring, not by validation, since
+numbers in `suggested_labels`. Citation existence is left to scoring, not validation, since
 citation validity is a metric. A `DuplicatePair` with the same number twice is rejected.
 
 `suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`) rather than the
