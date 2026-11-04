@@ -74,9 +74,9 @@ not hold it twice.
 
 `evals/repos/<name>/issues.json` is a `Repo`: the fixture name, the GitHub `owner/repo` it was
 recorded from, the recording time, and a list of open issues with number, title, body, labels,
-state and comments (author and body). `fixtures.load_repo(name)` reads it; the root directory is
-a parameter so tests use `tests/fixtures/` instead. When it is omitted, `FIXTURE_ROOT` is
-read at call time, so tests can repoint every caller, the tools included, with one monkeypatch.
+state and comments (author and body). `fixtures.load_repo(name)` reads it from `FIXTURE_ROOT`,
+which is read at call time, so the `tiny_root` test fixture repoints every caller, the tools
+included, at `tests/fixtures/` with one monkeypatch.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
 and is run by hand. It uses `httpx2`, which is in the dev dependency group, so it needs

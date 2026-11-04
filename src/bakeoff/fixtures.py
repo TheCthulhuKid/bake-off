@@ -37,15 +37,14 @@ class Repo(BaseModel):
         return next((issue for issue in self.issues if issue.number == number), None)
 
 
-def fixture_path(name: str, root: Path | None = None) -> Path:
-    # Resolved at call time so tests can point every caller, tools included, at another root.
-    return (root or FIXTURE_ROOT) / name / "issues.json"
+def fixture_path(name: str) -> Path:
+    # Read at call time so tests can point every caller, tools included, at another root.
+    return FIXTURE_ROOT / name / "issues.json"
 
 
-def load_repo(name: str, root: Path | None = None) -> Repo:
-    """Load ``<root>/<name>/issues.json``; an unknown name raises UnknownRepoError."""
-    root = root or FIXTURE_ROOT
-    path = fixture_path(name, root)
+def load_repo(name: str) -> Repo:
+    """Load ``FIXTURE_ROOT/<name>/issues.json``; an unknown name raises UnknownRepoError."""
+    path = fixture_path(name)
     if not path.is_file():
-        raise UnknownRepoError(f"no recorded repo {name!r} under {root}")
+        raise UnknownRepoError(f"no recorded repo {name!r} under {FIXTURE_ROOT}")
     return Repo.model_validate_json(path.read_text())
