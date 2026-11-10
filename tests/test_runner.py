@@ -6,6 +6,7 @@ import pytest
 from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.judge import Judgement
+from bakeoff.provenance import code_lines, prompt_hash
 from bakeoff.runner import run_case, run_eval
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
@@ -108,7 +109,8 @@ def test_run_eval_runs_every_case_and_repeat_in_order(triage_with):
     cases = [CASE, Case(name="tiny-bare", repo="tiny")]
     seen = []
     started = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
-    run = run_eval("fake", cases, repeats=2, on_record=seen.append, now=lambda: started)
+    # A registered name, for its code size; triage_with still swaps in the fake triage.
+    run = run_eval("anthropic", cases, repeats=2, on_record=seen.append, now=lambda: started)
     assert [(record.case, record.repeat) for record in run.records] == [
         ("tiny-top", 0),
         ("tiny-top", 1),
@@ -116,5 +118,7 @@ def test_run_eval_runs_every_case_and_repeat_in_order(triage_with):
         ("tiny-bare", 1),
     ]
     assert seen == run.records
-    assert (run.impl, run.model, run.effort) == ("fake", SETTINGS.model, SETTINGS.effort)
+    assert (run.impl, run.model, run.effort) == ("anthropic", SETTINGS.model, SETTINGS.effort)
     assert run.started_at == started
+    assert run.prompt_hash == prompt_hash()
+    assert (run.code_lines, run.code_non_blank_lines) == code_lines("anthropic")

@@ -15,6 +15,7 @@ from bakeoff.contract import InvalidReport, TriageReport
 from bakeoff.fixtures import Repo, load_repo
 from bakeoff.impls import get_triage
 from bakeoff.judge import Judgement, ThemeJudge
+from bakeoff.provenance import code_lines, git_sha, prompt_hash
 from bakeoff.scoring import Scores, score_run
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import RunStats, collect, raise_if_limit_fired
@@ -109,6 +110,11 @@ class EvalRun(BaseModel):
     model: str
     effort: str
     started_at: datetime
+    prompt_hash: str
+    # None outside a git checkout.
+    git_sha: str | None
+    code_lines: int
+    code_non_blank_lines: int
     records: list[RunRecord]
 
 
@@ -127,6 +133,9 @@ def run_eval(
     the loop.
     """
     started_at = now()
+    # Taken before the first run, so they describe the code and prompts that ran.
+    prompt, sha = prompt_hash(), git_sha()
+    lines, non_blank_lines = code_lines(impl)
     records = []
     for case in cases:
         for repeat in range(repeats):
@@ -138,6 +147,10 @@ def run_eval(
         model=SETTINGS.model,
         effort=SETTINGS.effort,
         started_at=started_at,
+        prompt_hash=prompt,
+        git_sha=sha,
+        code_lines=lines,
+        code_non_blank_lines=non_blank_lines,
         records=records,
     )
 

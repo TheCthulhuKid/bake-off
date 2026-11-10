@@ -113,3 +113,20 @@ returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
   implementation only. A judge that raises, such as on an API error or a verdict outside 1 to 5,
   is recorded as the record's `judge_error` and leaves `theme_score` `None`; what a failed call
   spent is not known, since the SDK raises before returning the usage.
+
+## Results files
+
+`run_eval` returns an `EvalRun`, one implementation's runs over the cases, which is what a
+results file holds. Besides the records, it says what produced them:
+
+| Field | Meaning |
+| --- | --- |
+| `impl`, `model`, `effort` | The implementation, and the model and effort from `SETTINGS`. |
+| `started_at` | When the eval of this implementation started, in UTC. |
+| `prompt_hash` | The first 12 hex digits of a SHA-256 over every prompt text the model sees: `SYSTEM_PROMPT`, the opening user message's template, `REPORT_PROMPT` and the three tools' docstrings, which are the model-facing tool descriptions. |
+| `git_sha` | The checkout's commit, with `-dirty` when tracked files have changed, or `null` outside a git checkout. Untracked files don't count, so new results files don't mark every later run dirty. |
+| `code_lines`, `code_non_blank_lines` | The size of the implementation's module, found with `importlib.util.find_spec` so the framework is not imported. |
+| `records` | One `RunRecord` per run, in run order. |
+
+The hash, commit and code size are taken before the first run, so they describe the code and
+prompts that ran.
