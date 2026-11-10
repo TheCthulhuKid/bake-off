@@ -2,7 +2,7 @@
 
 from collections import Counter
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 
 class Theme(BaseModel):
@@ -52,3 +52,15 @@ class TriageReport(BaseModel):
         cited.update(suggestion.number for suggestion in self.suggested_labels)
         cited.update(top.number for top in self.top_issues)
         return cited
+
+
+class InvalidReport(ValueError):
+    """Raised by an implementation when the model's final report fails validation."""
+
+
+def parse_report(text: str) -> TriageReport:
+    """Validate a report sent as JSON text, raising ``InvalidReport`` if it is invalid."""
+    try:
+        return TriageReport.model_validate_json(text)
+    except ValidationError as error:
+        raise InvalidReport(str(error)) from error

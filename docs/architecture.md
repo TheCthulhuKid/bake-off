@@ -74,6 +74,11 @@ JSON schema, which can only express that dict as an empty object; see `docs/fair
 report that lists an issue in `suggested_labels` more than once is rejected, as the dict could
 not hold it twice.
 
+`InvalidReport`, a `ValueError`, is the one exception for a final report that fails
+validation, whichever framework produced it, so the runner can tell an invalid report from a
+run that failed for another reason. `parse_report(text)` validates a report sent as JSON text
+and raises it, with pydantic's `ValidationError` as its cause.
+
 ## Fixtures
 
 `evals/repos/<name>/issues.json` is a `Repo`: the fixture name, the GitHub `owner/repo` it was
