@@ -3,11 +3,11 @@
 ```text
 src/bakeoff/
   contract.py      TriageReport and friends: the output every implementation returns
-  settings.py      model, effort, tool-call limit, truncation limit, prices and max output per model
+  settings.py      model, effort, run limits, truncation limit, prices and max output per model
   prompt.py        the shared system prompt, opening user message and report prompt
   fixtures.py      loads recorded repo data from evals/repos/<name>/issues.json
   tools.py         list_issues, get_issue, search_issues over fixture data
-  telemetry.py     per-run collector for tool calls and token usage
+  telemetry.py     per-run collector for tool calls, model requests, token usage and run limits
   impls/           one file per framework, each exposing triage(repo) -> TriageReport
   runner.py        runs an implementation once on a recorded repo and collects its stats
   cli.py           bakeoff run; input and output handling only
@@ -45,6 +45,8 @@ needs a source checkout or an editable install, which is what `uv sync` gives.
 | `model` | `BAKEOFF_MODEL` | `claude-opus-5-5` | implementations, `cost()`, `max_output_tokens()` |
 | `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
+| `max_model_requests` | `BAKEOFF_MAX_MODEL_REQUESTS` | 40 | `telemetry.py` request cap |
+| `run_timeout` | `BAKEOFF_RUN_TIMEOUT` | 900 seconds, still a guess | `telemetry.py` deadline |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly as `Settings.api_key()` |
@@ -110,14 +112,22 @@ turns into an error message; the tools and the CLI catch only that, not other mi
   every framework. The docstring states the limit of 20 literally, as prompt text, and a test
   checks it against `SEARCH_LIMIT`.
 
-`telemetry.py` collects one `RunStats` per run: tool calls, input and output tokens, the
-tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps its work in
-`collect()`. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on the call
-after the limit, and implementations pass token counts to `record_usage()`. The limit check and
-the count happen under one lock, since PydanticAI and LangGraph run a reply's tool calls in
-threads that share the run's `RunStats`. Outside `collect()` both are no-ops, so the tools work
-from a shell. For a framework that turns a tool's exception into an error result for the model,
-`raise_if_limit_fired()` raises `ToolLimitExceeded` again once the limit has fired.
+`telemetry.py` collects one `RunStats` per run: tool calls, model requests, input and output
+tokens, the three limits (`max_tool_calls`, `max_model_requests` and `timeout` in seconds), and
+`limit_fired` (`hit_limit` is derived from it). A run wraps its work in `collect()`, which takes
+each limit as an optional argument, defaulting to `SETTINGS`, and starts the run's deadline on
+the monotonic clock. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on
+the call after the limit. `record_model_request()` counts a model request and belongs just
+before each one; it raises `RunLimitExceeded` once the deadline has passed (`limit_fired =
+"timeout"`) or on the request after the cap (`"model_requests"`). No implementation calls it
+yet. Implementations pass token counts to `record_usage()`. `ToolLimitExceeded` is a subclass of `RunLimitExceeded`, so one `except`
+catches every limit. Each limit check and its count happen under one lock, since PydanticAI and
+LangGraph run a reply's tool calls in threads that share the run's `RunStats`. Outside
+`collect()` all three are no-ops, so the tools work from a shell. For a framework that turns a
+tool's exception into an error result for the model, `raise_if_limit_fired()` raises the error
+for whichever limit fired again.
+
+The deadline is checked only before a request, so it can't end a request that hangs.
 
 ## Prompt
 

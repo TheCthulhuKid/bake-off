@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     model: str = "claude-opus-5-5"
     effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     max_tool_calls: int = 25
+    max_model_requests: int = 40
+    # Seconds. A guess: the smoke runs didn't record latency, so check it against the first evals.
+    run_timeout: float = 900
     body_limit: int = 4000
     page_size: int = 30
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
