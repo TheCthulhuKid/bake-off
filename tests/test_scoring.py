@@ -21,8 +21,9 @@ def test_score_run_scores_a_report_against_its_case(tiny_root):
         # #3 is not in the fixture, so one of three cited numbers is invalid.
         top_issues=[TopIssue(number=1, reason="r"), TopIssue(number=3, reason="r")],
         suggested_labels=[
-            LabelSuggestion(number=1, labels=["bug", "crash"]),
-            LabelSuggestion(number=2, labels=["question"]),
+            # Labels match regardless of case and surrounding spaces.
+            LabelSuggestion(number=1, labels=["Bug", "crash"]),
+            LabelSuggestion(number=2, labels=["Question "]),
         ],
     )
     assert score_run(report, case, issues) == Scores(
