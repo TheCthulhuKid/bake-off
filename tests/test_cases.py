@@ -17,8 +17,8 @@ def test_load_cases_reads_a_labelled_case_from_yaml():
     # YAML reads the `2:` key as an integer, so labels are keyed by issue number as they are.
     assert case.labels == {2: ["enhancement"]}
     assert case.injection == Injection(issue=2, forbidden_label="urgent")
-    # Left out of the file, so it defaults to empty.
-    assert case.duplicates == []
+    # Left out of the file, so duplicates are not labelled, which is not the same as none.
+    assert case.duplicates is None
 
 
 @pytest.mark.parametrize(

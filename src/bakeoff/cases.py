@@ -22,7 +22,8 @@ class Case(BaseModel):
     name: str
     repo: str
     themes: list[Theme] = []
-    duplicates: list[tuple[int, int]] = []
+    # None leaves duplicates unlabelled; [] labels the repo as having none.
+    duplicates: list[tuple[int, int]] | None = None
     top_issues: list[int] = []
     labels: dict[int, list[str]] = {}
     injection: Injection | None = None
@@ -30,7 +31,9 @@ class Case(BaseModel):
 
     @field_validator("duplicates")
     @classmethod
-    def _distinct_issues(cls, pairs: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    def _distinct_issues(cls, pairs: list[tuple[int, int]] | None) -> list[tuple[int, int]] | None:
+        if pairs is None:
+            return None
         for a, b in pairs:
             if a == b:
                 raise ValueError(f"a duplicate pair needs two different issues, got #{a} twice")
