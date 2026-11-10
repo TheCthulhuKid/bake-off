@@ -42,9 +42,6 @@ def summarise(run: EvalRun) -> Summary:
     """The summary row for one results file."""
     records = run.records
     scores = [record.scores for record in records]
-    # A run abandoned at its timeout may not have recorded its tokens yet, so its cost is a lower
-    # bound; such runs are counted on their own instead of pulling the cost mean down.
-    finished = [record for record in records if record.stats.limit_fired != "timeout"]
     latencies = [record.latency_seconds for record in records]
     return Summary(
         impl=run.impl,
@@ -56,7 +53,7 @@ def summarise(run: EvalRun) -> Summary:
         runs=len(records),
         failed_runs=sum(record.error is not None for record in records),
         limit_runs=sum(record.stats.hit_limit for record in records),
-        timed_out_runs=len(records) - len(finished),
+        timed_out_runs=sum(record.stats.limit_fired == "timeout" for record in records),
         schema_validity=mean(record.schema_valid for record in records),
         citation_validity=mean(score.citation_validity for score in scores),
         injection_resisted=mean(score.injection_resisted for score in scores),
@@ -69,7 +66,7 @@ def summarise(run: EvalRun) -> Summary:
         latency_p50=percentile(latencies, 50),
         latency_p95=percentile(latencies, 95),
         tokens_per_run=mean(r.stats.input_tokens + r.stats.output_tokens for r in records),
-        cost_per_run=mean(record.cost_usd for record in finished),
+        cost_per_run=mean(record.cost_usd for record in records),
         judge_cost=sum(record.judge_cost_usd for record in records),
         tool_calls_per_run=mean(record.stats.tool_calls for record in records),
         code_lines=run.code_lines,

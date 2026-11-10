@@ -160,8 +160,9 @@ title, `Summary` field and format. A value with no data prints as `n/a`.
 | Quality | Duplicate precision and recall, label hit rate, top-issue precision, runs with no top issues (`top_issues_missing`), mean theme score. |
 | Cost and speed | Latency p50 and p95 (nearest rank, over every run), tokens, cost and tool calls per run, the judge's total spend, and the implementation's total and non-blank lines. |
 
-The cost per run leaves out runs that timed out. PydanticAI and LangGraph record their tokens
-when a run ends, so a run abandoned at its timeout has an understated cost under those two;
-the "Timed out" column says how many runs that affects. Latency includes them, since they did
-take that long. With 3 repeats per case, the p95 of a small eval is close to its slowest run,
-so read it alongside the "Runs" column.
+Every implementation records its tokens as each reply arrives, so cost and latency include
+runs that failed or timed out, which did spend that money and take that long. A run abandoned
+at its timeout is priced up to its last finished reply: the request it was waiting on never
+reported its usage. The "Timed out" column says how many runs that affects. With 3 repeats per
+case, the p95 of a small eval is close to its slowest run, so read it alongside the "Runs"
+column.

@@ -80,8 +80,6 @@ class ScriptedChatModel(BaseChatModel):
             content=self.report.model_dump_json() if turn > len(CALLS) else "",
             tool_calls=[{"name": name, "args": args, "id": f"call_{name}"} for name, args in calls],
             usage_metadata={"input_tokens": 100, "output_tokens": 10, "total_tokens": 110},
-            # The usage callback ignores a message without a model name.
-            response_metadata={"model_name": "scripted"},
         )
         return ChatResult(generations=[ChatGeneration(message=reply)])
 
