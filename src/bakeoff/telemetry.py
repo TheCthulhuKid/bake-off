@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Literal, NoReturn
 
-from pydantic import BaseModel, PrivateAttr, computed_field
+from pydantic import BaseModel, computed_field
 
 from bakeoff.settings import SETTINGS
 
@@ -37,8 +37,6 @@ class RunStats(BaseModel):
     max_model_requests: int
     timeout: float
     limit_fired: Limit | None = None
-    # Monotonic clock, so a system clock change can't move it.
-    _deadline: float = PrivateAttr()
 
     @computed_field
     @property
@@ -53,6 +51,9 @@ _LIMIT_ERRORS: dict[Limit, tuple[type[RunLimitExceeded], str]] = {
 }
 
 _current: ContextVar[RunStats | None] = ContextVar("run_stats", default=None)
+# Beside the stats rather than in them, so RunStats stays plain data that survives a results
+# file. Monotonic, so a system clock change can't move it.
+_deadline: ContextVar[float] = ContextVar("run_deadline")
 # PydanticAI and LangGraph run one reply's tool calls in threads that share the run's RunStats,
 # so each limit check and its count must happen as one step.
 _count_lock = threading.Lock()
@@ -75,12 +76,13 @@ def collect(
         ),
         timeout=SETTINGS.run_timeout if timeout is None else timeout,
     )
-    stats._deadline = time.monotonic() + stats.timeout
+    deadline_token = _deadline.set(time.monotonic() + stats.timeout)
     token = _current.set(stats)
     try:
         yield stats
     finally:
         _current.reset(token)
+        _deadline.reset(deadline_token)
 
 
 def record_tool_call() -> None:
@@ -104,7 +106,7 @@ def record_model_request() -> None:
     if stats is None:
         return
     with _count_lock:
-        if time.monotonic() >= stats._deadline:
+        if time.monotonic() >= _deadline.get():
             _fire(stats, "timeout")
         if stats.model_requests >= stats.max_model_requests:
             _fire(stats, "model_requests")

@@ -123,7 +123,9 @@ turns into an error message; the tools and the CLI catch only that, not other mi
 tokens, the three limits (`max_tool_calls`, `max_model_requests` and `timeout` in seconds), and
 `limit_fired` (`hit_limit` is derived from it). A run wraps its work in `collect()`, which takes
 each limit as an optional argument, defaulting to `SETTINGS`, and starts the run's deadline on
-the monotonic clock. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on
+the monotonic clock. The deadline is kept in its own context variable beside the stats, not in
+`RunStats`, so the stats are plain data that load back from a results file unchanged, and code
+run in a copied context sees both. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on
 the call after the limit. Every implementation calls
 `record_model_request()` just before each model request; it raises `RunLimitExceeded` once the
 deadline has passed (`limit_fired = "timeout"`) or on the request after the cap

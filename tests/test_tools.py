@@ -3,6 +3,7 @@ import pytest
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import (
     RunLimitExceeded,
+    RunStats,
     ToolLimitExceeded,
     collect,
     record_model_request,
@@ -65,3 +66,5 @@ def test_model_request_limits_raise_before_the_request(limits, fired, sent):
         record_model_request()
         record_model_request()
     assert (stats.model_requests, stats.limit_fired) == (sent, fired)
+    # Stats are saved in results files, so loading them back must give the same stats.
+    assert RunStats.model_validate_json(stats.model_dump_json()) == stats
