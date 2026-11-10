@@ -10,7 +10,7 @@ from bakeoff import tools
 from bakeoff.impls import get_triage
 from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT
 from bakeoff.settings import SETTINGS
-from bakeoff.telemetry import ToolLimitExceeded, collect
+from bakeoff.telemetry import RunLimitExceeded, ToolLimitExceeded, collect
 
 
 def test_pydanticai_returns_report_and_records_stats(pydanticai_model):
@@ -18,6 +18,7 @@ def test_pydanticai_returns_report_and_records_stats(pydanticai_model):
         report = get_triage("pydanticai")("tiny")
     assert report == pydanticai_model.report
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 300, 30)
+    assert stats.model_requests == 3 and not stats.hit_limit
     assert pydanticai_model.seen.instructions == SYSTEM_PROMPT
     # A dict is sent to the API as an object that can only be {}.
     schema = pydanticai_model.seen.output_tools[0].parameters_json_schema
@@ -68,3 +69,14 @@ def test_tool_limit_ends_the_run(impl, request):
         get_triage(impl)("tiny")
     # The two turns before the limit still count towards cost.
     assert (stats.input_tokens, stats.output_tokens) == (200, 20)
+
+
+# Each impl reports its requests through its own hook, so each needs a case.
+@pytest.mark.parametrize("impl", ["pydanticai"])
+def test_request_limit_ends_the_run(impl, request):
+    request.getfixturevalue(f"{impl}_model")
+    with collect(max_model_requests=1) as stats, pytest.raises(RunLimitExceeded):
+        get_triage(impl)("tiny")
+    assert (stats.model_requests, stats.limit_fired) == (1, "model_requests")
+    # The one request sent still counts towards cost.
+    assert (stats.input_tokens, stats.output_tokens) == (100, 10)
