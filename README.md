@@ -61,5 +61,18 @@ One run of an implementation on a recorded repo, saved to a new
 
 `--out` also takes a full path ending in `.json`. Existing files are never overwritten.
 
+The eval runs every implementation on the cases in `evals/cases.yaml`, taking turns on each case
+and repeat, and saves one new `results/<UTC timestamp>-<impl>.json` per implementation. It
+checks the cases against their fixtures and the output paths before the first run:
+
+```sh
+.venv/bin/bakeoff eval --repeats 3            # all implementations, all cases
+.venv/bin/bakeoff eval --repo click --judge   # one repo first, themes scored by the LLM judge
+```
+
+`--impl` runs one implementation, and `--cases` and `--out` point at another cases file or
+results directory. The judge costs extra and caches its verdicts in `evals/judge-cache.json`.
+`docs/evals.md` describes the cases, the scores and the results files.
+
 Implementations are registered by name in `src/bakeoff/impls/__init__.py`; `bakeoff run --help`
 lists them.
