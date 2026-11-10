@@ -185,7 +185,7 @@ and list it below.
   calls the model bound to the three tools and loops through a `ToolNode` while the reply has
   tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with
   the same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates
-  the reply's JSON text as a `TriageReport` and raises if it is invalid. `build_graph(model)`
+  the reply's JSON text with `parse_report`, which raises `InvalidReport` if it is invalid. `build_graph(model)`
   builds it, and the module-level `graph` uses a `ChatAnthropic` with `effort` from
   `SETTINGS`. Usage is collected by a `UsageMetadataCallbackHandler` passed in the run config,
   and recorded in a `finally`. `fetch` and `analyse`, the only nodes that call the model, each
@@ -202,7 +202,8 @@ and list it below.
   `stop_reason` is `tool_use` and `generate_tool_call_response()` has calls to answer. A reply
   cut off at `max_tokens` can hold a `tool_use` block, but the runner stops there, so its tools
   are not run and no request is counted. Usage is recorded from each reply as it arrives, and
-  the last reply's text is validated as a `TriageReport`.
+  the last reply's text is validated with `parse_report`, which raises `InvalidReport` if it is
+  invalid.
 
 Registered as `pydanticai`, `langgraph` and `anthropic`.
 
