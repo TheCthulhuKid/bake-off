@@ -64,3 +64,26 @@ def parse_report(text: str) -> TriageReport:
         return TriageReport.model_validate_json(text)
     except ValidationError as error:
         raise InvalidReport(str(error)) from error
+
+
+class IncompleteReport(RuntimeError):
+    """Raised when the model's final reply stopped before it held a whole report.
+
+    Cut off at the output limit or the context window, or refused: the report was never
+    finished, so this says nothing about whether the framework gets the schema right.
+    """
+
+
+# The stop reasons that end a reply before its report is finished.
+INCOMPLETE_STOPS = frozenset({"max_tokens", "model_context_window_exceeded", "refusal"})
+
+
+def parse_final_reply(text: str, stop_reason: str | None) -> TriageReport:
+    """Validate the final reply's report, for a framework that hands back the reply's text.
+
+    Raises ``IncompleteReport`` if the reply stopped before a whole report, and otherwise
+    ``InvalidReport`` if the text is not a valid report.
+    """
+    if stop_reason in INCOMPLETE_STOPS:
+        raise IncompleteReport(f"the final reply stopped at {stop_reason!r}, before a whole report")
+    return parse_report(text)

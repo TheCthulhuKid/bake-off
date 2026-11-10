@@ -5,11 +5,13 @@ from pydantic import ValidationError
 
 from bakeoff.contract import (
     DuplicatePair,
+    IncompleteReport,
     InvalidReport,
     LabelSuggestion,
     Theme,
     TopIssue,
     TriageReport,
+    parse_final_reply,
     parse_report,
 )
 
@@ -59,3 +61,16 @@ def test_parse_report_raises_invalid_report_for_a_report_that_fails_validation(
     )
     with expected:
         assert parse_report(report.model_dump_json()) == report
+
+
+@pytest.mark.parametrize(
+    ("stop_reason", "expected"),
+    [("end_turn", nullcontext()), ("max_tokens", pytest.raises(IncompleteReport))],
+)
+def test_parse_final_reply_raises_incomplete_report_for_a_reply_that_stopped_early(
+    stop_reason, expected
+):
+    report = TriageReport(themes=[], duplicates=[], top_issues=[], suggested_labels=[])
+    # A reply cut off mid-report is rarely valid JSON, but it is incomplete, not invalid.
+    with expected:
+        assert parse_final_reply(report.model_dump_json(), stop_reason) == report

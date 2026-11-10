@@ -8,7 +8,7 @@ import anthropic
 from anthropic import beta_tool, transform_schema
 from anthropic.types.beta import BetaJSONOutputFormatParam
 
-from bakeoff.contract import TriageReport, parse_report
+from bakeoff.contract import TriageReport, parse_final_reply
 from bakeoff.prompt import SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import raise_if_limit_fired, record_model_request, record_usage
@@ -67,4 +67,4 @@ def triage(repo: str) -> TriageReport:
         if another_request:
             record_model_request()
     text = "".join(block.text for block in message.content if block.type == "text")
-    return parse_report(text)
+    return parse_final_reply(text, message.stop_reason)

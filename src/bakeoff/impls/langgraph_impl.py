@@ -9,7 +9,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from bakeoff.contract import TriageReport, parse_report
+from bakeoff.contract import TriageReport, parse_final_reply
 from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_model_request, record_usage
@@ -43,7 +43,9 @@ def build_graph(model: BaseChatModel) -> CompiledStateGraph:
         return {"answer": reply}
 
     def report(state: State) -> dict[str, Any]:
-        return {"triage_report": parse_report(state["answer"].text)}
+        answer = state["answer"]
+        stop_reason = answer.response_metadata.get("stop_reason")
+        return {"triage_report": parse_final_reply(answer.text, stop_reason)}
 
     graph = StateGraph(State)
     graph.add_node("fetch", fetch)
