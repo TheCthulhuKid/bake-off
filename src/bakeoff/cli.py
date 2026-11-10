@@ -9,7 +9,16 @@ from bakeoff.cases import load_cases
 from bakeoff.fixtures import UnknownRepoError
 from bakeoff.impls import IMPLS
 from bakeoff.judge import ThemeJudge
-from bakeoff.runner import RunRecord, check_cases, result_path, run_eval, run_once, save_eval
+from bakeoff.report import render
+from bakeoff.runner import (
+    RunRecord,
+    check_cases,
+    load_eval,
+    result_path,
+    run_eval,
+    run_once,
+    save_eval,
+)
 from bakeoff.settings import PROJECT_ROOT, SETTINGS
 
 EVALS = PROJECT_ROOT / "evals"
@@ -115,3 +124,16 @@ def _print_record(impl: str, record: RunRecord) -> None:
         f"{impl} {record.case} #{record.repeat}: {outcome} "
         f"({record.latency_seconds:.1f} s, ${record.cost_usd:.4f})"
     )
+
+
+@main.command()
+@click.argument(
+    "files", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+def report(files: tuple[Path, ...]) -> None:
+    """Print the comparison tables for saved eval FILES, one row per file, as Markdown."""
+    try:
+        runs = [load_eval(path) for path in files]
+    except ValueError as error:
+        raise click.ClickException(f"not a results file: {error}") from error
+    click.echo(render(runs))

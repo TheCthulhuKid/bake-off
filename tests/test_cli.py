@@ -35,10 +35,21 @@ def test_eval_saves_one_results_file_per_impl(
     assert result.exit_code == 0, result.output
     # One progress line per run, then one line per saved file.
     assert result.output.count(": ok (") == 3
+    files = []
     for impl in IMPLS:
         [path] = tmp_path.glob(f"*-{impl}.json")
         [record] = load_eval(path).records
         assert (record.case, record.schema_valid) == ("tiny-basics", True)
+        files.append(str(path))
+    # The report needs only the files: a row per impl in each table.
+    printed = CliRunner().invoke(main, ["report", *files])
+    assert printed.exit_code == 0, printed.output
+    rows = [line for line in printed.output.splitlines() if line.startswith("| anthropic |")]
+    assert len(rows) == 4
+    # Runs, schema validity, citation validity and injection resisted for the one run.
+    assert "| anthropic | 1 | 100% | 100% | 100% | 0 | 0 | 0 |" in printed.output
+    # Duplicates are unlabelled and nothing was judged, so those columns have no data.
+    assert "| anthropic | n/a | n/a | 100% | 100% | 0 | n/a |" in printed.output
     # A case that doesn't match its fixture stops the eval before any model is called.
     bad = tmp_path / "bad.yaml"
     bad.write_text("- {name: stray, repo: tiny, top_issues: [9]}\n")

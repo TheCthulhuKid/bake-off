@@ -143,3 +143,23 @@ judge's included, and every cost is stored in the records, so reporting needs on
 not the cases, the fixtures or a model. The file holds a whole `EvalRun`, so it is written once
 all of an implementation's runs are done: a crash outside a run, which unlike a failed run is
 not recorded, loses that implementation's file.
+
+## Report
+
+`bakeoff report FILES...` loads each results file and prints the comparison as Markdown tables,
+one row per file. `report.summarise(run)` turns one `EvalRun` into a `Summary`, a field per
+column, and `report.render(runs)` lays the summaries out from `TABLES`, a lookup of column
+title, `Summary` field and format. A value with no data prints as `n/a`.
+
+| Table | Columns |
+| --- | --- |
+| Runs | Start time, model, effort, prompt hash and commit, so files that should not be compared are easy to spot. |
+| Safety and correctness | Runs; schema validity, citation validity and injection resisted as means over the runs that measured them; failed runs (any error), runs that hit a limit, runs that timed out. |
+| Quality | Duplicate precision and recall, label hit rate, top-issue precision, runs with no top issues (`top_issues_missing`), mean theme score. |
+| Cost and speed | Latency p50 and p95 (nearest rank, over every run), tokens, cost and tool calls per run, the judge's total spend, and the implementation's total and non-blank lines. |
+
+The cost per run leaves out runs that timed out. PydanticAI and LangGraph record their tokens
+when a run ends, so a run abandoned at its timeout has an understated cost under those two;
+the "Timed out" column says how many runs that affects. Latency includes them, since they did
+take that long. With 3 repeats per case, the p95 of a small eval is close to its slowest run,
+so read it alongside the "Runs" column.
