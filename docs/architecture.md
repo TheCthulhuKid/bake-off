@@ -9,8 +9,9 @@ src/bakeoff/
   tools.py         list_issues, get_issue, search_issues over fixture data
   telemetry.py     per-run collector for tool calls, model requests, token usage and run limits
   impls/           one file per framework, each exposing triage(repo) -> TriageReport
-  runner.py        runs an implementation once on a recorded repo and collects its stats
+  runner.py        runs an implementation on a recorded repo or an eval case, with its stats
   cases.py         Case and load_cases: the hand-labelled eval cases (docs/evals.md)
+  scoring.py       Scores, score_run and the mean and percentile helpers (docs/evals.md)
   cli.py           bakeoff run; input and output handling only
 evals/
   repos/<name>/    recorded issues, one directory per fixture repo
@@ -209,8 +210,20 @@ file. `runner.result_path` picks the file: a path ending in `.json` is used as g
 other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
 `YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
 before the run starts, so a bad or taken path costs no tokens. Errors from the run itself,
-including `ToolLimitExceeded`, propagate; the eval harness will record them instead and add
-`eval` and `report`.
+including `ToolLimitExceeded`, propagate.
+
+`runner.run_case(impl, case, repeat)` is the eval's unit: one run of an implementation on one
+case. Like `run_once` it loads the case's repo and imports the implementation first, so an
+unknown repo or impl raises before any model is called. It then runs `triage` inside
+`collect()` and returns a `RunRecord`: case name, repeat number, report or `None`, error or
+`None`, stats, `latency_seconds`, `cost_usd` and `scores`, plus the computed `schema_valid`
+(a report came back). Any `Exception` from the run, a run limit included, is recorded as the
+error text `"<ExceptionName>: <message>"` rather than raised, so one failed run never stops an
+eval; `KeyboardInterrupt` still stops it. The report is scored with `score_run` against the
+fixture's issue numbers, and a run with no report gets an empty `Scores()`. Cost is priced
+when the run is recorded, since `Settings.cost` prices the current model and a report over
+older files could not. Latency comes from a `clock` argument, `time.monotonic` by default, so
+tests can set it.
 
 ## Tests
 
