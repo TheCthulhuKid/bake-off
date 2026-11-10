@@ -10,6 +10,7 @@ src/bakeoff/
   telemetry.py     per-run collector for tool calls, model requests, token usage and run limits
   impls/           one file per framework, each exposing triage(repo) -> TriageReport
   runner.py        runs an implementation once on a recorded repo and collects its stats
+  cases.py         Case and load_cases: the hand-labelled eval cases (docs/evals.md)
   cli.py           bakeoff run; input and output handling only
 evals/
   repos/<name>/    recorded issues, one directory per fixture repo
@@ -18,9 +19,9 @@ scripts/           record_issues.py, which records a fixture from GitHub
 tests/             offline; frameworks run against fake models
 ```
 
-The eval harness will add `evals/cases.yaml` (hand-labelled ground truth per case),
-`evals/scoring.py` (metrics over saved runs), run timings, and the `bakeoff eval` and
-`bakeoff report` commands.
+`evals/` holds data only, since only `src/bakeoff` is packaged. The eval harness is adding
+`evals/cases.yaml` (hand-labelled ground truth per case), scoring, run timings, and the
+`bakeoff eval` and `bakeoff report` commands; its code goes under `src/bakeoff/`.
 
 ## Layers
 
