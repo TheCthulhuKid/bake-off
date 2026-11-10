@@ -231,11 +231,24 @@ unknown repo or impl raises before any model is called. It then runs `triage` in
 the run, a run limit included, is recorded as the error text `"<ExceptionName>: <message>"`
 rather than raised, so one failed run never stops an eval; `KeyboardInterrupt` still stops it.
 `schema_valid` is `True` when a report came back, `False` when the run raised the contract's
-`InvalidReport`, and `None` for any other failure, which says nothing about the schema. The report is scored with `score_run` against the
-fixture's issue numbers, and a run with no report gets an empty `Scores()`. Cost is priced
-when the run is recorded, since `Settings.cost` prices the current model and a report over
-older files could not. Latency comes from a `clock` argument, `time.monotonic` by default, so
-tests can set it.
+`InvalidReport`, and `None` for any other failure, which says nothing about the schema. The
+report is scored with `score_run` against the fixture's issue numbers, and a run with no report
+gets an empty `Scores()`. Cost is priced when the run is recorded, since `Settings.cost` prices
+the current model and a report over older files could not. Latency comes from a `clock`
+argument, `time.monotonic` by default, so tests can set it.
+
+The run's own deadline is only checked between model requests, so `run_case` also runs
+`triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.
+If the thread is still running, it sets `limit_fired = "timeout"` on the run's stats and
+records the run as failed with the deadline's `RunLimitExceeded` message; the abandoned run
+stops at its own next limit check. Without this, a request that hangs, such as one from
+`ChatAnthropic`, which sets no request timeout, would hold the eval forever.
+- A daemon thread, not a `ThreadPoolExecutor`, whose worker threads are joined at interpreter
+  exit, so one hung request would stop the process from ever exiting.
+- The thread runs `triage` in a `contextvars.copy_context()` of the caller, since a new thread
+  starts with an empty context and would not see the run's collector or deadline.
+- The record holds a `model_copy()` of the stats, since an abandoned run keeps updating the
+  original in the background.
 
 ## Tests
 

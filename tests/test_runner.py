@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 
 from bakeoff.cases import Case
@@ -27,6 +29,7 @@ def test_run_case_records_the_report_scores_and_cost(triage_with, monkeypatch):
     monkeypatch.setattr(SETTINGS, "model", "claude-sonnet-5-5")
 
     def triage(repo):
+        # triage runs on the timeout thread, so a cost here also shows the collector reaches it.
         record_usage(1_000_000, 100_000)
         return REPORT
 
@@ -56,3 +59,24 @@ def test_run_case_records_a_failed_run_and_whether_its_schema_failed(
     assert record.scores == Scores()
     # The tokens spent before the failure still count towards cost.
     assert record.stats.input_tokens == 100 and record.cost_usd > 0
+
+
+def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
+    monkeypatch.setattr(SETTINGS, "run_timeout", 0.05)
+    release, done = threading.Event(), threading.Event()
+
+    def triage(repo):
+        release.wait(5)
+        record_usage(100, 10)
+        done.set()
+        return REPORT
+
+    triage_with(triage)
+    record = run_case("fake", CASE, repeat=0)
+    assert (record.report, record.schema_valid) == (None, None)
+    assert record.error == "RunLimitExceeded: run timeout of 0.05 s reached"
+    assert record.stats.limit_fired == "timeout"
+    # The abandoned run carries on in the background; the record keeps the stats it had.
+    release.set()
+    assert done.wait(5)
+    assert record.stats.input_tokens == 0

@@ -1,5 +1,7 @@
 """Runs an implementation on a recorded repo or an eval case and collects its stats."""
 
+import contextvars
+import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -13,7 +15,7 @@ from bakeoff.fixtures import load_repo
 from bakeoff.impls import get_triage
 from bakeoff.scoring import Scores, score_run
 from bakeoff.settings import SETTINGS
-from bakeoff.telemetry import RunStats, collect
+from bakeoff.telemetry import RunStats, collect, raise_if_limit_fired
 
 
 class RunResult(BaseModel):
@@ -52,8 +54,8 @@ def run_case(
 ) -> RunRecord:
     """Run ``impl`` once on ``case`` and score the report.
 
-    A run that raises is recorded as failed with its error, so one run never stops an eval. An
-    unknown repo or impl still raises, before any model is called.
+    A run that raises, or runs past its timeout, is recorded as failed with its error, so one run
+    never stops an eval. An unknown repo or impl still raises, before any model is called.
     """
     repo = load_repo(case.repo)
     triage = get_triage(impl)
@@ -61,7 +63,7 @@ def run_case(
     start = clock()
     with collect() as stats:
         try:
-            report = triage(case.repo)
+            report = _triage_within_timeout(triage, case.repo, stats)
             schema_valid = True
         except InvalidReport as exc:
             error, schema_valid = _describe(exc), False
@@ -75,12 +77,44 @@ def run_case(
         report=report,
         error=error,
         schema_valid=schema_valid,
-        stats=stats,
+        # A copy: a run abandoned at its timeout still updates the original in the background.
+        stats=stats.model_copy(),
         latency_seconds=latency,
         # Priced now: Settings.cost prices the current model, which a later report can't know.
         cost_usd=SETTINGS.cost(stats.input_tokens, stats.output_tokens),
         scores=Scores() if report is None else score_run(report, case, issues),
     )
+
+
+def _triage_within_timeout(
+    triage: Callable[[str], TriageReport], repo: str, stats: RunStats
+) -> TriageReport:
+    """Run ``triage(repo)`` on a daemon thread, giving up after ``stats.timeout`` seconds.
+
+    The run's own deadline is only checked between model requests, so this is what ends a run
+    stuck in a hung request. A daemon thread rather than a ThreadPoolExecutor, whose threads are
+    joined at exit, so one hung request can't stop the process from exiting. The thread runs in
+    a copy of this context, or the run's collector would be invisible to the impl and tools.
+    """
+    context = contextvars.copy_context()
+    outcome: dict[str, TriageReport | BaseException] = {}
+
+    def run() -> None:
+        try:
+            outcome["report"] = context.run(triage, repo)
+        except BaseException as error:
+            outcome["error"] = error
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(stats.timeout)
+    if thread.is_alive():
+        # Also stops the abandoned run at its next limit check.
+        stats.limit_fired = "timeout"
+        raise_if_limit_fired()
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["report"]
 
 
 def _describe(error: Exception) -> str:
