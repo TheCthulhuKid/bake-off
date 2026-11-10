@@ -1,7 +1,6 @@
 import json
 import os
 from pathlib import Path
-from typing import ClassVar
 
 import anthropic
 import httpx2
@@ -43,9 +42,10 @@ class ScriptedModel(FunctionModel):
     def respond(self, messages, info: AgentInfo) -> ModelResponse:
         self.seen = info
         script = [ToolCallPart(name, args) for name, args in CALLS]
-        script.append(ToolCallPart(info.output_tools[0].name, REPORT.model_dump(mode="json")))
-        # Requests and responses alternate, so this counts the turns taken so far.
-        part = script[len(messages) // 2]
+        script.append(ToolCallPart(info.output_tools[0].name, self.report.model_dump(mode="json")))
+        # Requests and responses alternate, so this counts the turns taken so far. A retry of an
+        # invalid report gets the same report again.
+        part = script[min(len(messages) // 2, len(script) - 1)]
         return ModelResponse(parts=[part], usage=RequestUsage(input_tokens=100, output_tokens=10))
 
 
@@ -55,7 +55,7 @@ class ScriptedChatModel(BaseChatModel):
     Uses 100 + 10 tokens a turn.
     """
 
-    report: ClassVar[TriageReport] = REPORT
+    report: TriageReport = REPORT
     tools: list = []
     seen: list = []
 
@@ -77,7 +77,7 @@ class ScriptedChatModel(BaseChatModel):
         calls = CALLS[turn : turn + 1]
         reply = AIMessage(
             # The report call answers in JSON text, as the API does under output_config.format.
-            content=REPORT.model_dump_json() if turn > len(CALLS) else "",
+            content=self.report.model_dump_json() if turn > len(CALLS) else "",
             tool_calls=[{"name": name, "args": args, "id": f"call_{name}"} for name, args in calls],
             usage_metadata={"input_tokens": 100, "output_tokens": 10, "total_tokens": 110},
             # The usage callback ignores a message without a model name.

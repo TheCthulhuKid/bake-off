@@ -2,16 +2,21 @@
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.capabilities import Hooks
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.models import ModelRequestContext
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.usage import RunUsage
 
-from bakeoff.contract import TriageReport
+from bakeoff.contract import InvalidReport, TriageReport
 from bakeoff.prompt import SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_model_request, record_usage
 from bakeoff.tools import TOOLS
+
+# Running out of tool retries raises the same exception class, so only the message tells a report
+# that failed validation apart.
+OUTPUT_RETRIES_EXCEEDED = "Exceeded maximum output retries"
 
 
 async def _count_request(
@@ -41,5 +46,9 @@ def triage(repo: str) -> TriageReport:
     usage = RunUsage()
     try:
         return agent.run_sync(user_prompt(repo), usage=usage).output
+    except UnexpectedModelBehavior as error:
+        if error.message.startswith(OUTPUT_RETRIES_EXCEEDED):
+            raise InvalidReport(error.message) from error
+        raise
     finally:
         record_usage(usage.input_tokens, usage.output_tokens)

@@ -7,6 +7,7 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic_ai.profiles.anthropic import anthropic_model_profile
 
 from bakeoff import tools
+from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.impls import get_triage
 from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT
 from bakeoff.settings import SETTINGS
@@ -83,3 +84,17 @@ def test_request_limit_ends_the_run(impl, request):
     assert (stats.model_requests, stats.limit_fired) == (1, "model_requests")
     # The one request sent still counts towards cost.
     assert (stats.input_tokens, stats.output_tokens) == (100, 10)
+
+
+# Each impl turns its framework's validation failure into InvalidReport its own way.
+@pytest.mark.parametrize("impl", ["pydanticai", "langgraph", "anthropic"])
+def test_an_invalid_report_raises_invalid_report(impl, request):
+    # model_construct skips validation, so it can build the six top issues a model might send.
+    request.getfixturevalue(f"{impl}_model").report = TriageReport.model_construct(
+        themes=[],
+        duplicates=[],
+        top_issues=[TopIssue(number=1, reason="r")] * 6,
+        suggested_labels=[],
+    )
+    with collect(), pytest.raises(InvalidReport):
+        get_triage(impl)("tiny")

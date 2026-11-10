@@ -14,7 +14,8 @@ marked "Read from source" were not run.
 
 | Framework | Default | Effect | Changed? |
 | --- | --- | --- | --- |
-| PydanticAI | One output retry (`retries` defaults to 1 for output). Checked by a run. | A report that fails `TriageReport` validation is sent back once with the error; a second failure raises `UnexpectedModelBehavior`. Schema validity measures framework plus retry policy, and the retry's tokens count towards cost. | No |
+| PydanticAI | One output retry (`retries` defaults to 1 for output). Checked by a run. | A report that fails `TriageReport` validation is sent back once with the error; a second failure raises `UnexpectedModelBehavior`, which `triage` re-raises as `InvalidReport`. Schema validity measures framework plus retry policy, and the retry's tokens count towards cost. | No |
+| PydanticAI | Running out of output retries and running out of tool retries both raise `UnexpectedModelBehavior`, told apart only by the message (`Exceeded maximum output retries (1)` against `Tool 'x' exceeded max retries count of 1`). Read from source; checked by a run. | `triage` treats only the first as an invalid report, by the message prefix. A PydanticAI upgrade that rewords it would turn invalid reports into unmeasured failures; the fake-model test that expects `InvalidReport` from PydanticAI catches that. | Yes, see deviations |
 | PydanticAI | One tool retry (`retries` defaults to 1 for tools). Checked by a run. | Tool arguments that fail validation, such as a non-integer issue number, are sent back once per tool; a second failure raises `UnexpectedModelBehavior`. Such calls never reach the tool, so they do not count towards the tool-call limit. | No |
 | PydanticAI | `UsageLimits` request limit of 50 model requests per run. Read from source. | The shared request cap of 40 fires first, and so does the tool-call limit on a run of single tool calls. | No |
 | PydanticAI | The shared request cap and deadline are checked in a `before_model_request` hook. Checked by a run. | The exception from the hook ends `run_sync` unchanged, without being wrapped or retried, so a run past a limit ends the same way as past the tool-call limit. | Yes, see deviations |
@@ -70,6 +71,12 @@ implementation ends the run on it.
   its tools or validating the report, so a run that raises still reports its cost.
 
 ## Deliberate deviations
+
+- Every implementation raises the contract's `InvalidReport` when the final report fails
+  validation, so the runner can tell an invalid report from a run that failed for another
+  reason. LangGraph and the tool runner validate through `parse_report`. PydanticAI validates
+  the report itself, so its `triage` re-raises `UnexpectedModelBehavior` as `InvalidReport` when
+  the message says output retries ran out; no framework setting changes.
 
 - The model-request cap and the run deadline are the harness's, not the frameworks', so every
   implementation stops at the same point. Each implementation gained the hook that reports a

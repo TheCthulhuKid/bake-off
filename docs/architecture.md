@@ -180,7 +180,10 @@ and list it below.
   from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes. A
   `Hooks` capability calls `record_model_request()` in `before_model_request`; the hook is
   async, so PydanticAI runs it on the event loop rather than in a worker thread, and its
-  exception ends `run_sync` unchanged.
+  exception ends `run_sync` unchanged. When the report still fails validation after PydanticAI's
+  output retry, `triage` re-raises the `UnexpectedModelBehavior` as `InvalidReport`. It tells
+  that case apart by the message prefix `OUTPUT_RETRIES_EXCEEDED`, since running out of tool
+  retries raises the same class; any other `UnexpectedModelBehavior` propagates unchanged.
 - `impls/langgraph_impl.py`: a `StateGraph` over a messages state with three nodes. `fetch`
   calls the model bound to the three tools and loops through a `ToolNode` while the reply has
   tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with
