@@ -7,7 +7,7 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic_ai.profiles.anthropic import anthropic_model_profile
 
 from bakeoff import tools
-from bakeoff.contract import InvalidReport, TopIssue, TriageReport
+from bakeoff.contract import IncompleteReport, InvalidReport, TopIssue, TriageReport
 from bakeoff.impls import get_triage
 from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT
 from bakeoff.settings import SETTINGS
@@ -115,4 +115,12 @@ def test_an_invalid_report_raises_invalid_report(impl, request):
         suggested_labels=[],
     )
     with collect(), pytest.raises(InvalidReport):
+        get_triage(impl)("tiny")
+
+
+# Each impl learns from its framework that the reply stopped early in its own way.
+@pytest.mark.parametrize("impl", ["pydanticai", "langgraph", "anthropic"])
+def test_a_cut_off_report_raises_incomplete_report(impl, request):
+    request.getfixturevalue(f"{impl}_model").cut_off = True
+    with collect(), pytest.raises(IncompleteReport):
         get_triage(impl)("tiny")

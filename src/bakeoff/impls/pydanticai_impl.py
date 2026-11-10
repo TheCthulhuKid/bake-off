@@ -2,13 +2,13 @@
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.capabilities import Hooks
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.exceptions import ContentFilterError, IncompleteToolCall, UnexpectedModelBehavior
 from pydantic_ai.messages import ModelResponse
 from pydantic_ai.models import ModelRequestContext
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 
-from bakeoff.contract import InvalidReport, TriageReport
+from bakeoff.contract import IncompleteReport, InvalidReport, TriageReport
 from bakeoff.prompt import SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_model_request, record_usage
@@ -54,6 +54,9 @@ def triage(repo: str) -> TriageReport:
     """Triage ``repo``; the caller wraps the run in ``telemetry.collect()``."""
     try:
         return agent.run_sync(user_prompt(repo)).output
+    except (IncompleteToolCall, ContentFilterError) as error:
+        # Cut off at the output limit or refused: the report was never finished.
+        raise IncompleteReport(error.message) from error
     except UnexpectedModelBehavior as error:
         if error.message.startswith(OUTPUT_RETRIES_EXCEEDED):
             raise InvalidReport(error.message) from error

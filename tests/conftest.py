@@ -30,10 +30,20 @@ REPORT = TriageReport(
 CALLS = [("list_issues", {"repo": "tiny"}), ("get_issue", {"repo": "tiny", "number": 1})]
 
 
+def _cut_off(report: TriageReport) -> str:
+    """The first half of ``report``'s JSON, as a reply stopped at its output limit leaves it."""
+    text = report.model_dump_json()
+    return text[: len(text) // 2]
+
+
 class ScriptedModel(FunctionModel):
-    """Calls list_issues, then get_issue, then returns ``REPORT``, using 100 + 10 tokens a turn."""
+    """Calls list_issues, then get_issue, then returns ``REPORT``, using 100 + 10 tokens a turn.
+
+    With ``cut_off`` set, every report is cut off at the output limit instead.
+    """
 
     report = REPORT
+    cut_off = False
 
     def __init__(self):
         super().__init__(self.respond)
@@ -45,8 +55,13 @@ class ScriptedModel(FunctionModel):
         script.append(ToolCallPart(info.output_tools[0].name, self.report.model_dump(mode="json")))
         # Requests and responses alternate, so this counts the turns taken so far. A retry of an
         # invalid report gets the same report again.
-        part = script[min(len(messages) // 2, len(script) - 1)]
-        return ModelResponse(parts=[part], usage=RequestUsage(input_tokens=100, output_tokens=10))
+        turn = min(len(messages) // 2, len(script) - 1)
+        part, finish_reason = script[turn], None
+        if self.cut_off and turn == len(CALLS):
+            part = ToolCallPart(part.tool_name, _cut_off(self.report))
+            finish_reason = "length"
+        usage = RequestUsage(input_tokens=100, output_tokens=10)
+        return ModelResponse(parts=[part], usage=usage, finish_reason=finish_reason)
 
 
 class ScriptedChatModel(BaseChatModel):
@@ -56,6 +71,8 @@ class ScriptedChatModel(BaseChatModel):
     """
 
     report: TriageReport = REPORT
+    # Cuts the report off at the output limit, as ChatAnthropic reports it.
+    cut_off: bool = False
     tools: list = []
     seen: list = []
 
@@ -75,11 +92,17 @@ class ScriptedChatModel(BaseChatModel):
         turn = sum(message.type == "ai" for message in messages)
         # A turn with no call ends fetch; the turn after it is analyse's report call.
         calls = CALLS[turn : turn + 1]
+        # The report call answers in JSON text, as the API does under output_config.format.
+        content, metadata = "", {}
+        if turn > len(CALLS):
+            content = self.report.model_dump_json()
+            if self.cut_off:
+                content, metadata = _cut_off(self.report), {"stop_reason": "max_tokens"}
         reply = AIMessage(
-            # The report call answers in JSON text, as the API does under output_config.format.
-            content=self.report.model_dump_json() if turn > len(CALLS) else "",
+            content=content,
             tool_calls=[{"name": name, "args": args, "id": f"call_{name}"} for name, args in calls],
             usage_metadata={"input_tokens": 100, "output_tokens": 10, "total_tokens": 110},
+            response_metadata=metadata,
         )
         return ChatResult(generations=[ChatGeneration(message=reply)])
 
@@ -120,6 +143,8 @@ class ScriptedTransport(httpx2.MockTransport):
     """Answers the Messages API with list_issues, then get_issue, then ``REPORT`` as JSON text."""
 
     report = REPORT
+    # Cuts the report off at the output limit.
+    cut_off = False
 
     def __init__(self):
         super().__init__(self.respond)
@@ -133,7 +158,12 @@ class ScriptedTransport(httpx2.MockTransport):
             block = {"type": "tool_use", "id": f"call_{turn}", "name": name, "input": args}
             body = _sse(turn, block, "tool_use")
         else:
-            body = _sse(turn, {"type": "text", "text": self.report.model_dump_json()}, "end_turn")
+            text, stop = (
+                (_cut_off(self.report), "max_tokens")
+                if self.cut_off
+                else (self.report.model_dump_json(), "end_turn")
+            )
+            body = _sse(turn, {"type": "text", "text": text}, stop)
         return httpx2.Response(200, headers={"content-type": "text/event-stream"}, content=body)
 
 
