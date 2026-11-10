@@ -223,19 +223,24 @@ other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the time
 before the run starts, so a bad or taken path costs no tokens. Errors from the run itself,
 including `ToolLimitExceeded`, propagate.
 
-`runner.run_case(impl, case, repeat)` is the eval's unit: one run of an implementation on one
-case. Like `run_once` it loads the case's repo and imports the implementation first, so an
-unknown repo or impl raises before any model is called. It then runs `triage` inside
-`collect()` and returns a `RunRecord`: case name, repeat number, report or `None`, error or
-`None`, `schema_valid`, stats, `latency_seconds`, `cost_usd` and `scores`. Any `Exception` from
-the run, a run limit included, is recorded as the error text `"<ExceptionName>: <message>"`
-rather than raised, so one failed run never stops an eval; `KeyboardInterrupt` still stops it.
-`schema_valid` is `True` when a report came back, `False` when the run raised the contract's
-`InvalidReport`, and `None` for any other failure, which says nothing about the schema. The
-report is scored with `score_run` against the fixture's issue numbers, and a run with no report
-gets an empty `Scores()`. Cost is priced when the run is recorded, since `Settings.cost` prices
-the current model and a report over older files could not. Latency comes from a `clock`
-argument, `time.monotonic` by default, so tests can set it.
+`runner.run_case(impl, case, repeat, judge=None)` is the eval's unit: one run of an
+implementation on one case. Like `run_once` it loads the case's repo and imports the
+implementation first, so an unknown repo or impl raises before any model is called. It then runs
+`triage` inside `collect()` and returns a `RunRecord`: case name, repeat number, report or
+`None`, error or `None`, `schema_valid`, stats, `latency_seconds`, `cost_usd`, `scores`,
+`judge_cost_usd` and `judge_error`. Any `Exception` from the run, a run limit included, is
+recorded as the error text `"<ExceptionName>: <message>"` rather than raised, so one failed run
+never stops an eval; `KeyboardInterrupt` still stops it. `schema_valid` is `True` when a report
+came back, `False` when the run raised the contract's `InvalidReport`, and `None` for any other
+failure, which says nothing about the schema. The report is scored with `score_run` against the
+fixture's issue numbers, and a run with no report gets an empty `Scores()`. Given a
+`ThemeJudge`, `run_case` asks it for `theme_score` once the run is timed, for a run with a
+report only, and stores what the call spent as `judge_cost_usd`, apart from the run's
+`cost_usd`. A judge that raises is recorded as `judge_error`, leaving `theme_score` `None` and
+the run's other scores standing, so a judge failure never loses a run that was paid for. Cost is
+priced when the run is recorded, since `Settings.cost` prices the current model and a report
+over older files could not. Latency comes from a `clock` argument, `time.monotonic` by default,
+so tests can set it.
 
 The run's own deadline is only checked between model requests, so `run_case` also runs
 `triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.

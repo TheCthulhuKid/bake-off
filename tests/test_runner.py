@@ -4,6 +4,7 @@ import pytest
 
 from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
+from bakeoff.judge import Judgement
 from bakeoff.runner import run_case
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
@@ -13,6 +14,18 @@ CASE = Case(name="tiny-top", repo="tiny", top_issues=[1])
 REPORT = TriageReport(
     themes=[], duplicates=[], top_issues=[TopIssue(number=1, reason="r")], suggested_labels=[]
 )
+
+
+class StubJudge:
+    """Scores every report 4 for $0.50, or raises ``error`` if given."""
+
+    def __init__(self, error: Exception | None = None):
+        self.error = error
+
+    def score(self, report, case, repo) -> Judgement:
+        if self.error:
+            raise self.error
+        return Judgement(score=4, cost_usd=0.5)
 
 
 @pytest.fixture
@@ -34,11 +47,18 @@ def test_run_case_records_the_report_scores_and_cost(triage_with, monkeypatch):
         return REPORT
 
     triage_with(triage)
-    record = run_case("fake", CASE, repeat=2, clock=iter([10.0, 12.5]).__next__)
+    clock = iter([10.0, 12.5]).__next__
+    record = run_case("fake", CASE, repeat=2, judge=StubJudge(), clock=clock)
     assert (record.case, record.repeat, record.report) == ("tiny-top", 2, REPORT)
     assert record.schema_valid and record.error is None
-    assert record.scores.top_issue_precision == 1.0
+    assert (record.scores.top_issue_precision, record.scores.theme_score) == (1.0, 4)
     assert (record.latency_seconds, record.cost_usd) == (2.5, pytest.approx(3.0))
+    # The judge's spend is kept apart from the run's own cost.
+    assert (record.judge_cost_usd, record.judge_error) == (0.5, None)
+    # A judge that fails leaves the run and its other scores standing.
+    failed = run_case("fake", CASE, repeat=3, judge=StubJudge(RuntimeError("judge down")))
+    assert (failed.schema_valid, failed.scores.top_issue_precision) == (True, 1.0)
+    assert (failed.scores.theme_score, failed.judge_error) == (None, "RuntimeError: judge down")
 
 
 # Only an invalid report counts against schema validity; any other failure leaves it unmeasured.

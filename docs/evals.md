@@ -108,5 +108,8 @@ returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
   cache rather than reusing old scores. A refusal is not cached, so it is asked again next time.
   The file only grows, like `results/`.
 - **Spend:** `cost_usd` prices the reply's input and output tokens with `Settings.cost` when the
-  call is made, refusals included, and is 0 for a cached score or no call. It is kept apart from
-  a run's `cost_usd`, which measures the implementation only.
+  call is made, refusals included, and is 0 for a cached score or no call. `run_case` stores it
+  on the run record as `judge_cost_usd`, apart from the run's `cost_usd`, which measures the
+  implementation only. A judge that raises, such as on an API error or a verdict outside 1 to 5,
+  is recorded as the record's `judge_error` and leaves `theme_score` `None`; what a failed call
+  spent is not known, since the SDK raises before returning the usage.

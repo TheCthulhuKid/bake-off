@@ -11,8 +11,9 @@ from pydantic import BaseModel
 
 from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TriageReport
-from bakeoff.fixtures import load_repo
+from bakeoff.fixtures import Repo, load_repo
 from bakeoff.impls import get_triage
+from bakeoff.judge import Judgement, ThemeJudge
 from bakeoff.scoring import Scores, score_run
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import RunStats, collect, raise_if_limit_fired
@@ -47,15 +48,24 @@ class RunRecord(BaseModel):
     latency_seconds: float
     cost_usd: float
     scores: Scores
+    # The judge's spend on this run's themes, apart from the run's own cost; 0 when not judged.
+    judge_cost_usd: float
+    judge_error: str | None
 
 
 def run_case(
-    impl: str, case: Case, repeat: int, clock: Callable[[], float] = time.monotonic
+    impl: str,
+    case: Case,
+    repeat: int,
+    *,
+    judge: ThemeJudge | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> RunRecord:
-    """Run ``impl`` once on ``case`` and score the report.
+    """Run ``impl`` once on ``case`` and score the report, its themes by ``judge`` if given.
 
     A run that raises, or runs past its timeout, is recorded as failed with its error, so one run
-    never stops an eval. An unknown repo or impl still raises, before any model is called.
+    never stops an eval; so is a judge that fails, which leaves the other scores standing. An
+    unknown repo or impl still raises, before any model is called.
     """
     repo = load_repo(case.repo)
     triage = get_triage(impl)
@@ -71,6 +81,9 @@ def run_case(
             error = _describe(exc)
     latency = clock() - start
     issues = {issue.number for issue in repo.issues}
+    scores = Scores() if report is None else score_run(report, case, issues)
+    judgement, judge_error = _judge_themes(judge, report, case, repo)
+    scores.theme_score = judgement.score
     return RunRecord(
         case=case.name,
         repeat=repeat,
@@ -82,8 +95,22 @@ def run_case(
         latency_seconds=latency,
         # Priced now: Settings.cost prices the current model, which a later report can't know.
         cost_usd=SETTINGS.cost(stats.input_tokens, stats.output_tokens),
-        scores=Scores() if report is None else score_run(report, case, issues),
+        scores=scores,
+        judge_cost_usd=judgement.cost_usd,
+        judge_error=judge_error,
     )
+
+
+def _judge_themes(
+    judge: ThemeJudge | None, report: TriageReport | None, case: Case, repo: Repo
+) -> tuple[Judgement, str | None]:
+    """The judge's verdict on the report's themes, and the judge's error if it failed."""
+    if judge is None or report is None:
+        return Judgement(score=None, cost_usd=0.0), None
+    try:
+        return judge.score(report, case, repo), None
+    except Exception as exc:
+        return Judgement(score=None, cost_usd=0.0), _describe(exc)
 
 
 def _triage_within_timeout(
