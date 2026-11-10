@@ -15,10 +15,19 @@ from bakeoff.telemetry import RunLimitExceeded, ToolLimitExceeded, collect
 
 
 def test_pydanticai_returns_report_and_records_stats(pydanticai_model):
+    respond, seen_tokens = pydanticai_model.function, []
+
+    def respond_and_note_tokens(messages, info):
+        seen_tokens.append(stats.input_tokens)
+        return respond(messages, info)
+
+    pydanticai_model.function = respond_and_note_tokens
     with collect() as stats:
         report = get_triage("pydanticai")("tiny")
     assert report == pydanticai_model.report
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 300, 30)
+    # Usage is recorded as each reply arrives, so a run abandoned at its timeout is still priced.
+    assert seen_tokens == [0, 100, 200]
     assert stats.model_requests == 3 and not stats.hit_limit
     assert pydanticai_model.seen.instructions == SYSTEM_PROMPT
     # A dict is sent to the API as an object that can only be {}.

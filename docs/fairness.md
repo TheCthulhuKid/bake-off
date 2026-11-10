@@ -60,9 +60,11 @@ implementation ends the run on it.
 
 ## Usage reporting
 
-- PydanticAI: `triage` passes a `RunUsage` into `run_sync`, which PydanticAI updates after
-  every model request, and records its input and output tokens even when the run raises.
-  Totals include output retries and requests made before the tool-call limit fired.
+- PydanticAI: an `after_model_request` hook records each reply's input and output tokens as
+  it arrives, as the tool runner does, so a run that raises or is abandoned at its timeout
+  still reports what it spent. Totals include output retries and requests made before a limit
+  fired. A reply's usage is what the run is billed, except with a fallback model or a resumed
+  `pause_turn`, neither of which this agent uses.
 - LangGraph: `triage` passes a `UsageMetadataCallbackHandler` in the run config. It collects
   every model call in the graph, keyed by model name, and `triage` records the totals in a
   `finally`, so a run that raises still reports its cost. Totals include the `analyse` call

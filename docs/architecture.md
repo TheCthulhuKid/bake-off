@@ -182,11 +182,11 @@ and list it below.
 - `impls/pydanticai_impl.py`: one module-level `Agent` with `output_type=TriageReport`,
   `SYSTEM_PROMPT` as its instructions, the three tools passed as plain functions (PydanticAI
   takes the description from the docstring and the parameter descriptions from its `Args`
-  section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. Usage is read
-  from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes. A
-  `Hooks` capability calls `record_model_request()` in `before_model_request`; the hook is
-  async, so PydanticAI runs it on the event loop rather than in a worker thread, and its
-  exception ends `run_sync` unchanged. When the report still fails validation after PydanticAI's
+  section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. A `Hooks`
+  capability calls `record_model_request()` in `before_model_request`, and records each
+  reply's input and output tokens in `after_model_request`, so a run abandoned at its timeout
+  still reports what it spent. The hooks are async, so PydanticAI runs them on the event loop
+  rather than in a worker thread, and an exception from them ends `run_sync` unchanged. When the report still fails validation after PydanticAI's
   output retry, `triage` re-raises the `UnexpectedModelBehavior` as `InvalidReport`. It tells
   that case apart by the message prefix `OUTPUT_RETRIES_EXCEEDED`, since running out of tool
   retries raises the same class; any other `UnexpectedModelBehavior` propagates unchanged.
