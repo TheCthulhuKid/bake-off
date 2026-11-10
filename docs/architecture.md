@@ -82,7 +82,12 @@ not hold it twice.
 `InvalidReport`, a `ValueError`, is the one exception for a final report that fails
 validation, whichever framework produced it, so the runner can tell an invalid report from a
 run that failed for another reason. `parse_report(text)` validates a report sent as JSON text
-and raises it, with pydantic's `ValidationError` as its cause.
+and raises it, with pydantic's `ValidationError` as its cause. `IncompleteReport`, a
+`RuntimeError`, is the one exception for a final reply that stopped before it held a whole
+report: cut off at the output limit or the context window, or refused (`INCOMPLETE_STOPS`).
+That says nothing about the schema, so the runner records it as unmeasured.
+`parse_final_reply(text, stop_reason)` raises it for those stop reasons and otherwise calls
+`parse_report`, for the frameworks that hand back the final reply's text.
 
 ## Fixtures
 
@@ -186,15 +191,19 @@ and list it below.
   capability calls `record_model_request()` in `before_model_request`, and records each
   reply's input and output tokens in `after_model_request`, so a run abandoned at its timeout
   still reports what it spent. The hooks are async, so PydanticAI runs them on the event loop
-  rather than in a worker thread, and an exception from them ends `run_sync` unchanged. When the report still fails validation after PydanticAI's
-  output retry, `triage` re-raises the `UnexpectedModelBehavior` as `InvalidReport`. It tells
-  that case apart by the message prefix `OUTPUT_RETRIES_EXCEEDED`, since running out of tool
-  retries raises the same class; any other `UnexpectedModelBehavior` propagates unchanged.
+  rather than in a worker thread, and an exception from them ends `run_sync` unchanged. When
+  the report still fails validation after PydanticAI's output retry, `triage` re-raises the
+  `UnexpectedModelBehavior` as `InvalidReport`. It tells that case apart by the message prefix
+  `OUTPUT_RETRIES_EXCEEDED`, since running out of tool retries raises the same class. A report
+  cut off at the output limit (`IncompleteToolCall`) or refused (`ContentFilterError`) is
+  re-raised as `IncompleteReport`; any other `UnexpectedModelBehavior` propagates unchanged.
 - `impls/langgraph_impl.py`: a `StateGraph` over a messages state with three nodes. `fetch`
   calls the model bound to the three tools and loops through a `ToolNode` while the reply has
   tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with the
   same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates the
-  reply's JSON text with `parse_report`, which raises `InvalidReport` if it is invalid.
+  reply's JSON text with `parse_final_reply`, passing the `stop_reason` `ChatAnthropic` puts
+  in the reply's `response_metadata`, so a cut-off or refused reply raises `IncompleteReport`
+  and an invalid one `InvalidReport`.
   `build_graph(model)` builds it, and the module-level `graph` uses a `ChatAnthropic` with
   `effort` from `SETTINGS`. `fetch` and `analyse`, the only nodes that call the model, each
   call `record_model_request()` first, so a limit raises before the request and ends the graph
@@ -211,8 +220,8 @@ and list it below.
   `stop_reason` is `tool_use` and `generate_tool_call_response()` has calls to answer. A reply
   cut off at `max_tokens` can hold a `tool_use` block, but the runner stops there, so its tools
   are not run and no request is counted. Usage is recorded from each reply as it arrives, and
-  the last reply's text is validated with `parse_report`, which raises `InvalidReport` if it is
-  invalid.
+  the last reply's text is validated with `parse_final_reply` and its `stop_reason`, so a
+  cut-off or refused reply raises `IncompleteReport` and an invalid one `InvalidReport`.
 
 Registered as `pydanticai`, `langgraph` and `anthropic`.
 

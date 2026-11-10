@@ -58,9 +58,10 @@ report alone.
 Each run record has `schema_valid`: `True` when the implementation returned a report, `False`
 when it raised `InvalidReport` because the final report failed `TriageReport` validation
 (after the framework's own retries, if it has any), and `None` when the run failed for another
-reason, such as a run limit, the timeout or an API error. Those runs never produced a report to
-judge, so the schema validity rate skips them, as means skip any `None`; they show up in the
-runs that hit a limit and in the error text instead.
+reason, such as a run limit, the timeout, an API error, or a final reply that stopped before a
+whole report (`IncompleteReport`: cut off at the output limit or the context window, or
+refused). Those runs never produced a whole report to judge, so the schema validity rate skips
+them, as means skip any `None`; they show up in the failed runs and the error text instead.
 
 ## Scores
 

@@ -14,6 +14,7 @@ marked "Read from source" were not run.
 
 | Framework | Default | Effect | Changed? |
 | --- | --- | --- | --- |
+| PydanticAI | A report cut off at the output limit counts as invalid output: it is sent back once as an output retry, and only after the retries run out does PydanticAI check for a cut-off and raise `IncompleteToolCall`. Read from source; checked on the fake models. | A cut-off report costs PydanticAI one more request than the other two, which give up on the first cut-off (4 requests on the fakes, against 3 for the tool runner; LangGraph's 4 is its usual `analyse` call). If the retry is not cut off, PydanticAI can still return a valid report where the others would not. | No |
 | PydanticAI | One output retry (`retries` defaults to 1 for output). Checked by a run. | A report that fails `TriageReport` validation is sent back once with the error; a second failure raises `UnexpectedModelBehavior`, which `triage` re-raises as `InvalidReport`. Schema validity measures framework plus retry policy, and the retry's tokens count towards cost. | No |
 | PydanticAI | Running out of output retries and running out of tool retries both raise `UnexpectedModelBehavior`, told apart only by the message (`Exceeded maximum output retries (1)` against `Tool 'x' exceeded max retries count of 1`). Read from source; checked by a run. | `triage` treats only the first as an invalid report, by the message prefix. A PydanticAI upgrade that rewords it would turn invalid reports into unmeasured failures; the fake-model test that expects `InvalidReport` from PydanticAI catches that. | Yes, see deviations |
 | PydanticAI | One tool retry (`retries` defaults to 1 for tools). Checked by a run. | Tool arguments that fail validation, such as a non-integer issue number, are sent back once per tool; a second failure raises `UnexpectedModelBehavior`. Such calls never reach the tool, so they do not count towards the tool-call limit. | No |
@@ -25,7 +26,7 @@ marked "Read from source" were not run.
 | PydanticAI | The report is sent as a strict JSON schema in `output_config.format`. Checked offline. | Constraints strict mode cannot express are moved into descriptions: `top_issues`' `maxItems: 5` becomes a hint, so an overlong list fails validation and is retried once rather than being prevented. | No |
 | Anthropic SDK (under PydanticAI) | Two retries on connection errors, 429 and 5xx; 600 s read timeout. Read from source. | Affects latency and, after a transient error, the chance a run completes. Not counted as model retries. | No |
 | LangGraph | `analyse` is a separate model call after `fetch` ends: the planned three-node design (fetch, analyse, report), not a framework default. Checked by a run. | Every run makes one more model request than a single-agent loop, and that request sends the whole conversation again, so input tokens are higher for the same reading. | No |
-| LangGraph | No retry when the report fails validation. Checked by a run. | The `report` node raises `InvalidReport` (from pydantic's `ValidationError`) on the first invalid report, where PydanticAI sends it back once. Schema validity compares the frameworks' retry policies as well as their output. | No |
+| LangGraph | No retry when the report fails validation. Checked by a run. | The `report` node raises `InvalidReport` (from pydantic's `ValidationError`) on the first invalid report, where PydanticAI sends it back once. Schema validity compares the frameworks' retry policies as well as their output. A reply that stopped at `max_tokens`, the context window or a refusal raises `IncompleteReport` instead, which leaves schema validity unmeasured. | No |
 | LangGraph (`ToolNode`) | Tool arguments that fail validation are returned to the model as an error `ToolMessage`, with no cap. Checked by a run. | Such calls never reach the tool, so they do not count towards the tool-call limit. PydanticAI allows one such retry per tool and then raises. | No |
 | LangGraph | Recursion limit of 10,007 supersteps (`LANGGRAPH_DEFAULT_RECURSION_LIMIT`). Read from source. | Each fetch and tools round takes two supersteps, so the shared request cap of 40 fires long before it, on invalid calls too, and the recursion limit no longer bounds anything in practice. | No |
 | LangGraph | The shared request cap and deadline are checked at the start of the `fetch` and `analyse` nodes. Checked by a run. | The exception ends `graph.invoke` unchanged, as the tool-call limit does, so a run past a limit ends the same way. | Yes, see deviations |
@@ -40,7 +41,7 @@ marked "Read from source" were not run.
 | Anthropic tool runner | Tool arguments that fail validation are returned as an error result reading only `Invalid arguments for function <name>`, with no cap. Checked by a run. | Such calls never reach the tool, so they do not count towards the tool-call limit. The model is not told which argument was wrong, unlike under PydanticAI and LangGraph. | No |
 | Anthropic tool runner | `max_iterations` has no limit by default. Read from source. | With the row above, a model that keeps sending invalid arguments would not be stopped by the runner; the shared request cap of 40 stops it, as under LangGraph. | No |
 | Anthropic tool runner | The shared request cap and deadline are checked in `triage`'s loop: once before the first request, and after each reply that the runner answers with tool results. Read from source; checked by a run. | The runner also resumes `pause_turn` and `compaction` turns, which are not counted, but this run uses neither server tools nor compaction. The exception ends the loop before the next request, as the tool-call limit does. | Yes, see deviations |
-| Anthropic tool runner | No retry when the report fails validation. Checked by a run. | `parse_report` raises `InvalidReport` after the last reply, whose tokens are already recorded. A reply with no text, such as one cut off at `max_tokens`, is an invalid report too. | No |
+| Anthropic tool runner | No retry when the report fails validation. Checked by a run. | `parse_final_reply` raises `InvalidReport` after the last reply, whose tokens are already recorded. A reply that stopped at `max_tokens`, the context window or a refusal raises `IncompleteReport` instead, which leaves schema validity unmeasured. | No |
 | Anthropic tool runner | Tool calls from one reply run one at a time, in order. Read from source; the limit firing mid-batch checked by a run. | Each call counts towards the limit as elsewhere, but parallel reads are not parallel, so latency is higher than under the other two for the same calls. | No |
 | Anthropic tool runner | Message threads are on: after the first request, only new messages are sent, with the `message-threads-2026-08-12` beta. Checked offline. | Smaller requests and lower time to first token, billed the same according to the SDK docs. Favours this implementation on latency. Not available under zero data retention. | No |
 | Anthropic tool runner | `stream` is off by default, and a non-streaming request with `max_tokens` 128,000 is refused by the SDK. Checked offline. | Streaming is turned on so that `max_tokens` matches the other two. It changes how the reply arrives, not what it holds. | Yes, see deviations |
@@ -76,9 +77,15 @@ implementation ends the run on it.
 
 - Every implementation raises the contract's `InvalidReport` when the final report fails
   validation, so the runner can tell an invalid report from a run that failed for another
-  reason. LangGraph and the tool runner validate through `parse_report`. PydanticAI validates
-  the report itself, so its `triage` re-raises `UnexpectedModelBehavior` as `InvalidReport` when
-  the message says output retries ran out; no framework setting changes.
+  reason. LangGraph and the tool runner validate through `parse_final_reply`. PydanticAI
+  validates the report itself, so its `triage` re-raises `UnexpectedModelBehavior` as
+  `InvalidReport` when the message says output retries ran out; no framework setting changes.
+- Every implementation raises the contract's `IncompleteReport` when the final reply stopped
+  before it held a whole report: cut off at the output limit or the context window, or
+  refused. That is a run that never finished its report, not a schema failure, so it leaves
+  schema validity unmeasured in all three. LangGraph and the tool runner check the reply's
+  `stop_reason` in `parse_final_reply`; PydanticAI's `triage` re-raises `IncompleteToolCall`
+  and `ContentFilterError`. The error text differs: PydanticAI's own message is kept.
 
 - The model-request cap and the run deadline are the harness's, not the frameworks', so every
   implementation stops at the same point. Each implementation gained the hook that reports a
