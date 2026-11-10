@@ -1,0 +1,122 @@
+{
+  "impl": "langgraph",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output and formatting",
+        "issues": [
+          3652,
+          2778,
+          3362,
+          3097,
+          3094,
+          3089,
+          3016,
+          3010,
+          2882,
+          2881,
+          2683,
+          2679,
+          561,
+          373
+        ]
+      },
+      {
+        "name": "Parser and Click 9.0 roadmap",
+        "issues": [
+          3154,
+          3156,
+          2834,
+          2835,
+          2205,
+          590,
+          2824,
+          2771,
+          742,
+          730,
+          2786,
+          1269,
+          1322,
+          473,
+          1279,
+          2992
+        ]
+      },
+      {
+        "name": "Color, terminal and exception output",
+        "issues": [
+          3022,
+          2781,
+          2419,
+          944,
+          2740,
+          3886,
+          3840
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2847,
+          2614,
+          2303,
+          2184,
+          2917,
+          2299
+        ]
+      },
+      {
+        "name": "Typing, async and embedding",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          2493,
+          3036,
+          2033,
+          2360,
+          2361
+        ]
+      },
+      {
+        "name": "File and path parameters, prompts",
+        "issues": [
+          3888,
+          1428,
+          2429,
+          2645,
+          1378,
+          1370,
+          304,
+          2875
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 3652,
+        "b": 2778,
+        "reason": "Both ask for '...' to be added to an option's metavar when multiple=True so the help shows the option can be repeated; 2778 is the older one."
+      },
+      {
+        "a": 1370,
+        "b": 304,
+        "reason": "Both report that confirm and other prompts read from stdin instead of the terminal when stdin carries data (piped input or File('-')), and both ask for prompts to read from the terminal."
+      }
+    ],
+    "top_issues": [],
+    "suggested_labels": []
+  },
+  "stats": {
+    "tool_calls": 17,
+    "model_requests": 7,
+    "input_tokens": 90500,
+    "output_tokens": 3291,
+    "max_tool_calls": 25,
+    "max_model_requests": 40,
+    "timeout": 900.0,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}

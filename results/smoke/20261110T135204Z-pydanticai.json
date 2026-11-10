@@ -1,0 +1,173 @@
+{
+  "impl": "pydanticai",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output and formatting customization",
+        "issues": [
+          3652,
+          2778,
+          3362,
+          3097,
+          3094,
+          3089,
+          3016,
+          3010,
+          2882,
+          2881,
+          2683,
+          2679,
+          561,
+          373,
+          3022,
+          2781,
+          2419,
+          944
+        ]
+      },
+      {
+        "name": "Parser behavior, rewrite and Click 9.0 roadmap",
+        "issues": [
+          3154,
+          3156,
+          2834,
+          2835,
+          2205,
+          590,
+          2824,
+          2771,
+          2786,
+          2768,
+          2753,
+          2992,
+          742,
+          730,
+          1269,
+          1322,
+          473,
+          1279,
+          2676,
+          2801,
+          2853
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2847,
+          2917,
+          2614,
+          2303,
+          2184,
+          2299
+        ]
+      },
+      {
+        "name": "Terminal UI utilities: prompts, pager, editor, files",
+        "issues": [
+          1370,
+          304,
+          2875,
+          3886,
+          3840,
+          2154,
+          2429,
+          2645,
+          1378,
+          3888,
+          1428
+        ]
+      },
+      {
+        "name": "Typing, API cleanup and docs",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          3036,
+          2493,
+          3081,
+          3077,
+          3076,
+          2823,
+          1997
+        ]
+      },
+      {
+        "name": "Async and embedding Click",
+        "issues": [
+          2033,
+          2360,
+          2361,
+          2783
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 3652,
+        "b": 2778,
+        "reason": "Both ask to add '...' to the metavar in help output when an option has multiple=True."
+      },
+      {
+        "a": 1370,
+        "b": 304,
+        "reason": "Both report that confirm prompts read from piped stdin instead of the terminal, so confirmation fails when input is piped."
+      }
+    ],
+    "top_issues": [
+      {
+        "number": 3154,
+        "reason": "Tracking issue for the Click 9.0 release. It sets which deprecations and hacks get removed next."
+      },
+      {
+        "number": 2847,
+        "reason": "Confirmed bug: completing a long option written with '=' breaks in bash and zsh, and in zsh it deletes the option text."
+      },
+      {
+        "number": 3840,
+        "reason": "New, unlabelled report that click.edit fails on Windows about half the time. It needs a maintainer to decide whether this is a Click bug or a Windows platform bug."
+      },
+      {
+        "number": 2834,
+        "reason": "Meta issue for future parser changes. Many open parsing issues depend on it."
+      },
+      {
+        "number": 2614,
+        "reason": "Tab completion runs default callbacks. This can cause side effects and slow completion."
+      }
+    ],
+    "suggested_labels": [
+      {
+        "number": 3888,
+        "labels": [
+          "parsing"
+        ]
+      },
+      {
+        "number": 3886,
+        "labels": [
+          "prompt"
+        ]
+      },
+      {
+        "number": 3840,
+        "labels": [
+          "prompt"
+        ]
+      }
+    ]
+  },
+  "stats": {
+    "tool_calls": 14,
+    "model_requests": 6,
+    "input_tokens": 64420,
+    "output_tokens": 2255,
+    "max_tool_calls": 25,
+    "max_model_requests": 40,
+    "timeout": 900.0,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}
