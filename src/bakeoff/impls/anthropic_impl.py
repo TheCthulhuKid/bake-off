@@ -11,7 +11,7 @@ from anthropic.types.beta import BetaJSONOutputFormatParam
 from bakeoff.contract import TriageReport
 from bakeoff.prompt import SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
-from bakeoff.telemetry import raise_if_limit_fired, record_usage
+from bakeoff.telemetry import raise_if_limit_fired, record_model_request, record_usage
 from bakeoff.tools import TOOLS
 
 
@@ -51,12 +51,20 @@ def triage(repo: str) -> TriageReport:
         tools=RUNNER_TOOLS,
         output_config={"effort": SETTINGS.effort, "format": REPORT_FORMAT},
     )
+    record_model_request()
     for stream in runner:
         message = stream.get_final_message()
         record_usage(message.usage.input_tokens, message.usage.output_tokens)
+        # The runner sends another request only after a tool_use reply with calls to answer
+        # (pause_turn and compaction also resume, but this run uses neither). A reply cut off at
+        # max_tokens can hold a tool_use block too, and its tools must not run.
+        another_request = (
+            message.stop_reason == "tool_use" and runner.generate_tool_call_response() is not None
+        )
         # The runner turns a tool's exception into an error result for the model, so the limit is
         # checked here, once the reply's tools have run and before the next request.
-        runner.generate_tool_call_response()
         raise_if_limit_fired()
+        if another_request:
+            record_model_request()
     text = "".join(block.text for block in message.content if block.type == "text")
     return TriageReport.model_validate_json(text)
