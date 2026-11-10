@@ -82,8 +82,9 @@ nearest-rank, so it works on a single value, which `statistics.quantiles` does n
 
 ## Theme judge
 
-`judge.py` scores theme quality, `theme_score`, with an LLM judge. `ThemeJudge(client)` takes an
-Anthropic client, so tests pass a stub, and `score(report, case, repo)` returns 1 to 5.
+`judge.py` scores theme quality, `theme_score`, with an LLM judge. `ThemeJudge(client,
+cache_path)` takes an Anthropic client, so tests pass a stub, and `score(report, case, repo)`
+returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
 
 - **Rubric:** `RUBRIC` is the system prompt. It asks the judge to grade the groupings, not the
   theme names or their order, against five levels from "the same groupings as the labelled
@@ -99,5 +100,13 @@ Anthropic client, so tests pass a stub, and `score(report, case, repo)` returns 
   the judging, which is a known bias; the README's spot check by hand is the guard against it.
 - **When it is `None`:** the case labels no themes, so no call is made, or no verdict came back,
   such as on a refusal.
-
-The judge's tokens are not part of a run's `cost_usd`, which measures the implementation only.
+- **Cache:** a JSON file, `evals/judge-cache.json` for the eval, mapping a SHA-256 of the model,
+  the rubric and the user message to the verdict (score and reason, the reason kept for the spot
+  check by hand). A judge reads the file when it starts, so a report judged before is scored from
+  it without a call. The file is rewritten through a temporary file after every new verdict, so
+  an interrupted eval keeps every score it paid for. Changing the model or the rubric misses the
+  cache rather than reusing old scores. A refusal is not cached, so it is asked again next time.
+  The file only grows, like `results/`.
+- **Spend:** `cost_usd` prices the reply's input and output tokens with `Settings.cost` when the
+  call is made, refusals included, and is 0 for a cached score or no call. It is kept apart from
+  a run's `cost_usd`, which measures the implementation only.
