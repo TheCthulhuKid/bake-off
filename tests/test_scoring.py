@@ -18,8 +18,9 @@ def test_score_run_scores_a_report_against_its_case(tiny_root):
         themes=[Theme(name="Everything", issues=[1, 2])],
         # (2, 1) matches the labelled (1, 2): pairs are unordered.
         duplicates=[DuplicatePair(a=2, b=1, reason="r"), DuplicatePair(a=1, b=3, reason="r")],
-        # #3 is not in the fixture, so one of three cited numbers is invalid.
-        top_issues=[TopIssue(number=1, reason="r"), TopIssue(number=3, reason="r")],
+        # #3 is not in the fixture, so one of three cited numbers is invalid. #1 named twice
+        # counts once, so this is one hit out of two distinct top issues.
+        top_issues=[TopIssue(number=n, reason="r") for n in (1, 1, 3)],
         suggested_labels=[
             # Labels match regardless of case and surrounding spaces.
             LabelSuggestion(number=1, labels=["Bug", "crash"]),
