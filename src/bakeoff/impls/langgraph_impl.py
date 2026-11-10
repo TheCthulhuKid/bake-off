@@ -13,7 +13,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from bakeoff.contract import TriageReport
 from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT, user_prompt
 from bakeoff.settings import SETTINGS
-from bakeoff.telemetry import record_usage
+from bakeoff.telemetry import record_model_request, record_usage
 from bakeoff.tools import TOOLS
 
 
@@ -32,9 +32,11 @@ def build_graph(model: BaseChatModel) -> CompiledStateGraph:
     )
 
     def fetch(state: State) -> dict[str, Any]:
+        record_model_request()
         return {"messages": [fetch_model.invoke(state["messages"])]}
 
     def analyse(state: State) -> dict[str, Any]:
+        record_model_request()
         messages = [*state["messages"], HumanMessage(REPORT_PROMPT)]
         return {"answer": analyse_model.invoke(messages)}
 
