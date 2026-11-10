@@ -117,11 +117,12 @@ tokens, the three limits (`max_tool_calls`, `max_model_requests` and `timeout` i
 `limit_fired` (`hit_limit` is derived from it). A run wraps its work in `collect()`, which takes
 each limit as an optional argument, defaulting to `SETTINGS`, and starts the run's deadline on
 the monotonic clock. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on
-the call after the limit. `record_model_request()` counts a model request and belongs just
-before each one; it raises `RunLimitExceeded` once the deadline has passed (`limit_fired =
-"timeout"`) or on the request after the cap (`"model_requests"`). No implementation calls it
-yet. Implementations pass token counts to `record_usage()`. `ToolLimitExceeded` is a subclass of `RunLimitExceeded`, so one `except`
-catches every limit. Each limit check and its count happen under one lock, since PydanticAI and
+the call after the limit. Every implementation calls
+`record_model_request()` just before each model request; it raises `RunLimitExceeded` once the
+deadline has passed (`limit_fired = "timeout"`) or on the request after the cap
+(`"model_requests"`). Implementations pass token counts to `record_usage()`.
+`ToolLimitExceeded` is a subclass of `RunLimitExceeded`, so one `except` catches every limit.
+Each limit check and its count happen under one lock, since PydanticAI and
 LangGraph run a reply's tool calls in threads that share the run's `RunStats`. Outside
 `collect()` all three are no-ops, so the tools work from a shell. For a framework that turns a
 tool's exception into an error result for the model, `raise_if_limit_fired()` raises the error
@@ -169,7 +170,10 @@ and list it below.
   `SYSTEM_PROMPT` as its instructions, the three tools passed as plain functions (PydanticAI
   takes the description from the docstring and the parameter descriptions from its `Args`
   section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. Usage is read
-  from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes.
+  from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes. A
+  `Hooks` capability calls `record_model_request()` in `before_model_request`; the hook is
+  async, so PydanticAI runs it on the event loop rather than in a worker thread, and its
+  exception ends `run_sync` unchanged.
 - `impls/langgraph_impl.py`: a `StateGraph` over a messages state with three nodes. `fetch`
   calls the model bound to the three tools and loops through a `ToolNode` while the reply has
   tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with
@@ -177,15 +181,21 @@ and list it below.
   the reply's JSON text as a `TriageReport` and raises if it is invalid. `build_graph(model)`
   builds it, and the module-level `graph` uses a `ChatAnthropic` with `effort` from
   `SETTINGS`. Usage is collected by a `UsageMetadataCallbackHandler` passed in the run config,
-  and recorded in a `finally`.
+  and recorded in a `finally`. `fetch` and `analyse`, the only nodes that call the model, each
+  call `record_model_request()` first, so a limit raises before the request and ends the graph
+  run.
 - `impls/anthropic_impl.py`: the Anthropic SDK's beta tool runner, streamed, over the three
   tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
   its `Args` section) and with `as_json`, which returns their dicts as JSON text, with
   `SYSTEM_PROMPT` as `system` and the strict `TriageReport` schema from `transform_schema` in
   `output_config.format`, and `max_tokens` from `Settings.max_output_tokens()`. The runner
   turns tool exceptions into error results, so `triage` calls `telemetry.raise_if_limit_fired()`
-  after each reply's tools have run. Usage is recorded from each reply as it arrives, and the
-  last reply's text is validated as a `TriageReport`.
+  after each reply's tools have run. `triage` calls `record_model_request()` once before the
+  loop and again after a reply only when the runner will send another request: the reply's
+  `stop_reason` is `tool_use` and `generate_tool_call_response()` has calls to answer. A reply
+  cut off at `max_tokens` can hold a `tool_use` block, but the runner stops there, so its tools
+  are not run and no request is counted. Usage is recorded from each reply as it arrives, and
+  the last reply's text is validated as a `TriageReport`.
 
 Registered as `pydanticai`, `langgraph` and `anthropic`.
 

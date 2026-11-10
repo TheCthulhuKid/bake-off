@@ -34,6 +34,7 @@ def test_langgraph_returns_report_and_records_stats(langgraph_model):
     assert report == langgraph_model.report
     # One more model call than PydanticAI: analyse runs after fetch ends.
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 400, 40)
+    assert stats.model_requests == 4 and not stats.hit_limit
     assert langgraph_model.seen[0].content == SYSTEM_PROMPT
     # The API rejects a report call that ends on the model's own reply.
     assert langgraph_model.seen[-1].content == REPORT_PROMPT
@@ -44,10 +45,12 @@ def test_langgraph_returns_report_and_records_stats(langgraph_model):
 
 
 def test_anthropic_returns_report_and_records_stats(anthropic_model):
-    with collect() as stats:
+    # A cap of exactly the run's requests: the final reply sends none, so it must not count one.
+    with collect(max_model_requests=3) as stats:
         report = get_triage("anthropic")("tiny")
     assert report == anthropic_model.report
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 300, 30)
+    assert stats.model_requests == 3 and not stats.hit_limit
     # Under message threads, later requests leave out the system prompt and tools.
     first = anthropic_model.sent[0]
     assert first["system"] == SYSTEM_PROMPT
@@ -72,7 +75,7 @@ def test_tool_limit_ends_the_run(impl, request):
 
 
 # Each impl reports its requests through its own hook, so each needs a case.
-@pytest.mark.parametrize("impl", ["pydanticai"])
+@pytest.mark.parametrize("impl", ["pydanticai", "langgraph", "anthropic"])
 def test_request_limit_ends_the_run(impl, request):
     request.getfixturevalue(f"{impl}_model")
     with collect(max_model_requests=1) as stats, pytest.raises(RunLimitExceeded):

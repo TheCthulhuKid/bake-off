@@ -16,7 +16,8 @@ marked "Read from source" were not run.
 | --- | --- | --- | --- |
 | PydanticAI | One output retry (`retries` defaults to 1 for output). Checked by a run. | A report that fails `TriageReport` validation is sent back once with the error; a second failure raises `UnexpectedModelBehavior`. Schema validity measures framework plus retry policy, and the retry's tokens count towards cost. | No |
 | PydanticAI | One tool retry (`retries` defaults to 1 for tools). Checked by a run. | Tool arguments that fail validation, such as a non-integer issue number, are sent back once per tool; a second failure raises `UnexpectedModelBehavior`. Such calls never reach the tool, so they do not count towards the tool-call limit. | No |
-| PydanticAI | `UsageLimits` request limit of 50 model requests per run. Read from source. | A run makes at most 25 tool calls plus a final answer and one output retry, so the shared tool-call limit always fires first. | No |
+| PydanticAI | `UsageLimits` request limit of 50 model requests per run. Read from source. | The shared request cap of 40 fires first, and so does the tool-call limit on a run of single tool calls. | No |
+| PydanticAI | The shared request cap and deadline are checked in a `before_model_request` hook. Checked by a run. | The exception from the hook ends `run_sync` unchanged, without being wrapped or retried, so a run past a limit ends the same way as past the tool-call limit. | Yes, see deviations |
 | PydanticAI | Tool calls from one model response run concurrently in threads. Checked by a run. | Each call still counts towards the limit, which fires mid-batch. Parallel reads lower latency without changing the call count. | No |
 | PydanticAI | `max_tokens` unset, so it sends the model's maximum output (128,000 for `claude-opus-5-5`). Read from source. | No report is cut off by a framework-chosen output limit. | No |
 | PydanticAI | No prompt caching (no `anthropic_cache_*` setting). Read from source. | Each request pays full input price for the whole conversation so far, including the system prompt and tool definitions. | No |
@@ -25,7 +26,8 @@ marked "Read from source" were not run.
 | LangGraph | `analyse` is a separate model call after `fetch` ends: the planned three-node design (fetch, analyse, report), not a framework default. Checked by a run. | Every run makes one more model request than a single-agent loop, and that request sends the whole conversation again, so input tokens are higher for the same reading. | No |
 | LangGraph | No retry when the report fails validation. Checked by a run. | The `report` node raises pydantic's `ValidationError` on the first invalid report, where PydanticAI sends it back once. Schema validity compares the frameworks' retry policies as well as their output. | No |
 | LangGraph (`ToolNode`) | Tool arguments that fail validation are returned to the model as an error `ToolMessage`, with no cap. Checked by a run. | Such calls never reach the tool, so they do not count towards the tool-call limit. PydanticAI allows one such retry per tool and then raises. | No |
-| LangGraph | Recursion limit of 10,007 supersteps (`LANGGRAPH_DEFAULT_RECURSION_LIMIT`). Read from source. | Each fetch and tools round takes two supersteps, so on valid calls the tool-call limit always fires first. On invalid calls, which the limit does not count, a run can make about 5,000 model requests before it is stopped. | No |
+| LangGraph | Recursion limit of 10,007 supersteps (`LANGGRAPH_DEFAULT_RECURSION_LIMIT`). Read from source. | Each fetch and tools round takes two supersteps, so the shared request cap of 40 fires long before it, on invalid calls too, and the recursion limit no longer bounds anything in practice. | No |
+| LangGraph | The shared request cap and deadline are checked at the start of the `fetch` and `analyse` nodes. Checked by a run. | The exception ends `graph.invoke` unchanged, as the tool-call limit does, so a run past a limit ends the same way. | Yes, see deviations |
 | LangGraph (`ToolNode`) | Tool calls from one model response run concurrently in a thread pool. Read from source; the limit firing mid-batch checked by a run. | As in PydanticAI: each call counts towards the limit, which fires mid-batch. | No |
 | LangChain (`ChatAnthropic`) | `max_tokens` is the model's maximum output (128,000 for `claude-opus-5-5`). Checked offline. | As in PydanticAI, no report is cut off by a framework-chosen limit. | No |
 | LangChain (`ChatAnthropic`) | No prompt caching (no `cache_control` in the request). Checked offline. | As in PydanticAI, each request pays full input price for the whole conversation so far. | No |
@@ -35,7 +37,8 @@ marked "Read from source" were not run.
 | Anthropic SDK (under `ChatAnthropic`) | Two retries on connection errors, 429 and 5xx; no request timeout, because `ChatAnthropic` passes `timeout=None`. Checked offline. | A stalled request waits forever, where PydanticAI's client gives up after 600 s, so a hung LangGraph run ends only when the caller stops it. | No |
 | Anthropic tool runner | A tool's exception, `ToolLimitExceeded` included, is sent to the model as an error result. Checked by a run. | Without a check, the tool-call limit would not end the run. `triage` re-raises it once the reply's tools have run and before the next request, so the run ends where the other implementations' runs end. | No; worked around in `triage` |
 | Anthropic tool runner | Tool arguments that fail validation are returned as an error result reading only `Invalid arguments for function <name>`, with no cap. Checked by a run. | Such calls never reach the tool, so they do not count towards the tool-call limit. The model is not told which argument was wrong, unlike under PydanticAI and LangGraph. | No |
-| Anthropic tool runner | `max_iterations` has no limit by default. Read from source. | With the row above, a model that keeps sending invalid arguments is not stopped, as under LangGraph; the shared per-run cap planned for the eval harness covers it. | No |
+| Anthropic tool runner | `max_iterations` has no limit by default. Read from source. | With the row above, a model that keeps sending invalid arguments would not be stopped by the runner; the shared request cap of 40 stops it, as under LangGraph. | No |
+| Anthropic tool runner | The shared request cap and deadline are checked in `triage`'s loop: once before the first request, and after each reply that the runner answers with tool results. Read from source; checked by a run. | The runner also resumes `pause_turn` and `compaction` turns, which are not counted, but this run uses neither server tools nor compaction. The exception ends the loop before the next request, as the tool-call limit does. | Yes, see deviations |
 | Anthropic tool runner | No retry when the report fails validation. Checked by a run. | `TriageReport.model_validate_json` raises after the last reply, whose tokens are already recorded. | No |
 | Anthropic tool runner | Tool calls from one reply run one at a time, in order. Read from source; the limit firing mid-batch checked by a run. | Each call counts towards the limit as elsewhere, but parallel reads are not parallel, so latency is higher than under the other two for the same calls. | No |
 | Anthropic tool runner | Message threads are on: after the first request, only new messages are sent, with the `message-threads-2026-08-12` beta. Checked offline. | Smaller requests and lower time to first token, billed the same according to the SDK docs. Favours this implementation on latency. Not available under zero data retention. | No |
@@ -67,6 +70,14 @@ implementation ends the run on it.
   its tools or validating the report, so a run that raises still reports its cost.
 
 ## Deliberate deviations
+
+- The model-request cap and the run deadline are the harness's, not the frameworks', so every
+  implementation stops at the same point. Each implementation gained the hook that reports a
+  request: in PydanticAI a `Hooks` capability on the `Agent` whose `before_model_request`
+  calls `record_model_request()`; in LangGraph a call at the start of the `fetch` and
+  `analyse` nodes; in the tool runner a call before the loop and one after each reply that
+  leads to another request. Framework defaults such as `UsageLimits`, LangGraph's recursion
+  limit and the runner's `max_iterations` are left as they are.
 
 - `TriageReport.suggested_labels` is a list of `LabelSuggestion` items (`number`, `labels`),
   one per issue, instead of the planned `dict[int, list[str]]`. Every framework sends the
