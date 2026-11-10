@@ -130,3 +130,12 @@ results file holds. Besides the records, it says what produced them:
 
 The hash, commit and code size are taken before the first run, so they describe the code and
 prompts that ran.
+
+`save_eval(run, path)` writes one `EvalRun` as indented JSON to a new file, creating parent
+directories, and opens it in `"x"` mode, so an existing results file is never overwritten.
+`runner.result_path` names a file in a directory `<UTC timestamp>-<impl>.json`, as for
+`bakeoff run`. `load_eval(path)` reads a file back as the same `EvalRun`. Every score, the
+judge's included, and every cost is stored in the records, so reporting needs only the files,
+not the cases, the fixtures or a model. The file holds a whole `EvalRun`, so it is written once
+all of an implementation's runs are done: a crash outside a run, which unlike a failed run is
+not recorded, loses that implementation's file.

@@ -7,7 +7,7 @@ from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.judge import Judgement
 from bakeoff.provenance import code_lines, prompt_hash
-from bakeoff.runner import run_case, run_eval
+from bakeoff.runner import load_eval, run_case, run_eval, save_eval
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
@@ -104,7 +104,7 @@ def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     assert record.stats.input_tokens == 0
 
 
-def test_run_eval_runs_every_case_and_repeat_in_order(triage_with):
+def test_run_eval_runs_every_case_and_repeat_and_saves_once(triage_with, tmp_path):
     triage_with(lambda repo: REPORT)
     cases = [CASE, Case(name="tiny-bare", repo="tiny")]
     seen = []
@@ -122,3 +122,9 @@ def test_run_eval_runs_every_case_and_repeat_in_order(triage_with):
     assert run.started_at == started
     assert run.prompt_hash == prompt_hash()
     assert (run.code_lines, run.code_non_blank_lines) == code_lines("anthropic")
+    # The results file loads back as the same run, and is never overwritten.
+    path = tmp_path / "results" / "run.json"
+    save_eval(run, path)
+    assert load_eval(path) == run
+    with pytest.raises(FileExistsError):
+        save_eval(run, path)

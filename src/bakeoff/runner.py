@@ -155,6 +155,18 @@ def run_eval(
     )
 
 
+def save_eval(run: EvalRun, path: Path) -> None:
+    """Write ``run`` to a new results file at ``path``; an existing file is never overwritten."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8") as file:
+        file.write(run.model_dump_json(indent=2) + "\n")
+
+
+def load_eval(path: Path) -> EvalRun:
+    """Read a results file written by ``save_eval``."""
+    return EvalRun.model_validate_json(path.read_text(encoding="utf-8"))
+
+
 def _judge_themes(
     judge: ThemeJudge | None, report: TriageReport | None, case: Case, repo: Repo
 ) -> tuple[Judgement, str | None]:
