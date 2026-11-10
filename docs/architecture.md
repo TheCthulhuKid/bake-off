@@ -225,10 +225,11 @@ including `ToolLimitExceeded`, propagate.
 case. Like `run_once` it loads the case's repo and imports the implementation first, so an
 unknown repo or impl raises before any model is called. It then runs `triage` inside
 `collect()` and returns a `RunRecord`: case name, repeat number, report or `None`, error or
-`None`, stats, `latency_seconds`, `cost_usd` and `scores`, plus the computed `schema_valid`
-(a report came back). Any `Exception` from the run, a run limit included, is recorded as the
-error text `"<ExceptionName>: <message>"` rather than raised, so one failed run never stops an
-eval; `KeyboardInterrupt` still stops it. The report is scored with `score_run` against the
+`None`, `schema_valid`, stats, `latency_seconds`, `cost_usd` and `scores`. Any `Exception` from
+the run, a run limit included, is recorded as the error text `"<ExceptionName>: <message>"`
+rather than raised, so one failed run never stops an eval; `KeyboardInterrupt` still stops it.
+`schema_valid` is `True` when a report came back, `False` when the run raised the contract's
+`InvalidReport`, and `None` for any other failure, which says nothing about the schema. The report is scored with `score_run` against the
 fixture's issue numbers, and a run with no report gets an empty `Scores()`. Cost is priced
 when the run is recorded, since `Settings.cost` prices the current model and a report over
 older files could not. Latency comes from a `clock` argument, `time.monotonic` by default, so

@@ -1,7 +1,7 @@
 import pytest
 
 from bakeoff.cases import Case
-from bakeoff.contract import TopIssue, TriageReport
+from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.runner import run_case
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
@@ -38,14 +38,21 @@ def test_run_case_records_the_report_scores_and_cost(triage_with, monkeypatch):
     assert (record.latency_seconds, record.cost_usd) == (2.5, pytest.approx(3.0))
 
 
-def test_run_case_records_a_failed_run_with_its_error(triage_with):
+# Only an invalid report counts against schema validity; any other failure leaves it unmeasured.
+@pytest.mark.parametrize(
+    ("failure", "schema_valid"), [(RuntimeError("boom"), None), (InvalidReport("boom"), False)]
+)
+def test_run_case_records_a_failed_run_and_whether_its_schema_failed(
+    triage_with, failure, schema_valid
+):
     def triage(repo):
         record_usage(100, 10)
-        raise RuntimeError("boom")
+        raise failure
 
     triage_with(triage)
     record = run_case("fake", CASE, repeat=0)
-    assert (record.report, record.error, record.schema_valid) == (None, "RuntimeError: boom", False)
+    assert (record.report, record.schema_valid) == (None, schema_valid)
+    assert record.error == f"{type(failure).__name__}: boom"
     assert record.scores == Scores()
     # The tokens spent before the failure still count towards cost.
     assert record.stats.input_tokens == 100 and record.cost_usd > 0

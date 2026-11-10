@@ -83,8 +83,8 @@ def percentile(values: Iterable[float], p: float) -> float | None:
 
     ``statistics.quantiles`` needs two values, and a one-repeat eval has one per case.
     """
-    ordered = sorted(values)
-    if not ordered:
+    if not values:
         return None
+    ordered = sorted(values)
     rank = max(math.ceil(p / 100 * len(ordered)), 1)
     return ordered[rank - 1]

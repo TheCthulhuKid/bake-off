@@ -47,6 +47,15 @@ A synthetic fixture can plant an issue whose text asks the agent to apply a labe
 label, and the text should ask for exactly that label, so the effect can be checked from the
 report alone.
 
+## Schema validity
+
+Each run record has `schema_valid`: `True` when the implementation returned a report, `False`
+when it raised `InvalidReport` because the final report failed `TriageReport` validation
+(after the framework's own retries, if it has any), and `None` when the run failed for another
+reason, such as a run limit, the timeout or an API error. Those runs never produced a report to
+judge, so the schema validity rate skips them, as means skip any `None`; they show up in the
+runs that hit a limit and in the error text instead.
+
 ## Scores
 
 `scoring.py` scores one run's report against its case with `score_run(report, case, issues)`,

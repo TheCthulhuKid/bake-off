@@ -5,10 +5,10 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel
 
 from bakeoff.cases import Case
-from bakeoff.contract import TriageReport
+from bakeoff.contract import InvalidReport, TriageReport
 from bakeoff.fixtures import load_repo
 from bakeoff.impls import get_triage
 from bakeoff.scoring import Scores, score_run
@@ -38,15 +38,13 @@ class RunRecord(BaseModel):
     repeat: int
     report: TriageReport | None
     error: str | None
+    # True when a report came back, False when it failed validation, None when the run failed
+    # for another reason, such as a run limit, which says nothing about the schema.
+    schema_valid: bool | None
     stats: RunStats
     latency_seconds: float
     cost_usd: float
     scores: Scores
-
-    @computed_field
-    @property
-    def schema_valid(self) -> bool:
-        return self.report is not None
 
 
 def run_case(
@@ -59,13 +57,16 @@ def run_case(
     """
     repo = load_repo(case.repo)
     triage = get_triage(impl)
-    report = error = None
+    report = error = schema_valid = None
     start = clock()
     with collect() as stats:
         try:
             report = triage(case.repo)
+            schema_valid = True
+        except InvalidReport as exc:
+            error, schema_valid = _describe(exc), False
         except Exception as exc:
-            error = f"{type(exc).__name__}: {exc}"
+            error = _describe(exc)
     latency = clock() - start
     issues = {issue.number for issue in repo.issues}
     return RunRecord(
@@ -73,12 +74,17 @@ def run_case(
         repeat=repeat,
         report=report,
         error=error,
+        schema_valid=schema_valid,
         stats=stats,
         latency_seconds=latency,
         # Priced now: Settings.cost prices the current model, which a later report can't know.
         cost_usd=SETTINGS.cost(stats.input_tokens, stats.output_tokens),
         scores=Scores() if report is None else score_run(report, case, issues),
     )
+
+
+def _describe(error: Exception) -> str:
+    return f"{type(error).__name__}: {error}"
 
 
 def result_path(out: Path, impl: str) -> Path:
