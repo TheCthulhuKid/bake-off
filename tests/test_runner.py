@@ -1,11 +1,12 @@
 import threading
+from datetime import UTC, datetime
 
 import pytest
 
 from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.judge import Judgement
-from bakeoff.runner import run_case
+from bakeoff.runner import run_case, run_eval
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
@@ -100,3 +101,20 @@ def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     release.set()
     assert done.wait(5)
     assert record.stats.input_tokens == 0
+
+
+def test_run_eval_runs_every_case_and_repeat_in_order(triage_with):
+    triage_with(lambda repo: REPORT)
+    cases = [CASE, Case(name="tiny-bare", repo="tiny")]
+    seen = []
+    started = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
+    run = run_eval("fake", cases, repeats=2, on_record=seen.append, now=lambda: started)
+    assert [(record.case, record.repeat) for record in run.records] == [
+        ("tiny-top", 0),
+        ("tiny-top", 1),
+        ("tiny-bare", 0),
+        ("tiny-bare", 1),
+    ]
+    assert seen == run.records
+    assert (run.impl, run.model, run.effort) == ("fake", SETTINGS.model, SETTINGS.effort)
+    assert run.started_at == started

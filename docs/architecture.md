@@ -242,6 +242,12 @@ priced when the run is recorded, since `Settings.cost` prices the current model 
 over older files could not. Latency comes from a `clock` argument, `time.monotonic` by default,
 so tests can set it.
 
+`runner.run_eval(impl, cases, repeats, judge=None, on_record=...)` runs `run_case` for each case
+in turn, `repeats` times each (repeats numbered from 0), and returns an `EvalRun`: the impl, the
+model and effort from `SETTINGS`, `started_at` in UTC and the records in run order. `on_record`
+is called with each record as it is made, so the CLI can show progress without owning the loop.
+`started_at` comes from a `now` argument, so tests can set it.
+
 The run's own deadline is only checked between model requests, so `run_case` also runs
 `triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.
 If the thread is still running, it sets `limit_fired = "timeout"` on the run's stats and

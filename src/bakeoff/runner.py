@@ -1,9 +1,10 @@
 """Runs an implementation on a recorded repo or an eval case and collects its stats."""
 
 import contextvars
+import functools
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -98,6 +99,46 @@ def run_case(
         scores=scores,
         judge_cost_usd=judgement.cost_usd,
         judge_error=judge_error,
+    )
+
+
+class EvalRun(BaseModel):
+    """One implementation's runs over the eval cases, as saved to one results file."""
+
+    impl: str
+    model: str
+    effort: str
+    started_at: datetime
+    records: list[RunRecord]
+
+
+def run_eval(
+    impl: str,
+    cases: Iterable[Case],
+    repeats: int,
+    *,
+    judge: ThemeJudge | None = None,
+    on_record: Callable[[RunRecord], None] = lambda record: None,
+    now: Callable[[], datetime] = functools.partial(datetime.now, UTC),
+) -> EvalRun:
+    """Run ``impl`` ``repeats`` times on each case in turn, judging themes if ``judge`` is given.
+
+    ``on_record`` sees each record as it is made, so the CLI can show progress without owning
+    the loop.
+    """
+    started_at = now()
+    records = []
+    for case in cases:
+        for repeat in range(repeats):
+            record = run_case(impl, case, repeat, judge=judge)
+            on_record(record)
+            records.append(record)
+    return EvalRun(
+        impl=impl,
+        model=SETTINGS.model,
+        effort=SETTINGS.effort,
+        started_at=started_at,
+        records=records,
     )
 
 
