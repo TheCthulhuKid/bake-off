@@ -3,8 +3,9 @@
 ## Cases
 
 A case is one fixture repo with hand-labelled ground truth. `cases.py` defines it, and
-`load_cases(path)` reads a YAML list of cases, validated with pydantic. The real set will live in
-`evals/cases.yaml`; the tests use `tests/fixtures/cases.yaml`, one case over the `tiny` fixture.
+`load_cases(path)` reads a YAML list of cases, validated with pydantic. `bakeoff eval` reads
+`evals/cases.yaml` by default, which holds the eval set once it is labelled; the tests use
+`tests/fixtures/cases.yaml`, one case over the `tiny` fixture.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -18,7 +19,8 @@ A case is one fixture repo with hand-labelled ground truth. `cases.py` defines i
 | `notes` | text | Free text for whoever labels the case. |
 
 Only `name` and `repo` are required. Every other field defaults to empty, or to absent for
-`duplicates` and `injection`, so a case labels only what it tests. YAML reads `2:` as an integer, so `labels` keys are issue numbers as written.
+`duplicates` and `injection`, so a case labels only what it tests. YAML reads `2:` as an
+integer, so `labels` keys are issue numbers as written.
 
 A duplicate pair must name two different issues, as in the contract's `DuplicatePair`, and no
 two cases in a file may share a `name`, since results are reported by case name. `load_cases`

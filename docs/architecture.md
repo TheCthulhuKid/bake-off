@@ -12,17 +12,22 @@ src/bakeoff/
   runner.py        runs an implementation on a recorded repo or an eval case, with its stats
   cases.py         Case and load_cases: the hand-labelled eval cases (docs/evals.md)
   scoring.py       Scores, score_run and the mean and percentile helpers (docs/evals.md)
-  cli.py           bakeoff run and bakeoff eval; input and output handling only
+  judge.py         ThemeJudge: the LLM judge for theme quality, with its on-disk cache
+  provenance.py    prompt hash, git commit and code size recorded with each eval
+  report.py        summarise and render: the comparison tables from results files
+  cli.py           bakeoff run, eval and report; input and output handling only
 evals/
   repos/<name>/    recorded issues, one directory per fixture repo
+  cases.yaml       hand-labelled ground truth per case (not labelled yet)
+  judge-cache.json the judge's verdicts, created by the first judged eval
 results/           saved runs, never overwritten
 scripts/           record_issues.py, which records a fixture from GitHub
 tests/             offline; frameworks run against fake models
 ```
 
-`evals/` holds data only, since only `src/bakeoff` is packaged. The eval harness is adding
-`evals/cases.yaml` (hand-labelled ground truth per case), scoring, run timings, and the
-`bakeoff eval` and `bakeoff report` commands; its code goes under `src/bakeoff/`.
+`evals/` holds data only, since only `src/bakeoff` is packaged; the eval harness's code is
+under `src/bakeoff/`. `docs/evals.md` describes the cases, scores, judge, results files and
+report.
 
 ## Layers
 
@@ -125,17 +130,16 @@ tokens, the three limits (`max_tool_calls`, `max_model_requests` and `timeout` i
 each limit as an optional argument, defaulting to `SETTINGS`, and starts the run's deadline on
 the monotonic clock. The deadline is kept in its own context variable beside the stats, not in
 `RunStats`, so the stats are plain data that load back from a results file unchanged, and code
-run in a copied context sees both. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on
-the call after the limit. Every implementation calls
+run in a copied context sees both. Every tool calls `record_tool_call()`, which raises
+`ToolLimitExceeded` on the call after the limit. Every implementation calls
 `record_model_request()` just before each model request; it raises `RunLimitExceeded` once the
 deadline has passed (`limit_fired = "timeout"`) or on the request after the cap
-(`"model_requests"`). Implementations pass token counts to `record_usage()`.
-`ToolLimitExceeded` is a subclass of `RunLimitExceeded`, so one `except` catches every limit.
-Each limit check and its count happen under one lock, since PydanticAI and
-LangGraph run a reply's tool calls in threads that share the run's `RunStats`. Outside
-`collect()` all three are no-ops, so the tools work from a shell. For a framework that turns a
-tool's exception into an error result for the model, `raise_if_limit_fired()` raises the error
-for whichever limit fired again.
+(`"model_requests"`). Implementations pass token counts to `record_usage()`. `ToolLimitExceeded`
+is a subclass of `RunLimitExceeded`, so one `except` catches every limit. Each limit check and
+its count happen under one lock, since PydanticAI and LangGraph run a reply's tool calls in
+threads that share the run's `RunStats`. Outside `collect()` all three are no-ops, so the tools
+work from a shell. For a framework that turns a tool's exception into an error result for the
+model, `raise_if_limit_fired()` raises the error for whichever limit fired again.
 
 The deadline is checked only before a request, so it can't end a request that hangs.
 
@@ -188,14 +192,14 @@ and list it below.
   retries raises the same class; any other `UnexpectedModelBehavior` propagates unchanged.
 - `impls/langgraph_impl.py`: a `StateGraph` over a messages state with three nodes. `fetch`
   calls the model bound to the three tools and loops through a `ToolNode` while the reply has
-  tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with
-  the same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates
-  the reply's JSON text with `parse_report`, which raises `InvalidReport` if it is invalid. `build_graph(model)`
-  builds it, and the module-level `graph` uses a `ChatAnthropic` with `effort` from
-  `SETTINGS`. Usage is collected by a `UsageMetadataCallbackHandler` passed in the run config,
-  and recorded in a `finally`. `fetch` and `analyse`, the only nodes that call the model, each
-  call `record_model_request()` first, so a limit raises before the request and ends the graph
-  run.
+  tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with the
+  same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates the
+  reply's JSON text with `parse_report`, which raises `InvalidReport` if it is invalid.
+  `build_graph(model)` builds it, and the module-level `graph` uses a `ChatAnthropic` with
+  `effort` from `SETTINGS`. Usage is collected by a `UsageMetadataCallbackHandler` passed in the
+  run config, and recorded in a `finally`. `fetch` and `analyse`, the only nodes that call the
+  model, each call `record_model_request()` first, so a limit raises before the request and ends
+  the graph run.
 - `impls/anthropic_impl.py`: the Anthropic SDK's beta tool runner, streamed, over the three
   tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
   its `Args` section) and with `as_json`, which returns their dicts as JSON text, with
