@@ -7,7 +7,7 @@ from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.judge import Judgement
 from bakeoff.provenance import code_lines, prompt_hash
-from bakeoff.runner import load_eval, run_case, run_eval, save_eval
+from bakeoff.runner import check_cases, load_eval, run_case, run_eval, save_eval
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
@@ -128,3 +128,14 @@ def test_run_eval_runs_every_case_and_repeat_and_saves_once(triage_with, tmp_pat
     assert load_eval(path) == run
     with pytest.raises(FileExistsError):
         save_eval(run, path)
+
+
+def test_check_cases_lists_unknown_repos_and_labels_not_in_the_fixture(tiny_root):
+    cases = [
+        CASE,
+        Case(name="stray", repo="tiny", duplicates=[(1, 7)], labels={9: ["bug"]}),
+        Case(name="lost", repo="missing"),
+    ]
+    [stray, lost] = check_cases(cases)
+    assert stray == "stray: issues not in tiny: [7, 9]"
+    assert lost.startswith("lost: no recorded repo 'missing'")

@@ -23,6 +23,10 @@ Only `name` and `repo` are required. Every other field defaults to empty, or to 
 A duplicate pair must name two different issues, as in the contract's `DuplicatePair`, and no
 two cases in a file may share a `name`, since results are reported by case name. `load_cases`
 doesn't check that `repo` exists, since that depends on the fixtures rather than the cases file.
+`runner.check_cases(cases)` does that check against the fixtures, so an eval can stop before
+its first run: it lists each case whose repo has no fixture, and each issue number a case labels
+(in themes, duplicates, top issues, labels or the injection) that isn't in its fixture, which
+would otherwise cap a score below 1 with nothing to say why.
 
 The issue numbers in this example are illustrative, not labelled data.
 

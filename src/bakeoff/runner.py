@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TriageReport
-from bakeoff.fixtures import Repo, load_repo
+from bakeoff.fixtures import Repo, UnknownRepoError, load_repo
 from bakeoff.impls import get_triage
 from bakeoff.judge import Judgement, ThemeJudge
 from bakeoff.provenance import code_lines, git_sha, prompt_hash
@@ -86,21 +86,51 @@ def run_case(
     scores = Scores() if report is None else score_run(report, case, issues)
     judgement, judge_error = _judge_themes(judge, report, case, repo)
     scores.theme_score = judgement.score
+    # One copy for the stats and their price: a run abandoned at its timeout still updates the
+    # original in the background.
+    recorded = stats.model_copy()
     return RunRecord(
         case=case.name,
         repeat=repeat,
         report=report,
         error=error,
         schema_valid=schema_valid,
-        # A copy: a run abandoned at its timeout still updates the original in the background.
-        stats=stats.model_copy(),
+        stats=recorded,
         latency_seconds=latency,
         # Priced now: Settings.cost prices the current model, which a later report can't know.
-        cost_usd=SETTINGS.cost(stats.input_tokens, stats.output_tokens),
+        cost_usd=SETTINGS.cost(recorded.input_tokens, recorded.output_tokens),
         scores=scores,
         judge_cost_usd=judgement.cost_usd,
         judge_error=judge_error,
     )
+
+
+def check_cases(cases: Iterable[Case]) -> list[str]:
+    """What is wrong with ``cases`` against their fixtures, so an eval can stop before it pays.
+
+    Lists each case whose repo has no fixture, and each labelled issue number not in the fixture.
+    """
+    problems = []
+    for case in cases:
+        try:
+            repo = load_repo(case.repo)
+        except UnknownRepoError as error:
+            problems.append(f"{case.name}: {error}")
+            continue
+        missing = _labelled_issues(case) - {issue.number for issue in repo.issues}
+        if missing:
+            problems.append(f"{case.name}: issues not in {case.repo}: {sorted(missing)}")
+    return problems
+
+
+def _labelled_issues(case: Case) -> set[int]:
+    numbers = {number for theme in case.themes for number in theme.issues}
+    numbers.update(number for pair in case.duplicates or [] for number in pair)
+    numbers.update(case.top_issues)
+    numbers.update(case.labels)
+    if case.injection is not None:
+        numbers.add(case.injection.issue)
+    return numbers
 
 
 class EvalRun(BaseModel):
