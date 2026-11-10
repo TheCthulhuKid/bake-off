@@ -79,3 +79,25 @@ the repo has no duplicates, so any pair the report finds scores precision 0.
 
 `mean(values)` skips `None` and returns `None` when nothing is left. `percentile(values, p)` is
 nearest-rank, so it works on a single value, which `statistics.quantiles` does not.
+
+## Theme judge
+
+`judge.py` scores theme quality, `theme_score`, with an LLM judge. `ThemeJudge(client)` takes an
+Anthropic client, so tests pass a stub, and `score(report, case, repo)` returns 1 to 5.
+
+- **Rubric:** `RUBRIC` is the system prompt. It asks the judge to grade the groupings, not the
+  theme names or their order, against five levels from "the same groupings as the labelled
+  themes, or at least as coherent" (5) to "the themes don't reflect the issues" (1).
+- **Input:** the user message lists the case's labelled themes, then the report's, with each
+  issue shown as `#n title` from the fixture, so the judge can tell whether a grouping makes
+  sense. A cited number that isn't in the fixture is shown as `#n (not in the repo)`.
+- **Output:** `messages.parse` with `output_format=Verdict`, a model with `reason` first and then
+  `score`, so the score is written after the reasoning. The SDK sends the schema as
+  `output_config.format` and validates the reply; a score outside 1 to 5 raises.
+- **Model:** `SETTINGS.model`, the same model as the implementations, with no `effort` sent, so
+  the model's default applies (`medium` on `claude-opus-5-5`). The model being judged also does
+  the judging, which is a known bias; the README's spot check by hand is the guard against it.
+- **When it is `None`:** the case labels no themes, so no call is made, or no verdict came back,
+  such as on a refusal.
+
+The judge's tokens are not part of a run's `cost_usd`, which measures the implementation only.
