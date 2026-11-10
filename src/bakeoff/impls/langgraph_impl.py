@@ -3,7 +3,6 @@
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
-from langchain_core.callbacks import UsageMetadataCallbackHandler
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, MessagesState, StateGraph
@@ -33,12 +32,15 @@ def build_graph(model: BaseChatModel) -> CompiledStateGraph:
 
     def fetch(state: State) -> dict[str, Any]:
         record_model_request()
-        return {"messages": [fetch_model.invoke(state["messages"])]}
+        reply = fetch_model.invoke(state["messages"])
+        _record_reply_usage(reply)
+        return {"messages": [reply]}
 
     def analyse(state: State) -> dict[str, Any]:
         record_model_request()
-        messages = [*state["messages"], HumanMessage(REPORT_PROMPT)]
-        return {"answer": analyse_model.invoke(messages)}
+        reply = analyse_model.invoke([*state["messages"], HumanMessage(REPORT_PROMPT)])
+        _record_reply_usage(reply)
+        return {"answer": reply}
 
     def report(state: State) -> dict[str, Any]:
         return {"triage_report": parse_report(state["answer"].text)}
@@ -56,6 +58,13 @@ def build_graph(model: BaseChatModel) -> CompiledStateGraph:
     return graph.compile()
 
 
+def _record_reply_usage(reply: AIMessage) -> None:
+    # Recorded as each reply arrives rather than when the run ends, so a run abandoned at its
+    # timeout still reports what it spent.
+    if reply.usage_metadata:
+        record_usage(reply.usage_metadata["input_tokens"], reply.usage_metadata["output_tokens"])
+
+
 graph = build_graph(
     ChatAnthropic(model=SETTINGS.model, api_key=SETTINGS.api_key(), effort=SETTINGS.effort)
 )
@@ -63,11 +72,5 @@ graph = build_graph(
 
 def triage(repo: str) -> TriageReport:
     """Run the graph on ``repo`` and return its report."""
-    usage = UsageMetadataCallbackHandler()
     messages = [SystemMessage(SYSTEM_PROMPT), HumanMessage(user_prompt(repo))]
-    try:
-        state = graph.invoke({"messages": messages}, config={"callbacks": [usage]})
-        return state["triage_report"]
-    finally:
-        for counts in usage.usage_metadata.values():
-            record_usage(counts["input_tokens"], counts["output_tokens"])
+    return graph.invoke({"messages": messages})["triage_report"]

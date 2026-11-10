@@ -65,10 +65,10 @@ implementation ends the run on it.
   still reports what it spent. Totals include output retries and requests made before a limit
   fired. A reply's usage is what the run is billed, except with a fallback model or a resumed
   `pause_turn`, neither of which this agent uses.
-- LangGraph: `triage` passes a `UsageMetadataCallbackHandler` in the run config. It collects
-  every model call in the graph, keyed by model name, and `triage` records the totals in a
-  `finally`, so a run that raises still reports its cost. Totals include the `analyse` call
-  and requests made before the tool-call limit fired.
+- LangGraph: the `fetch` and `analyse` nodes record each reply's `usage_metadata` as it
+  arrives, the same counts LangChain's usage callback would sum, so a run that raises or is
+  abandoned at its timeout still reports what it spent. Totals include the `analyse` call and
+  requests made before a limit fired.
 - Anthropic tool runner: `triage` records each reply's `usage` as it arrives, before running
   its tools or validating the report, so a run that raises still reports its cost.
 

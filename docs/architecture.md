@@ -196,10 +196,10 @@ and list it below.
   same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates the
   reply's JSON text with `parse_report`, which raises `InvalidReport` if it is invalid.
   `build_graph(model)` builds it, and the module-level `graph` uses a `ChatAnthropic` with
-  `effort` from `SETTINGS`. Usage is collected by a `UsageMetadataCallbackHandler` passed in the
-  run config, and recorded in a `finally`. `fetch` and `analyse`, the only nodes that call the
-  model, each call `record_model_request()` first, so a limit raises before the request and ends
-  the graph run.
+  `effort` from `SETTINGS`. `fetch` and `analyse`, the only nodes that call the model, each
+  call `record_model_request()` first, so a limit raises before the request and ends the graph
+  run, and record the reply's `usage_metadata` as soon as it arrives, so a run abandoned at its
+  timeout still reports what it spent.
 - `impls/anthropic_impl.py`: the Anthropic SDK's beta tool runner, streamed, over the three
   tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
   its `Args` section) and with `as_json`, which returns their dicts as JSON text, with

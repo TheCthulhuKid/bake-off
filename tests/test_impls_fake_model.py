@@ -38,12 +38,21 @@ def test_pydanticai_returns_report_and_records_stats(pydanticai_model):
         assert tool.description in inspect.getdoc(getattr(tools, tool.name))
 
 
-def test_langgraph_returns_report_and_records_stats(langgraph_model):
+def test_langgraph_returns_report_and_records_stats(langgraph_model, monkeypatch):
+    generate, seen_tokens = type(langgraph_model)._generate, []
+
+    def generate_and_note_tokens(self, messages, **kwargs):
+        seen_tokens.append(stats.input_tokens)
+        return generate(self, messages, **kwargs)
+
+    monkeypatch.setattr(type(langgraph_model), "_generate", generate_and_note_tokens)
     with collect() as stats:
         report = get_triage("langgraph")("tiny")
     assert report == langgraph_model.report
     # One more model call than PydanticAI: analyse runs after fetch ends.
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 400, 40)
+    # Usage is recorded as each reply arrives, so a run abandoned at its timeout is still priced.
+    assert seen_tokens == [0, 100, 200, 300]
     assert stats.model_requests == 4 and not stats.hit_limit
     assert langgraph_model.seen[0].content == SYSTEM_PROMPT
     # The API rejects a report call that ends on the model's own reply.
