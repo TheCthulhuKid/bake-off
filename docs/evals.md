@@ -120,7 +120,7 @@ returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
 
 ## Results files
 
-`run_eval` returns an `EvalRun`, one implementation's runs over the cases, which is what a
+`run_eval` returns one `EvalRun` per implementation, its runs over the cases, which is what a
 results file holds. Besides the records, it says what produced them:
 
 | Field | Meaning |

@@ -104,24 +104,41 @@ def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     assert record.stats.input_tokens == 0
 
 
-def test_run_eval_runs_every_case_and_repeat_and_saves_once(triage_with, tmp_path):
+def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_path):
     triage_with(lambda repo: REPORT)
     cases = [CASE, Case(name="tiny-bare", repo="tiny")]
     seen = []
     started = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
-    # A registered name, for its code size; triage_with still swaps in the fake triage.
-    run = run_eval("anthropic", cases, repeats=2, on_record=seen.append, now=lambda: started)
+    # Registered names, for their code size; triage_with still swaps in the fake triage.
+    impls = ["anthropic", "langgraph"]
+
+    def on_record(impl, record):
+        seen.append((impl, record.case, record.repeat))
+
+    runs = run_eval(impls, cases, repeats=2, on_record=on_record, now=lambda: started)
+    # Every impl runs a case's repeat before the next repeat starts.
+    assert seen == [
+        ("anthropic", "tiny-top", 0),
+        ("langgraph", "tiny-top", 0),
+        ("anthropic", "tiny-top", 1),
+        ("langgraph", "tiny-top", 1),
+        ("anthropic", "tiny-bare", 0),
+        ("langgraph", "tiny-bare", 0),
+        ("anthropic", "tiny-bare", 1),
+        ("langgraph", "tiny-bare", 1),
+    ]
+    assert [run.impl for run in runs] == impls
+    run = runs[0]
     assert [(record.case, record.repeat) for record in run.records] == [
         ("tiny-top", 0),
         ("tiny-top", 1),
         ("tiny-bare", 0),
         ("tiny-bare", 1),
     ]
-    assert seen == run.records
-    assert (run.impl, run.model, run.effort) == ("anthropic", SETTINGS.model, SETTINGS.effort)
-    assert run.started_at == started
+    assert (run.model, run.effort, run.started_at) == (SETTINGS.model, SETTINGS.effort, started)
     assert run.prompt_hash == prompt_hash()
     assert (run.code_lines, run.code_non_blank_lines) == code_lines("anthropic")
+    assert runs[1].code_lines == code_lines("langgraph")[0]
     # The results file loads back as the same run, and is never overwritten.
     path = tmp_path / "results" / "run.json"
     save_eval(run, path)

@@ -4,7 +4,7 @@ import contextvars
 import functools
 import threading
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -149,40 +149,46 @@ class EvalRun(BaseModel):
 
 
 def run_eval(
-    impl: str,
+    impls: Sequence[str],
     cases: Iterable[Case],
     repeats: int,
     *,
     judge: ThemeJudge | None = None,
-    on_record: Callable[[RunRecord], None] = lambda record: None,
+    on_record: Callable[[str, RunRecord], None] = lambda impl, record: None,
     now: Callable[[], datetime] = functools.partial(datetime.now, UTC),
-) -> EvalRun:
-    """Run ``impl`` ``repeats`` times on each case in turn, judging themes if ``judge`` is given.
+) -> list[EvalRun]:
+    """Run each impl ``repeats`` times on each case, judging themes if ``judge`` is given.
 
-    ``on_record`` sees each record as it is made, so the CLI can show progress without owning
-    the loop.
+    The impls take turns: every impl runs a case's repeat before the next repeat starts, so a
+    slow spell on the API falls on all of them rather than on one impl's whole eval. Returns one
+    ``EvalRun`` per impl, in the order given. ``on_record`` sees each impl's record as it is made,
+    so the CLI can show progress without owning the loop.
     """
     started_at = now()
     # Taken before the first run, so they describe the code and prompts that ran.
     prompt, sha = prompt_hash(), git_sha()
-    lines, non_blank_lines = code_lines(impl)
-    records = []
+    sizes = {impl: code_lines(impl) for impl in impls}
+    records: dict[str, list[RunRecord]] = {impl: [] for impl in impls}
     for case in cases:
         for repeat in range(repeats):
-            record = run_case(impl, case, repeat, judge=judge)
-            on_record(record)
-            records.append(record)
-    return EvalRun(
-        impl=impl,
-        model=SETTINGS.model,
-        effort=SETTINGS.effort,
-        started_at=started_at,
-        prompt_hash=prompt,
-        git_sha=sha,
-        code_lines=lines,
-        code_non_blank_lines=non_blank_lines,
-        records=records,
-    )
+            for impl in impls:
+                record = run_case(impl, case, repeat, judge=judge)
+                on_record(impl, record)
+                records[impl].append(record)
+    return [
+        EvalRun(
+            impl=impl,
+            model=SETTINGS.model,
+            effort=SETTINGS.effort,
+            started_at=started_at,
+            prompt_hash=prompt,
+            git_sha=sha,
+            code_lines=sizes[impl][0],
+            code_non_blank_lines=sizes[impl][1],
+            records=records[impl],
+        )
+        for impl in impls
+    ]
 
 
 def save_eval(run: EvalRun, path: Path) -> None:

@@ -242,11 +242,17 @@ priced when the run is recorded, since `Settings.cost` prices the current model 
 over older files could not. Latency comes from a `clock` argument, `time.monotonic` by default,
 so tests can set it.
 
-`runner.run_eval(impl, cases, repeats, judge=None, on_record=...)` runs `run_case` for each case
-in turn, `repeats` times each (repeats numbered from 0), and returns an `EvalRun`: the impl, the
-model and effort from `SETTINGS`, `started_at` in UTC and the records in run order. `on_record`
-is called with each record as it is made, so the CLI can show progress without owning the loop.
-`started_at` comes from a `now` argument, so tests can set it.
+`runner.run_eval(impls, cases, repeats, judge=None, on_record=...)` runs `run_case` for each
+case in turn, `repeats` times each (repeats numbered from 0), and the implementations take
+turns: every implementation runs a case's repeat before the next repeat starts. A slow spell on
+the API then falls on all of them, rather than on one implementation's whole eval, which would
+show up as a latency difference between frameworks. It returns one `EvalRun` per
+implementation, in the order given: the impl, the model and effort from `SETTINGS`, `started_at`
+in UTC and that implementation's records in run order. `on_record(impl, record)` is called as
+each record is made, so the CLI can show progress without owning the loop. `started_at` comes
+from a `now` argument, so tests can set it. Because the runs are interleaved, every
+implementation's results are held until the last run, so a crash outside a run loses all of
+them, not only one implementation's.
 
 The run's own deadline is only checked between model requests, so `run_case` also runs
 `triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.
