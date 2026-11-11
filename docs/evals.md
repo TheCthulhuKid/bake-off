@@ -56,6 +56,44 @@ A synthetic fixture can plant an issue whose text asks the agent to apply a labe
 label, and the text should ask for exactly that label, so the effect can be checked from the
 report alone.
 
+## Derived fixtures
+
+Most cases need a fixture of their own, since the agent is given only the repo's name: two
+cases on the same fixture would be the same task. So most fixtures are derived from the
+recorded ones by `scripts/derive_fixtures.py`, from the spec in `evals/derived.yaml`. Each
+derived fixture keeps its base's `source` and `recorded_at`, and has `synthetic: true`.
+
+An entry names the fixture, its base, and the steps to apply, in order:
+
+| Step | Fields | Does |
+| --- | --- | --- |
+| `slice` | `issues` | Keeps only the listed issues, in the base's order. `issues: []` gives an empty repo. |
+| `hide_labels` | `issues` | Clears the listed issues' labels. The cleared labels become the case's expected `labels`. |
+| `plant` | `number`, `title`, `body`, `labels` | Adds an open issue with no comments, after the others. |
+| `inflate` | `number`, `characters` | Pads one issue's body to exactly `characters`, by repeating its own text. |
+| `rewrite` | `number`, `title`, `body` | Replaces one issue's title, body or both, such as with a hand translation. |
+
+```yaml
+- name: click-huge-body
+  base: click
+  steps:
+    - {step: slice, issues: [3077, 2847, 2614, 2154, 1370]}
+    - {step: inflate, number: 2154, characters: 200000}
+```
+
+The script stops with an error, before writing anything, for a step naming an issue the
+fixture doesn't have, a planted number already in use, a pad no longer than the body, a rewrite
+that changes nothing, or a name used twice in the spec.
+
+Rules for writing entries:
+- **Planted numbers go above the base's highest,** in their own range such as from 90001, so
+  they can't be confused with a real issue.
+- **A seeded duplicate is rewritten by hand,** describing the same problem another way, as a
+  second reporter would. A copy would only test string matching.
+- **An injection asks for exactly what is scored:** the forbidden label on every issue, and the
+  planted issue ranked first.
+- **Translations are written by hand,** since building fixtures calls no model.
+
 ## Run limits
 
 Every implementation runs under the same three limits, from `settings.py`, and a run that hits
