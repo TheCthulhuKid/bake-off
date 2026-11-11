@@ -106,12 +106,21 @@
 #     - step: slice
 #       issues: [5663, 5658, 5656, 5546, 5468, 5376, 5260, 5216, 4882, 4839, 4771, 4651, 4649,
 #                4554, 4516, 4506, 4455, 4438, 4411, 4276, 4249, 4244, 4229, 4208, 4203, 4196]
-#     - step: plant
+#     - step: plant          # draft: seeded duplicate of #4411, to edit into your own words
 #       number: 90201
-#       title:
-#       body:
+#       title: User-level black config is skipped when pyproject.toml has no [tool.black]
+#       body: |
+#         I keep my black settings in my user config so every repo gets the same line length.
+#         In a repo that has a `pyproject.toml` for other tools (only `[tool.pytest.ini_options]`
+#         in it), black stops reading my user config and falls back to the defaults. It looks like
+#         finding any `pyproject.toml` ends the search, even when that file has nothing for black.
+#
+#         Expected: a `pyproject.toml` without a `[tool.black]` table is skipped, and the user-level
+#         config is used.
+#
+#         black 24.4.2, Python 3.12, macOS.
 #     - step: hide_labels
-#       issues: []
+#       issues: [4649, 4554, 4208, 4276]
 #
 # - name: black-slice-2
 #   base: black
@@ -120,12 +129,27 @@
 #       issues: [4178, 4177, 4156, 4123, 4099, 4098, 4092, 4075, 4058, 4025, 4001, 3972, 3955,
 #                3952, 3946, 3918, 3880, 3802, 3800, 3769, 3752, 3747, 3725, 3715, 3714, 3711,
 #                3694]
-#     - step: plant
+#     - step: plant          # draft: seeded duplicate of #3946, to edit into your own words
 #       number: 90211
-#       title:
-#       body:
+#       title: Type-checker ignore comment moves to the closing bracket when a call is split
+#       body: |
+#         When black splits a long call over several lines, a trailing `# pyright: ignore[...]`
+#         comment ends up after the closing parenthesis instead of on the line that needs it:
+#
+#             result = client.fetch_records("customers", limit=500)  # pyright: ignore[reportUnknownMemberType]
+#
+#         becomes
+#
+#             result = client.fetch_records(
+#                 "customers", limit=500
+#             )  # pyright: ignore[reportUnknownMemberType]
+#
+#         pyright then reports the error again, because the comment is no longer on the line with
+#         the call. Could black keep such comments with the first line of the statement?
+#
+#         black 24.2.0, Python 3.12.
 #     - step: hide_labels
-#       issues: []
+#       issues: [4058, 4092, 4156, 3800]
 #
 # - name: black-slice-3
 #   base: black
@@ -134,12 +158,20 @@
 #       issues: [3668, 3666, 3663, 3647, 3629, 3627, 3626, 3606, 3603, 3592, 3590, 3582, 3581,
 #                3579, 3576, 3571, 3569, 3566, 3560, 3553, 3552, 3530, 3525, 3518, 3510, 3504,
 #                3494]
-#     - step: plant
+#     - step: plant          # draft: seeded duplicate of #3666, to edit into your own words
 #       number: 90221
-#       title:
-#       body:
+#       title: blackd stops answering after a burst of format requests
+#       body: |
+#         Our editor plugin sends one request to blackd per open file when a project loads. With
+#         about thirty files open, the first two or three requests come back, then the rest sit on
+#         open connections and never get a reply. Nothing is logged. When I stop blackd with
+#         Ctrl+C, the waiting requests all complete at once before it exits.
+#
+#         To reproduce: start `blackd`, then send 20 to 30 POST requests at the same moment.
+#
+#         blackd 24.1.1, Python 3.11, Linux.
 #     - step: hide_labels
-#       issues: []
+#       issues: [3647, 3560, 3571, 3553]
 #
 # - name: pip-tools-slice-1
 #   base: pip-tools
@@ -147,12 +179,20 @@
 #     - step: slice
 #       issues: [2519, 2514, 2509, 2497, 2483, 2464, 2404, 2393, 2377, 2365, 2285, 2247, 2244,
 #                2239, 2232, 2229, 2200, 2187, 2182, 2177, 2173, 2172, 2170, 2160, 2155, 2151]
-#     - step: plant
+#     - step: plant          # draft: seeded duplicate of #2509, to edit into your own words
 #       number: 90301
-#       title:
-#       body:
+#       title: Zero or negative --max-rounds gives a traceback instead of an error message
+#       body: |
+#         `pip-compile --max-rounds 0 requirements.in` doesn't reject the value: it starts resolving
+#         and then fails with a long internal traceback that asks me to report a bug. The same
+#         happens with `--max-rounds -5`.
+#
+#         I'd expect a normal usage error saying the value must be at least 1, before any
+#         resolving starts.
+#
+#         pip-tools 7.4.1, Python 3.12.
 #     - step: hide_labels
-#       issues: []
+#       issues: [2497, 2377, 2187, 2285]
 #
 # - name: pip-tools-slice-2
 #   base: pip-tools
@@ -161,12 +201,21 @@
 #       issues: [2143, 2140, 2139, 2135, 2125, 2124, 2123, 2117, 2115, 2114, 2103, 2096, 2094,
 #                2093, 2080, 2074, 2073, 2072, 2069, 2064, 2062, 2056, 2051, 2047, 2028, 2027,
 #                2025]
-#     - step: plant
+#     - step: plant          # draft: seeded duplicate of #2047, to edit into your own words
 #       number: 90311
-#       title:
-#       body:
+#       title: Extra index only used for top-level requirements, not their dependencies
+#       body: |
+#         I pass `--extra-index-url` pointing at our internal package server. If I list the internal
+#         package `metrics-core` directly in `requirements.in`, it resolves from that server. If I
+#         only list `reporting-tool`, a public package that depends on `metrics-core`, pip-compile
+#         fails to find `metrics-core` at all, as if the extra index weren't there.
+#
+#         So the extra index seems to apply to direct requirements only, not to anything pulled in
+#         transitively.
+#
+#         pip-tools 7.3.0, pip 24.0, Python 3.11, Linux.
 #     - step: hide_labels
-#       issues: []
+#       issues: [2025, 2093, 2027, 2103]
 #
 # - name: pip-tools-slice-3
 #   base: pip-tools
@@ -175,12 +224,21 @@
 #       issues: [2012, 2010, 2002, 2000, 1997, 1987, 1929, 1928, 1924, 1902, 1889, 1886, 1883,
 #                1880, 1877, 1876, 1873, 1850, 1845, 1836, 1831, 1823, 1821, 1818, 1804, 1794,
 #                1792]
-#     - step: plant
+#     - step: plant          # draft: seeded duplicate of #1902, to edit into your own words
 #       number: 90321
-#       title:
-#       body:
+#       title: Header lists a --config option even though no config file was used
+#       body: |
+#         After upgrading pip-tools, the comment header in our compiled files includes a `--config`
+#         argument pointing at `pyproject.toml`, although that file has no `[tool.pip-tools]`
+#         section and nothing was read from it. The command shown in the header is therefore not
+#         the one we ran, and every regenerated file differs from the committed one.
+#
+#         To reproduce: an empty `pyproject.toml` next to a `requirements.in`, then run
+#         `pip-compile requirements.in` and look at the header.
+#
+#         pip-tools 6.14.0, Python 3.11.
 #     - step: hide_labels
-#       issues: []
+#       issues: [1929, 1883, 1804, 1845]
 #
 # pinyin: 39 issues, so one slice plus the whole repo (planted numbers 90401 onwards).
 #
