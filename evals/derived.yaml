@@ -11,3 +11,12 @@
   steps:
     - step: slice
       issues: [3077, 2847]
+
+- name: click-huge-body
+  base: click
+  steps:
+    - step: slice
+      issues: [3077, 2847, 2614, 2154, 1370]
+    - step: inflate
+      number: 2154
+      characters: 200000

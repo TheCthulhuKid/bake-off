@@ -39,6 +39,8 @@ def test_derive_applies_the_steps_to_a_copy_of_the_base(root, tmp_path):
     - {step: plant, number: 90001, title: Planted, body: A planted issue., labels: [bug]}
     - {step: slice, issues: [90001, 1]}
     - {step: hide_labels, issues: [1]}
+    - {step: inflate, number: 1, characters: 120}
+    - {step: rewrite, number: 90001, title: Neu geschrieben}
 """,
         tmp_path / "derived.yaml",
     )
@@ -46,6 +48,9 @@ def test_derive_applies_the_steps_to_a_copy_of_the_base(root, tmp_path):
     derived, base = load_repo("tiny-derived"), load_repo("tiny")
     assert [issue.number for issue in derived.issues] == [1, 90001]
     assert (derived.issue(1).labels, derived.issue(90001).labels) == ([], ["bug"])
+    body = derived.issue(1).body
+    assert len(body) == 120 and body.startswith(base.issue(1).body)
+    assert derived.issue(90001).title == "Neu geschrieben"
     assert derived.synthetic
     assert (derived.source, derived.recorded_at) == (base.source, base.recorded_at)
 
