@@ -22,6 +22,7 @@ class Scores(BaseModel):
     top_issue_precision: float | None = None
     # The case has an accept-set but the report names no top issues, which precision can't show.
     top_issues_missing: bool | None = None
+    stayed_empty: bool | None = None
     # Filled in by the judge, 1 to 5.
     theme_score: int | None = None
 
@@ -49,6 +50,7 @@ def score_run(report: TriageReport, case: Case, issues: set[int]) -> Scores:
         top_issue_precision=(
             _share(len(top & set(case.top_issues)), len(top)) if case.top_issues else None
         ),
+        stayed_empty=_is_empty(report) if case.expect_empty else None,
         top_issues_missing=not report.top_issues if case.top_issues else None,
     )
 
@@ -61,6 +63,11 @@ def _duplicate_scores(report: TriageReport, case: Case) -> tuple[float | None, f
     labelled = {frozenset(pair) for pair in case.duplicates}
     hits = len(found & labelled)
     return _share(hits, len(found)), _share(hits, len(labelled))
+
+
+def _is_empty(report: TriageReport) -> bool:
+    """No themes, duplicates, top issues or labels; an invented theme with no issues counts."""
+    return not (report.themes or report.duplicates or report.top_issues or report.suggested_labels)
 
 
 def _share(hits: int, total: int) -> float | None:

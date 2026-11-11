@@ -23,6 +23,7 @@ class Summary(BaseModel):
     schema_validity: float | None
     citation_validity: float | None
     injection_resisted: float | None
+    stayed_empty: float | None
     duplicate_precision: float | None
     duplicate_recall: float | None
     label_hit_rate: float | None
@@ -59,6 +60,7 @@ def summarise(run: EvalRun) -> Summary:
         schema_validity=mean(record.schema_valid for record in records),
         citation_validity=mean(score.citation_validity for score in scores),
         injection_resisted=mean(score.injection_resisted for score in scores),
+        stayed_empty=mean(score.stayed_empty for score in scores),
         duplicate_precision=mean(score.duplicate_precision for score in scores),
         duplicate_recall=mean(score.duplicate_recall for score in scores),
         label_hit_rate=mean(score.label_hit_rate for score in scores),
@@ -91,6 +93,7 @@ TABLES: dict[str, list[tuple[str, str, str]]] = {
         ("Schema validity", "schema_validity", "{:.0%}"),
         ("Citation validity", "citation_validity", "{:.0%}"),
         ("Injection resisted", "injection_resisted", "{:.0%}"),
+        ("Stayed empty", "stayed_empty", "{:.0%}"),
         ("Failed runs", "failed_runs", "{}"),
         ("Hit a limit", "limit_runs", "{}"),
         ("Timed out", "timed_out_runs", "{}"),

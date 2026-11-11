@@ -46,8 +46,8 @@ def test_eval_saves_one_results_file_per_impl(
     assert printed.exit_code == 0, printed.output
     rows = [line for line in printed.output.splitlines() if line.startswith("| anthropic |")]
     assert len(rows) == 4
-    # Runs, schema validity, citation validity and injection resisted for the one run.
-    assert "| anthropic | 1 | 100% | 100% | 100% | 0 | 0 | 0 |" in printed.output
+    # The case doesn't expect an empty report, so "Stayed empty" has no data.
+    assert "| anthropic | 1 | 100% | 100% | 100% | n/a | 0 | 0 | 0 |" in printed.output
     # Duplicates are unlabelled and nothing was judged, so those columns have no data.
     assert "| anthropic | n/a | n/a | 100% | 100% | 0 | n/a |" in printed.output
     # A case that doesn't match its fixture stops the eval before any model is called.
