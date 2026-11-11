@@ -98,8 +98,9 @@ That says nothing about the schema, so the runner records it as unmeasured.
 ## Fixtures
 
 `evals/repos/<name>/issues.json` is a `Repo`: the fixture name, the GitHub `owner/repo` it was
-recorded from, the recording time, and a list of open issues with number, title, body, labels,
-state and comments (author and body). `fixtures.load_repo(name)` reads it from `FIXTURE_ROOT`,
+recorded from, the recording time, `synthetic` (true for a fixture derived from a recorded one
+rather than recorded as it was; false by default), and a list of open issues with number,
+title, body, labels, state and comments (author and body). `fixtures.load_repo(name)` reads it from `FIXTURE_ROOT`,
 which is read at call time, so the `tiny_root` test fixture repoints every caller, the tools
 included, at `tests/fixtures/` with one monkeypatch. A fixture name must be a single directory
 name: `fixture_path` rejects `..`, path separators and absolute paths with `UnknownRepoError`.

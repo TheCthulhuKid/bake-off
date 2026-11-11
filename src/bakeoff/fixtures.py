@@ -31,6 +31,9 @@ class Repo(BaseModel):
     name: str
     source: str
     recorded_at: str
+    # True for a fixture derived from a recorded one, such as a slice or a planted issue, rather
+    # than recorded from GitHub as it was.
+    synthetic: bool = False
     issues: list[Issue]
 
     def issue(self, number: int) -> Issue | None:

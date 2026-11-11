@@ -2,7 +2,7 @@ from contextlib import nullcontext
 
 import pytest
 
-from bakeoff.fixtures import UnknownRepoError, load_repo
+from bakeoff.fixtures import Repo, UnknownRepoError, load_repo
 
 
 def test_load_repo_reads_fixture_and_rejects_unknown_name(tiny_root):
@@ -10,6 +10,9 @@ def test_load_repo_reads_fixture_and_rejects_unknown_name(tiny_root):
     assert [issue.number for issue in repo.issues] == [1, 2]
     assert repo.issue(1).comments[0].author == "alice"
     assert repo.issue(99) is None
+    # A recorded fixture isn't synthetic; a derived one keeps its flag rather than losing it.
+    assert not repo.synthetic
+    assert Repo.model_validate(repo.model_dump() | {"synthetic": True}).synthetic
     with pytest.raises(UnknownRepoError):
         load_repo("missing")
 
