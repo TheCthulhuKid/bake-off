@@ -143,7 +143,7 @@ results file holds. Besides the records, it says what produced them:
 | `cases_hash` | The first 12 hex digits of a SHA-256 over the cases that ran, after any `--repo` filter. Relabelling a case changes every score, so files with different hashes should not be compared. |
 | `fixture_hashes` | Each case's repo name, mapped to a short SHA-256 of its fixture file, which changes if the fixture is re-recorded or edited. |
 | `page_size`, `body_limit` | The tool settings from `SETTINGS`: what the tools return depends on them, and they are not in the prompt. |
-| `git_sha` | The checkout's commit, with `-dirty` when tracked files have changed, or `null` outside a git checkout. Untracked files don't count, so new results files don't mark every later run dirty. |
+| `git_sha` | The checkout's commit, with `-dirty` when a tracked file has changed or an untracked file is under `src/`, where it can change what runs, or `null` outside a git checkout. Other untracked files don't count, so new results files don't mark every later run dirty; the cases and fixtures have their own hashes. |
 | `code_lines`, `code_non_blank_lines` | The size of the implementation's module, found with `importlib.util.find_spec` so the framework is not imported. |
 | `records` | One `RunRecord` per run, in run order. |
 

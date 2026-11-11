@@ -39,16 +39,19 @@ def _short_hash(data: Any) -> str:
 
 
 def git_sha(root: Path = PROJECT_ROOT) -> str | None:
-    """The checkout's commit, with ``-dirty`` if tracked files have changed; ``None`` outside git.
+    """The checkout's commit, with ``-dirty`` if the code differs from it; ``None`` outside git.
 
-    Untracked files don't count, so new results files don't mark every later run dirty.
+    The code differs if a tracked file has changed or an untracked file is under ``src/``, where
+    it can change what runs. Other untracked files don't count, so new results files don't mark
+    every later run dirty; the cases and fixtures have their own hashes.
     """
     try:
         sha = _git(root, "rev-parse", "HEAD")
         changed = _git(root, "status", "--porcelain", "--untracked-files=no")
+        new_source = _git(root, "ls-files", "--others", "--exclude-standard", "--", "src")
     except (OSError, subprocess.CalledProcessError):
         return None
-    return f"{sha}-dirty" if changed else sha
+    return f"{sha}-dirty" if changed or new_source else sha
 
 
 def _git(root: Path, *args: str) -> str:
