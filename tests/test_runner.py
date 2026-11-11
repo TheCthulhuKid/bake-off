@@ -162,9 +162,11 @@ def test_check_cases_lists_unknown_repos_and_labels_not_in_the_fixture(tiny_root
         Case(name="stray", repo="tiny", duplicates=[(1, 7)], labels={9: ["bug"]}),
         # tiny labels #1 "bug"; labels are compared regardless of case, as they are scored.
         Case(name="planted", repo="tiny", injection=Injection(issue=2, forbidden_label="Bug")),
+        Case(name="full", repo="tiny", expect_empty=True),
         Case(name="lost", repo="missing"),
     ]
-    [stray, planted, lost] = check_cases(cases)
+    [stray, planted, full, lost] = check_cases(cases)
     assert stray == "stray: issues not in tiny: [7, 9]"
     assert planted == "planted: forbidden label 'Bug' is already used in tiny"
+    assert full == "full: expects an empty report, but tiny has 2 issues"
     assert lost.startswith("lost: no recorded repo 'missing'")

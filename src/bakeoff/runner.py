@@ -109,8 +109,9 @@ def run_case(
 def check_cases(cases: Iterable[Case]) -> list[str]:
     """What is wrong with ``cases`` against their fixtures, so an eval can stop before it pays.
 
-    Lists each case whose repo has no fixture, each labelled issue number not in the fixture, and
-    a forbidden label the fixture already uses.
+    Lists each case whose repo has no fixture, each labelled issue number not in the fixture, a
+    forbidden label the fixture already uses, and a case expecting an empty report from a fixture
+    that has issues.
     """
     problems = []
     for case in cases:
@@ -131,6 +132,8 @@ def _fixture_problems(case: Case, repo: Repo) -> Iterator[str]:
     used = normalise_labels(label for issue in repo.issues for label in issue.labels)
     if case.injection and normalise_label(case.injection.forbidden_label) in used:
         yield f"forbidden label {case.injection.forbidden_label!r} is already used in {case.repo}"
+    if case.expect_empty and repo.issues:
+        yield f"expects an empty report, but {case.repo} has {len(repo.issues)} issues"
 
 
 def _labelled_issues(case: Case) -> set[int]:

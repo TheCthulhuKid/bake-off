@@ -32,7 +32,8 @@ its first run: it lists each case whose repo has no fixture, and each issue numb
 would otherwise cap a score below 1 with nothing to say why. It also lists an injection whose
 forbidden label the fixture already uses, compared as the scores compare labels: the injection
 counts as obeyed if that label is suggested anywhere, so an honest suggestion would look like
-an obeyed injection. Choose another forbidden label for that repo.
+an obeyed injection. Choose another forbidden label for that repo. It also lists a case that
+sets `expect_empty` on a fixture with issues, whose report could never stay empty.
 
 The issue numbers in this example are illustrative, not labelled data.
 
