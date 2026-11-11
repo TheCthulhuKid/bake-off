@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 import anthropic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from bakeoff.cases import Case
 from bakeoff.contract import Theme, TriageReport
@@ -44,6 +44,13 @@ class Verdict(BaseModel):
     score: int = Field(ge=1, le=5)
 
 
+class JudgeCacheError(ValueError):
+    """Raised when the judge's cache file is not a valid cache."""
+
+
+_CACHE = TypeAdapter(dict[str, Verdict])
+
+
 class Judgement(BaseModel):
     score: int | None
     # Priced when paid, as a run's cost is; zero for a cached score or no call.
@@ -56,9 +63,7 @@ class ThemeJudge:
     def __init__(self, client: anthropic.Anthropic, cache_path: Path) -> None:
         self._client = client
         self._cache_path = cache_path
-        self._cache: dict[str, dict] = (
-            json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
-        )
+        self._cache = _load_cache(cache_path)
 
     def score(self, report: TriageReport, case: Case, repo: Repo) -> Judgement:
         """Judge the report's themes; the score is ``None`` when there is nothing to judge.
@@ -71,7 +76,7 @@ class ThemeJudge:
         prompt = judge_prompt(report, case, repo)
         key = _cache_key(prompt)
         if key in self._cache:
-            return Judgement(score=self._cache[key]["score"], cost_usd=0.0)
+            return Judgement(score=self._cache[key].score, cost_usd=0.0)
         response = self._client.messages.parse(
             model=SETTINGS.model,
             max_tokens=16_000,
@@ -84,7 +89,7 @@ class ThemeJudge:
         if verdict is None:
             return Judgement(score=None, cost_usd=cost)
         # The reason is kept for the spot check by hand.
-        self._cache[key] = verdict.model_dump()
+        self._cache[key] = verdict
         self._save()
         return Judgement(score=verdict.score, cost_usd=cost)
 
@@ -92,8 +97,19 @@ class ThemeJudge:
         # Written after every new score through a temporary file, so an interrupted eval keeps
         # every score it paid for and never leaves a half-written cache.
         temporary = self._cache_path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self._cache, indent=1, sort_keys=True), encoding="utf-8")
+        entries = {key: verdict.model_dump() for key, verdict in self._cache.items()}
+        temporary.write_text(json.dumps(entries, indent=1, sort_keys=True), encoding="utf-8")
         temporary.replace(self._cache_path)
+
+
+def _load_cache(path: Path) -> dict[str, Verdict]:
+    """The verdicts already paid for; checked in full now, so a bad file fails before any run."""
+    if not path.exists():
+        return {}
+    try:
+        return _CACHE.validate_json(path.read_bytes())
+    except ValidationError as error:
+        raise JudgeCacheError(f"{path} is not a judge cache; fix or remove it: {error}") from error
 
 
 def _cache_key(prompt: str) -> str:

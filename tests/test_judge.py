@@ -6,7 +6,7 @@ import pytest
 from bakeoff.cases import Case
 from bakeoff.contract import Theme, TriageReport
 from bakeoff.fixtures import load_repo
-from bakeoff.judge import RUBRIC, Judgement, ThemeJudge, Verdict, judge_prompt
+from bakeoff.judge import RUBRIC, JudgeCacheError, Judgement, ThemeJudge, Verdict, judge_prompt
 from bakeoff.settings import SETTINGS
 
 CASE = Case(name="tiny-themes", repo="tiny", themes=[Theme(name="Crashes", issues=[1])])
@@ -72,3 +72,7 @@ def test_judge_scores_a_repeated_report_from_the_cache(judge_model, tmp_path):
     assert len(client.calls) == 1
     [entry] = json.loads(cache.read_text()).values()
     assert entry == VERDICT.model_dump()
+    # A cache that doesn't hold verdicts fails when the judge starts, naming the file.
+    cache.write_text(json.dumps({"key": {"reason": "no score"}}))
+    with pytest.raises(JudgeCacheError, match="cache.json is not a judge cache"):
+        ThemeJudge(client, cache)

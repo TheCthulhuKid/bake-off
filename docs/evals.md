@@ -118,7 +118,11 @@ returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
   it without a call. The file is rewritten through a temporary file after every new verdict, so
   an interrupted eval keeps every score it paid for. Changing the model or the rubric misses the
   cache rather than reusing old scores. A refusal is not cached, so it is asked again next time.
-  The file only grows, like `results/`.
+  The file only grows, like `results/`. Every entry is checked as a verdict when the judge
+  starts, which `bakeoff eval` does before the first run, so a corrupt or hand-edited file
+  raises `JudgeCacheError`, naming the file, before anything is spent. Only one eval should use
+  a cache file at a time: each judge holds the whole cache in memory and rewrites the file, so
+  two at once would each drop the other's new verdicts.
 - **Spend:** `cost_usd` prices the reply's input and output tokens with `Settings.cost` when the
   call is made, refusals included, and is 0 for a cached score or no call. `run_case` stores it
   on the run record as `judge_cost_usd`, apart from the run's `cost_usd`, which measures the
