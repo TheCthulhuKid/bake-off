@@ -173,6 +173,9 @@
 #     - step: hide_labels
 #       issues: [3647, 3560, 3571, 3553]
 #
+# pip-tools slices: consecutive thirds in fixture order, except #2096, moved into slice 3 to keep
+# the natural pair #2096/#1902 together (a maintainer found the same root cause).
+#
 # - name: pip-tools-slice-1
 #   base: pip-tools
 #   steps:
@@ -198,9 +201,8 @@
 #   base: pip-tools
 #   steps:
 #     - step: slice
-#       issues: [2143, 2140, 2139, 2135, 2125, 2124, 2123, 2117, 2115, 2114, 2103, 2096, 2094,
-#                2093, 2080, 2074, 2073, 2072, 2069, 2064, 2062, 2056, 2051, 2047, 2028, 2027,
-#                2025]
+#       issues: [2143, 2140, 2139, 2135, 2125, 2124, 2123, 2117, 2115, 2114, 2103, 2094, 2093,
+#                2080, 2074, 2073, 2072, 2069, 2064, 2062, 2056, 2051, 2047, 2028, 2027, 2025]
 #     - step: plant          # draft: seeded duplicate of #2047, to edit into your own words
 #       number: 90311
 #       title: Extra index only used for top-level requirements, not their dependencies
@@ -215,28 +217,28 @@
 #
 #         pip-tools 7.3.0, pip 24.0, Python 3.11, Linux.
 #     - step: hide_labels
-#       issues: [2025, 2093, 2027, 2103]
+#       issues: [2025, 2124, 2027, 2103]
 #
 # - name: pip-tools-slice-3
 #   base: pip-tools
 #   steps:
 #     - step: slice
-#       issues: [2012, 2010, 2002, 2000, 1997, 1987, 1929, 1928, 1924, 1902, 1889, 1886, 1883,
-#                1880, 1877, 1876, 1873, 1850, 1845, 1836, 1831, 1823, 1821, 1818, 1804, 1794,
-#                1792]
-#     - step: plant          # draft: seeded duplicate of #1902, to edit into your own words
+#       issues: [2096, 2012, 2010, 2002, 2000, 1997, 1987, 1929, 1928, 1924, 1902, 1889, 1886,
+#                1883, 1880, 1877, 1876, 1873, 1850, 1845, 1836, 1831, 1823, 1821, 1818, 1804,
+#                1794, 1792]
+#     - step: plant          # draft: seeded duplicate of #1792, to edit into your own words
 #       number: 90321
-#       title: Header lists a --config option even though no config file was used
+#       title: Packages from a private index are downloaded again on every compile
 #       body: |
-#         After upgrading pip-tools, the comment header in our compiled files includes a `--config`
-#         argument pointing at `pyproject.toml`, although that file has no `[tool.pip-tools]`
-#         section and nothing was read from it. The command shown in the header is therefore not
-#         the one we ran, and every regenerated file differs from the committed one.
+#         We compile against our company's package server with `pip-compile -i <our index>`.
+#         Every run downloads all the packages again, which takes several minutes, while
+#         compiling against PyPI reuses pip's cache and finishes in seconds. pip itself caches
+#         downloads from the same server fine: a second `pip install -i <our index>` of the
+#         same version doesn't download anything.
 #
-#         To reproduce: an empty `pyproject.toml` next to a `requirements.in`, then run
-#         `pip-compile requirements.in` and look at the header.
+#         Passing `--cache-dir` explicitly made no difference.
 #
-#         pip-tools 6.14.0, Python 3.11.
+#         pip-tools 7.3.0, pip 23.3, Python 3.11.
 #     - step: hide_labels
 #       issues: [1929, 1883, 1804, 1845]
 #
