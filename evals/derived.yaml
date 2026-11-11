@@ -25,34 +25,56 @@
 # planted texts are written, then rerun the script. Planted numbers start at 90001, above every
 # recorded issue, with a range of 100 for each group of entries.
 #
-# Click slices: consecutive thirds in fixture order. The natural pair #1370/#304 is in slice 3;
-# #3652 (slice 1) and #2778 (slice 2) are a natural pair split across slices: move one of them.
+# Click slices: consecutive thirds in fixture order, except #2778, moved into slice 1 to keep the
+# natural pair #3652/#2778 together. The other natural pair, #1370/#304, is in slice 3.
 #
 # - name: click-slice-1
 #   base: click
 #   steps:
 #     - step: slice
 #       issues: [3888, 3886, 3847, 3840, 3696, 3652, 3406, 3362, 3156, 3154, 3097, 3094, 3089,
-#                3081, 3077, 3076, 3036, 3022, 3016, 3010, 2992, 2917, 2882, 2881, 2875]
-#     - step: plant          # a seeded duplicate of an issue in this slice
+#                3081, 3077, 3076, 3036, 3022, 3016, 3010, 2992, 2917, 2882, 2881, 2875, 2778]
+#     - step: plant          # draft: seeded duplicate of #3362, to edit into your own words
 #       number: 90101
-#       title:
-#       body:
+#       title: Usage line wraps in the middle of long option names
+#       body: |
+#         Our tool has a lot of long-form options, and when the usage line in `--help` gets
+#         near the terminal width, Click splits an option name across two lines at a dash.
+#         With an 80-column terminal we get:
+#
+#             Usage: sync [OPTIONS] --source-dir DIR --skip-hidden-files --no-color-
+#                         output --dry-run
+#
+#         so `--no-color-output` is shown as `--no-color-` and `output`, which looks like two
+#         separate flags. I'd expect the wrap to happen between options, never inside one.
+#
+#         Click 8.2.1, Python 3.13 on Linux.
 #     - step: hide_labels
-#       issues: []           # 3 to 5 labelled issues in this slice
+#       issues: [2992, 3406, 3077, 3010]
 #
 # - name: click-slice-2
 #   base: click
 #   steps:
 #     - step: slice
-#       issues: [2853, 2847, 2835, 2834, 2824, 2823, 2801, 2786, 2783, 2781, 2778, 2771, 2768,
-#                2753, 2740, 2706, 2683, 2679, 2676, 2645, 2614, 2493, 2429, 2419, 2402, 2361]
-#     - step: plant
+#       issues: [2853, 2847, 2835, 2834, 2824, 2823, 2801, 2786, 2783, 2781, 2771, 2768, 2753,
+#                2740, 2706, 2683, 2679, 2676, 2645, 2614, 2493, 2429, 2419, 2402, 2361]
+#     - step: plant          # draft: seeded duplicate of #2429, to edit into your own words
 #       number: 90111
-#       title:
-#       body:
+#       title: lazy=True file default still checked on startup, but only on Windows
+#       body: |
+#         I have an option declared as
+#         `@click.option("--config", type=click.File("r", lazy=True), default="settings.ini")`
+#         and the file is only opened if the command actually needs it. On macOS and Linux the
+#         command runs fine when `settings.ini` doesn't exist. On our Windows CI runner the same
+#         command fails before doing anything:
+#
+#             Error: Invalid value for '--config': 'settings.ini': No such file or directory
+#
+#         So it looks like `lazy` is ignored for the existence check on Windows.
+#
+#         Click 8.1.7, Python 3.11, GitHub Actions windows-latest.
 #     - step: hide_labels
-#       issues: []
+#       issues: [2614, 2676, 2753, 2679]
 #
 # - name: click-slice-3
 #   base: click
@@ -60,12 +82,23 @@
 #     - step: slice
 #       issues: [2360, 2303, 2299, 2205, 2184, 2154, 2033, 1997, 1574, 1428, 1378, 1370, 1322,
 #                1279, 1269, 944, 928, 742, 730, 680, 590, 561, 531, 473, 373, 304]
-#     - step: plant
+#     - step: plant          # draft: seeded duplicate of #1269, to edit into your own words
 #       number: 90121
-#       title:
-#       body:
+#       title: Option after an argument is read as the next command in a chained group
+#       body: |
+#         In a group created with `chain=True`, a subcommand that takes an argument and an
+#         option can't be given the option after the argument:
+#
+#             $ tool add notes.txt --tag work
+#             Error: No such command '--tag'.
+#
+#         `tool add --help` lists `--tag` correctly, and if I remove the argument from `add`,
+#         `--tag` is accepted. The docs say chained commands can take options and arguments as
+#         usual, so this looks like a bug in how the chain splits the command line.
+#
+#         Click 8.1.7, Python 3.12.
 #     - step: hide_labels
-#       issues: []
+#       issues: [2303, 2299, 944, 1322]
 #
 # - name: black-slice-1
 #   base: black
