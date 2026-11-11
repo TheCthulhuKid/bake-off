@@ -31,7 +31,11 @@ def test_records_issues_skipping_pull_requests_and_pages_through_comments(monkey
     pages = {
         ("/repos/o/r/issues", "1"): ([issue, pull], None),
         ("/repos/o/r/issues/1/comments", "1"): ([comment] * 100, f"{comments_url}?page=2"),
-        ("/repos/o/r/issues/1/comments", "2"): ([comment] * 30, None),
+        # A deleted account's comment has no user; GitHub shows it as by "ghost".
+        ("/repos/o/r/issues/1/comments", "2"): (
+            [comment] * 29 + [{"user": None, "body": "+1"}],
+            None,
+        ),
     }
     requested = []
 
@@ -50,6 +54,7 @@ def test_records_issues_skipping_pull_requests_and_pages_through_comments(monkey
     assert result.exit_code == 0, result.output
     [recorded] = load_repo("r").issues
     assert (recorded.number, recorded.body, len(recorded.comments)) == (1, "", 130)
+    assert recorded.comments[-1].author == "ghost"
     assert requested == list(pages)
     # A second recording refuses before making any request, unless forced.
     again = CliRunner().invoke(record_issues.main, ["o/r", "--name", "r"])

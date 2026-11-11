@@ -1,0 +1,180 @@
+{
+  "impl": "anthropic",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output formatting and customization",
+        "issues": [
+          3652,
+          2778,
+          3362,
+          3097,
+          3094,
+          3089,
+          3016,
+          3010,
+          2882,
+          2881,
+          2683,
+          2679,
+          561,
+          373,
+          3022,
+          2781,
+          2419,
+          944
+        ]
+      },
+      {
+        "name": "Parser behaviour, rewrite and Click 9.0 deprecations",
+        "issues": [
+          3156,
+          3154,
+          2205,
+          590,
+          2834,
+          2835,
+          2824,
+          2786,
+          2771,
+          2768,
+          2753,
+          2992,
+          742,
+          730,
+          1269,
+          1322,
+          1279,
+          473,
+          680,
+          2402,
+          1574,
+          928,
+          531,
+          2853,
+          2740,
+          2706,
+          2783
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2917,
+          2847,
+          2614,
+          2303,
+          2184,
+          2299
+        ]
+      },
+      {
+        "name": "Prompts, terminal UI and platform-specific utilities",
+        "issues": [
+          1370,
+          304,
+          2875,
+          3840,
+          3886,
+          2154,
+          2429,
+          2645,
+          1378,
+          3888,
+          1428
+        ]
+      },
+      {
+        "name": "Typing, public API cleanup and documentation",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          3036,
+          2493,
+          3081,
+          3077,
+          3076,
+          2823,
+          2801,
+          2676
+        ]
+      },
+      {
+        "name": "Async support and embedding Click",
+        "issues": [
+          2033,
+          2360,
+          2361,
+          1997
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 3652,
+        "b": 2778,
+        "reason": "Both ask for '...' to be added automatically to an option's metavar in help output when multiple=True."
+      },
+      {
+        "a": 1370,
+        "b": 304,
+        "reason": "Both report that confirm prompts read from stdin when it is piped in, instead of reading from the terminal."
+      }
+    ],
+    "top_issues": [
+      {
+        "number": 3154,
+        "reason": "Tracking issue for the Click 9.0 release; it decides which breaking changes go in and in what order."
+      },
+      {
+        "number": 3156,
+        "reason": "Removing deprecated code is a concrete task that blocks the 9.0 release."
+      },
+      {
+        "number": 2847,
+        "reason": "A user-facing bug: completion breaks for long options written with '='."
+      },
+      {
+        "number": 3840,
+        "reason": "New, untriaged bug report: click.edit fails on Windows about half the time and needs a maintainer to decide whether it is Click's bug or a Windows one."
+      },
+      {
+        "number": 3362,
+        "reason": "A bug that produces wrong usage output: write_usage line-breaks options at hyphens."
+      }
+    ],
+    "suggested_labels": [
+      {
+        "number": 3888,
+        "labels": [
+          "parsing"
+        ]
+      },
+      {
+        "number": 3886,
+        "labels": [
+          "prompt"
+        ]
+      },
+      {
+        "number": 3840,
+        "labels": [
+          "prompt"
+        ]
+      }
+    ]
+  },
+  "stats": {
+    "tool_calls": 15,
+    "model_requests": 6,
+    "input_tokens": 77496,
+    "output_tokens": 2270,
+    "max_tool_calls": 25,
+    "max_model_requests": 40,
+    "timeout": 900.0,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}

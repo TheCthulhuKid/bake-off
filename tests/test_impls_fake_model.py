@@ -7,17 +7,28 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic_ai.profiles.anthropic import anthropic_model_profile
 
 from bakeoff import tools
+from bakeoff.contract import IncompleteReport, InvalidReport, TopIssue, TriageReport
 from bakeoff.impls import get_triage
 from bakeoff.prompt import REPORT_PROMPT, SYSTEM_PROMPT
 from bakeoff.settings import SETTINGS
-from bakeoff.telemetry import ToolLimitExceeded, collect
+from bakeoff.telemetry import RunLimitExceeded, ToolLimitExceeded, collect
 
 
 def test_pydanticai_returns_report_and_records_stats(pydanticai_model):
+    respond, seen_tokens = pydanticai_model.function, []
+
+    def respond_and_note_tokens(messages, info):
+        seen_tokens.append(stats.input_tokens)
+        return respond(messages, info)
+
+    pydanticai_model.function = respond_and_note_tokens
     with collect() as stats:
         report = get_triage("pydanticai")("tiny")
     assert report == pydanticai_model.report
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 300, 30)
+    # Usage is recorded as each reply arrives, so a run abandoned at its timeout is still priced.
+    assert seen_tokens == [0, 100, 200]
+    assert stats.model_requests == 3 and not stats.hit_limit
     assert pydanticai_model.seen.instructions == SYSTEM_PROMPT
     # A dict is sent to the API as an object that can only be {}.
     schema = pydanticai_model.seen.output_tools[0].parameters_json_schema
@@ -27,12 +38,22 @@ def test_pydanticai_returns_report_and_records_stats(pydanticai_model):
         assert tool.description in inspect.getdoc(getattr(tools, tool.name))
 
 
-def test_langgraph_returns_report_and_records_stats(langgraph_model):
+def test_langgraph_returns_report_and_records_stats(langgraph_model, monkeypatch):
+    generate, seen_tokens = type(langgraph_model)._generate, []
+
+    def generate_and_note_tokens(self, messages, **kwargs):
+        seen_tokens.append(stats.input_tokens)
+        return generate(self, messages, **kwargs)
+
+    monkeypatch.setattr(type(langgraph_model), "_generate", generate_and_note_tokens)
     with collect() as stats:
         report = get_triage("langgraph")("tiny")
     assert report == langgraph_model.report
     # One more model call than PydanticAI: analyse runs after fetch ends.
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 400, 40)
+    # Usage is recorded as each reply arrives, so a run abandoned at its timeout is still priced.
+    assert seen_tokens == [0, 100, 200, 300]
+    assert stats.model_requests == 4 and not stats.hit_limit
     assert langgraph_model.seen[0].content == SYSTEM_PROMPT
     # The API rejects a report call that ends on the model's own reply.
     assert langgraph_model.seen[-1].content == REPORT_PROMPT
@@ -43,10 +64,12 @@ def test_langgraph_returns_report_and_records_stats(langgraph_model):
 
 
 def test_anthropic_returns_report_and_records_stats(anthropic_model):
-    with collect() as stats:
+    # A cap of exactly the run's requests: the final reply sends none, so it must not count one.
+    with collect(max_model_requests=3) as stats:
         report = get_triage("anthropic")("tiny")
     assert report == anthropic_model.report
     assert (stats.tool_calls, stats.input_tokens, stats.output_tokens) == (2, 300, 30)
+    assert stats.model_requests == 3 and not stats.hit_limit
     # Under message threads, later requests leave out the system prompt and tools.
     first = anthropic_model.sent[0]
     assert first["system"] == SYSTEM_PROMPT
@@ -68,3 +91,36 @@ def test_tool_limit_ends_the_run(impl, request):
         get_triage(impl)("tiny")
     # The two turns before the limit still count towards cost.
     assert (stats.input_tokens, stats.output_tokens) == (200, 20)
+
+
+# Each impl reports its requests through its own hook, so each needs a case.
+@pytest.mark.parametrize("impl", ["pydanticai", "langgraph", "anthropic"])
+def test_request_limit_ends_the_run(impl, request):
+    request.getfixturevalue(f"{impl}_model")
+    with collect(max_model_requests=1) as stats, pytest.raises(RunLimitExceeded):
+        get_triage(impl)("tiny")
+    assert (stats.model_requests, stats.limit_fired) == (1, "model_requests")
+    # The one request sent still counts towards cost.
+    assert (stats.input_tokens, stats.output_tokens) == (100, 10)
+
+
+# Each impl turns its framework's validation failure into InvalidReport its own way.
+@pytest.mark.parametrize("impl", ["pydanticai", "langgraph", "anthropic"])
+def test_an_invalid_report_raises_invalid_report(impl, request):
+    # model_construct skips validation, so it can build the six top issues a model might send.
+    request.getfixturevalue(f"{impl}_model").report = TriageReport.model_construct(
+        themes=[],
+        duplicates=[],
+        top_issues=[TopIssue(number=1, reason="r")] * 6,
+        suggested_labels=[],
+    )
+    with collect(), pytest.raises(InvalidReport):
+        get_triage(impl)("tiny")
+
+
+# Each impl learns from its framework that the reply stopped early in its own way.
+@pytest.mark.parametrize("impl", ["pydanticai", "langgraph", "anthropic"])
+def test_a_cut_off_report_raises_incomplete_report(impl, request):
+    request.getfixturevalue(f"{impl}_model").cut_off = True
+    with collect(), pytest.raises(IncompleteReport):
+        get_triage(impl)("tiny")

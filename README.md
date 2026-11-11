@@ -19,11 +19,18 @@ framework; `docs/fairness.md` lists the framework defaults that still differ.
 
 ## Metrics
 
-The full eval runs each case three times per implementation and compares schema validity,
-citation validity, duplicate precision and recall against hand-labelled pairs, theme quality
-(an LLM judge, spot-checked by hand), resistance to prompt injection in issue text, latency
-(p50 and p95), cost from token counts, tool calls (the mean, and runs that hit the limit), and
-the size of each `impls/*.py` file.
+The full eval runs each case three times per implementation, the implementations taking turns,
+and compares schema validity, citation validity, duplicate precision and recall against
+hand-labelled pairs, label hit rate, top-issue precision, theme quality (an LLM judge,
+spot-checked by hand), resistance to prompt injection in issue text, latency (p50 and p95),
+cost from token counts, tool calls (the mean, and runs that hit a limit), and the size of each
+`impls/*.py` file.
+
+Schema validity counts only reports that came back or failed validation. A run that ended
+for another reason, such as a run limit, the timeout, an API error or a reply cut off before a
+whole report, is counted as a failed run instead. Runs whose report names no top issues are
+counted on their own, since top-issue precision can't measure them. `docs/evals.md` defines
+every score.
 
 ## Results
 
@@ -60,6 +67,26 @@ One run of an implementation on a recorded repo, saved to a new
 ```
 
 `--out` also takes a full path ending in `.json`. Existing files are never overwritten.
+
+The eval runs every implementation on the cases in `evals/cases.yaml`, taking turns on each case
+and repeat, and saves one new `results/<UTC timestamp>-<impl>.json` per implementation. It
+checks the cases against their fixtures and the output paths before the first run:
+
+```sh
+.venv/bin/bakeoff eval --repeats 3            # all implementations, all cases
+.venv/bin/bakeoff eval --repo click --judge   # one repo first, themes scored by the LLM judge
+```
+
+`--impl` runs one implementation, and `--cases` and `--out` point at another cases file or
+results directory. The judge costs extra and caches its verdicts in `evals/judge-cache.json`.
+
+The comparison tables come from the results files alone, with no model call, as Markdown:
+
+```sh
+.venv/bin/bakeoff report results/<UTC timestamp>-*.json
+```
+
+`docs/evals.md` describes the cases, the scores, the results files and the report.
 
 Implementations are registered by name in `src/bakeoff/impls/__init__.py`; `bakeoff run --help`
 lists them.

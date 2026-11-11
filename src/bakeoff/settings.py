@@ -34,9 +34,13 @@ MODELS = {
 class Settings(BaseSettings):
     model: str = "claude-opus-5-5"
     effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
-    max_tool_calls: int = 25
-    body_limit: int = 4000
-    page_size: int = 30
+    # Positive, since a limit of 0 fires on the first call and a page size of 0 can't page.
+    max_tool_calls: int = Field(default=25, gt=0)
+    max_model_requests: int = Field(default=40, gt=0)
+    # Seconds. A guess: the smoke runs didn't record latency, so check it against the first evals.
+    run_timeout: float = Field(default=900, gt=0)
+    body_limit: int = Field(default=4000, gt=0)
+    page_size: int = Field(default=30, gt=0)
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
     github_token: SecretStr | None = Field(default=None, validation_alias="GITHUB_TOKEN")
 

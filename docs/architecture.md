@@ -3,24 +3,31 @@
 ```text
 src/bakeoff/
   contract.py      TriageReport and friends: the output every implementation returns
-  settings.py      model, effort, tool-call limit, truncation limit, prices and max output per model
+  settings.py      model, effort, run limits, truncation limit, prices and max output per model
   prompt.py        the shared system prompt, opening user message and report prompt
   fixtures.py      loads recorded repo data from evals/repos/<name>/issues.json
   tools.py         list_issues, get_issue, search_issues over fixture data
-  telemetry.py     per-run collector for tool calls and token usage
+  telemetry.py     per-run collector for tool calls, model requests, token usage and run limits
   impls/           one file per framework, each exposing triage(repo) -> TriageReport
-  runner.py        runs an implementation once on a recorded repo and collects its stats
-  cli.py           bakeoff run; input and output handling only
+  runner.py        runs an implementation on a recorded repo or an eval case, with its stats
+  cases.py         Case and load_cases: the hand-labelled eval cases (docs/evals.md)
+  scoring.py       Scores, score_run and the mean and percentile helpers (docs/evals.md)
+  judge.py         ThemeJudge: the LLM judge for theme quality, with its on-disk cache
+  provenance.py    prompt hash, git commit and code size recorded with each eval
+  report.py        summarise and render: the comparison tables from results files
+  cli.py           bakeoff run, eval and report; input and output handling only
 evals/
   repos/<name>/    recorded issues, one directory per fixture repo
+  cases.yaml       hand-labelled ground truth per case (not labelled yet)
+  judge-cache.json the judge's verdicts, created by the first judged eval
 results/           saved runs, never overwritten
 scripts/           record_issues.py, which records a fixture from GitHub
 tests/             offline; frameworks run against fake models
 ```
 
-The eval harness will add `evals/cases.yaml` (hand-labelled ground truth per case),
-`evals/scoring.py` (metrics over saved runs), run timings, and the `bakeoff eval` and
-`bakeoff report` commands.
+`evals/` holds data only, since only `src/bakeoff` is packaged; the eval harness's code is
+under `src/bakeoff/`. `docs/evals.md` describes the cases, scores, judge, results files and
+report.
 
 ## Layers
 
@@ -45,10 +52,18 @@ needs a source checkout or an editable install, which is what `uv sync` gives.
 | `model` | `BAKEOFF_MODEL` | `claude-opus-5-5` | implementations, `cost()`, `max_output_tokens()` |
 | `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
+| `max_model_requests` | `BAKEOFF_MAX_MODEL_REQUESTS` | 40 | `telemetry.py` request cap |
+| `run_timeout` | `BAKEOFF_RUN_TIMEOUT` | 900 seconds, still a guess | `telemetry.py` deadline, `run_case`'s timeout thread |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly as `Settings.api_key()` |
 | `github_token` | `GITHUB_TOKEN` | none | `scripts/record_issues.py` |
+
+The two caps, `run_timeout`, `body_limit` and `page_size` must be greater than 0. An invalid
+value, from the environment or `.env`, fails when `SETTINGS` is built at import, rather than
+part-way through a run. The tests don't depend on local settings: `tests/conftest.py` puts every
+setting except the test API key back to its default before any test module is imported, so a
+local `.env` or an exported `BAKEOFF_` variable can't change what the tests check.
 
 `MODELS` maps each supported model to a `ModelSpec`: input and output price per million tokens,
 and the maximum output that PydanticAI and LangChain send as `max_tokens` when none is set.
@@ -70,13 +85,28 @@ JSON schema, which can only express that dict as an empty object; see `docs/fair
 report that lists an issue in `suggested_labels` more than once is rejected, as the dict could
 not hold it twice.
 
+`InvalidReport`, a `ValueError`, is the one exception for a final report that fails
+validation, whichever framework produced it, so the runner can tell an invalid report from a
+run that failed for another reason. `parse_report(text)` validates a report sent as JSON text
+and raises it, with pydantic's `ValidationError` as its cause. `IncompleteReport`, a
+`RuntimeError`, is the one exception for a final reply that stopped before it held a whole
+report: cut off at the output limit or the context window, or refused (`INCOMPLETE_STOPS`).
+That says nothing about the schema, so the runner records it as unmeasured.
+`parse_final_reply(text, stop_reason)` raises it for those stop reasons and otherwise calls
+`parse_report`, for the frameworks that hand back the final reply's text.
+
 ## Fixtures
 
 `evals/repos/<name>/issues.json` is a `Repo`: the fixture name, the GitHub `owner/repo` it was
 recorded from, the recording time, and a list of open issues with number, title, body, labels,
 state and comments (author and body). `fixtures.load_repo(name)` reads it from `FIXTURE_ROOT`,
 which is read at call time, so the `tiny_root` test fixture repoints every caller, the tools
-included, at `tests/fixtures/` with one monkeypatch.
+included, at `tests/fixtures/` with one monkeypatch. A fixture name must be a single directory
+name: `fixture_path` rejects `..`, path separators and absolute paths with `UnknownRepoError`.
+The tools pass the model's repo argument straight through, and issue text is untrusted, so
+without this a prompt injection could point a tool at an `issues.json` outside the fixture root;
+with it, the tool returns its usual "does not exist" error. The recording script writes through
+the same function, so it can't write outside the root either.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
 and is run by hand. It uses `httpx2`, which is in the dev dependency group, so it needs
@@ -110,14 +140,24 @@ turns into an error message; the tools and the CLI catch only that, not other mi
   every framework. The docstring states the limit of 20 literally, as prompt text, and a test
   checks it against `SEARCH_LIMIT`.
 
-`telemetry.py` collects one `RunStats` per run: tool calls, input and output tokens, the
-tool-call limit, and `limit_fired` (`hit_limit` is derived from it). A run wraps its work in
-`collect()`. Every tool calls `record_tool_call()`, which raises `ToolLimitExceeded` on the call
-after the limit, and implementations pass token counts to `record_usage()`. The limit check and
-the count happen under one lock, since PydanticAI and LangGraph run a reply's tool calls in
-threads that share the run's `RunStats`. Outside `collect()` both are no-ops, so the tools work
-from a shell. For a framework that turns a tool's exception into an error result for the model,
-`raise_if_limit_fired()` raises `ToolLimitExceeded` again once the limit has fired.
+`telemetry.py` collects one `RunStats` per run: tool calls, model requests, input and output
+tokens, the three limits (`max_tool_calls`, `max_model_requests` and `timeout` in seconds), and
+`limit_fired` (`hit_limit` is derived from it). A run wraps its work in `collect()`, which takes
+each limit as an optional argument, defaulting to `SETTINGS`, and starts the run's deadline on
+the monotonic clock. The deadline is kept in its own context variable beside the stats, not in
+`RunStats`, so the stats are plain data that load back from a results file unchanged, and code
+run in a copied context sees both. Every tool calls `record_tool_call()`, which raises
+`ToolLimitExceeded` on the call after the limit. Every implementation calls
+`record_model_request()` just before each model request; it raises `RunLimitExceeded` once the
+deadline has passed (`limit_fired = "timeout"`) or on the request after the cap
+(`"model_requests"`). Implementations pass token counts to `record_usage()`. `ToolLimitExceeded`
+is a subclass of `RunLimitExceeded`, so one `except` catches every limit. Each limit check and
+its count happen under one lock, since PydanticAI and LangGraph run a reply's tool calls in
+threads that share the run's `RunStats`. Outside `collect()` all three are no-ops, so the tools
+work from a shell. For a framework that turns a tool's exception into an error result for the
+model, `raise_if_limit_fired()` raises the error for whichever limit fired again.
+
+The deadline is checked only before a request, so it can't end a request that hangs.
 
 ## Prompt
 
@@ -158,24 +198,41 @@ and list it below.
 - `impls/pydanticai_impl.py`: one module-level `Agent` with `output_type=TriageReport`,
   `SYSTEM_PROMPT` as its instructions, the three tools passed as plain functions (PydanticAI
   takes the description from the docstring and the parameter descriptions from its `Args`
-  section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. Usage is read
-  from a `RunUsage` passed into `run_sync`, which PydanticAI updates as the run goes.
+  section), and an `AnthropicModel` with `anthropic_effort` from `SETTINGS`. A `Hooks`
+  capability calls `record_model_request()` in `before_model_request`, and records each
+  reply's input and output tokens in `after_model_request`, so a run abandoned at its timeout
+  still reports what it spent. The hooks are async, so PydanticAI runs them on the event loop
+  rather than in a worker thread, and an exception from them ends `run_sync` unchanged. When
+  the report still fails validation after PydanticAI's output retry, `triage` re-raises the
+  `UnexpectedModelBehavior` as `InvalidReport`. It tells that case apart by the message prefix
+  `OUTPUT_RETRIES_EXCEEDED`, since running out of tool retries raises the same class. A report
+  cut off at the output limit (`IncompleteToolCall`) or refused (`ContentFilterError`) is
+  re-raised as `IncompleteReport`; any other `UnexpectedModelBehavior` propagates unchanged.
 - `impls/langgraph_impl.py`: a `StateGraph` over a messages state with three nodes. `fetch`
   calls the model bound to the three tools and loops through a `ToolNode` while the reply has
-  tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with
-  the same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates
-  the reply's JSON text as a `TriageReport` and raises if it is invalid. `build_graph(model)`
-  builds it, and the module-level `graph` uses a `ChatAnthropic` with `effort` from
-  `SETTINGS`. Usage is collected by a `UsageMetadataCallbackHandler` passed in the run config,
-  and recorded in a `finally`.
+  tool calls; `analyse` makes one more call over the conversation plus `REPORT_PROMPT`, with the
+  same tools, `tool_choice` `none` and `response_format=TriageReport`; `report` validates the
+  reply's JSON text with `parse_final_reply`, passing the `stop_reason` `ChatAnthropic` puts
+  in the reply's `response_metadata`, so a cut-off or refused reply raises `IncompleteReport`
+  and an invalid one `InvalidReport`.
+  `build_graph(model)` builds it, and the module-level `graph` uses a `ChatAnthropic` with
+  `effort` from `SETTINGS`. `fetch` and `analyse`, the only nodes that call the model, each
+  call `record_model_request()` first, so a limit raises before the request and ends the graph
+  run, and record the reply's `usage_metadata` as soon as it arrives, so a run abandoned at its
+  timeout still reports what it spent.
 - `impls/anthropic_impl.py`: the Anthropic SDK's beta tool runner, streamed, over the three
   tools wrapped with `beta_tool` (description from the docstring, parameter descriptions from
   its `Args` section) and with `as_json`, which returns their dicts as JSON text, with
   `SYSTEM_PROMPT` as `system` and the strict `TriageReport` schema from `transform_schema` in
   `output_config.format`, and `max_tokens` from `Settings.max_output_tokens()`. The runner
   turns tool exceptions into error results, so `triage` calls `telemetry.raise_if_limit_fired()`
-  after each reply's tools have run. Usage is recorded from each reply as it arrives, and the
-  last reply's text is validated as a `TriageReport`.
+  after each reply's tools have run. `triage` calls `record_model_request()` once before the
+  loop and again after a reply only when the runner will send another request: the reply's
+  `stop_reason` is `tool_use` and `generate_tool_call_response()` has calls to answer. A reply
+  cut off at `max_tokens` can hold a `tool_use` block, but the runner stops there, so its tools
+  are not run and no request is counted. Usage is recorded from each reply as it arrives, and
+  the last reply's text is validated with `parse_final_reply` and its `stop_reason`, so a
+  cut-off or refused reply raises `IncompleteReport` and an invalid one `InvalidReport`.
 
 Registered as `pydanticai`, `langgraph` and `anthropic`.
 
@@ -188,8 +245,58 @@ file. `runner.result_path` picks the file: a path ending in `.json` is used as g
 other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
 `YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
 before the run starts, so a bad or taken path costs no tokens. Errors from the run itself,
-including `ToolLimitExceeded`, propagate; the eval harness will record them instead and add
-`eval` and `report`.
+including `ToolLimitExceeded`, propagate.
+
+`runner.run_case(impl, case, repeat, judge=None)` is the eval's unit: one run of an
+implementation on one case. Like `run_once` it loads the case's repo and imports the
+implementation first, so an unknown repo or impl raises before any model is called. It then runs
+`triage` inside `collect()` and returns a `RunRecord`: case name, repeat number, report or
+`None`, error or `None`, `schema_valid`, stats, `latency_seconds`, `cost_usd`, `scores`,
+`judge_cost_usd` and `judge_error`. Any `Exception` from the run, a run limit included, is
+recorded as the error text `"<ExceptionName>: <message>"` rather than raised, so one failed run
+never stops an eval; `KeyboardInterrupt` still stops it. `schema_valid` is `True` when a report
+came back, `False` when the run raised the contract's `InvalidReport`, and `None` for any other
+failure, which says nothing about the schema. The report is scored with `score_run` against the
+fixture's issue numbers, and a run with no report gets an empty `Scores()`. Given a
+`ThemeJudge`, `run_case` asks it for `theme_score` once the run is timed, for a run with a
+report only, and stores what the call spent as `judge_cost_usd`, apart from the run's
+`cost_usd`. A judge that raises is recorded as `judge_error`, leaving `theme_score` `None` and
+the run's other scores standing, so a judge failure never loses a run that was paid for. Cost is
+priced when the run is recorded, since `Settings.cost` prices the current model and a report
+over older files could not. Latency comes from a `clock` argument, `time.monotonic` by default,
+so tests can set it.
+
+`runner.run_eval(impls, cases, repeats, judge=None, on_record=...)` runs `run_case` for each
+case in turn, `repeats` times each (repeats numbered from 0), and the implementations take
+turns: every implementation runs a case's repeat before the next repeat starts. A slow spell on
+the API then falls on all of them, rather than on one implementation's whole eval, which would
+show up as a latency difference between frameworks. It returns one `EvalRun` per
+implementation, in the order given: the impl, the model and effort from `SETTINGS`, `started_at`
+in UTC and that implementation's records in run order. `on_record(impl, record)` is called as
+each record is made, so the CLI can show progress without owning the loop. `started_at` comes
+from a `now` argument, so tests can set it. Because the runs are interleaved, every
+implementation's results are held until the last run, so a crash outside a run loses all of
+them, not only one implementation's.
+
+`bakeoff eval` runs the eval. Before the first run it checks everything that can fail cheaply,
+so a mistake costs no tokens: `--out` must be a directory, the cases file must load, the cases
+left after any `--repo` filter must pass `check_cases`, and no implementation's results file
+may exist yet. It then calls `run_eval` with every implementation (or the one `--impl` names),
+prints one line per run as it lands, and saves one file per implementation with `save_eval`.
+With `--judge` it builds an Anthropic client and a `ThemeJudge` over `evals/judge-cache.json`.
+
+The run's own deadline is only checked between model requests, so `run_case` also runs
+`triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.
+If the thread is still running, it sets `limit_fired = "timeout"` on the run's stats and
+records the run as failed with the deadline's `RunLimitExceeded` message; the abandoned run
+stops at its own next limit check. Without this, a request that hangs, such as one from
+`ChatAnthropic`, which sets no request timeout, would hold the eval forever.
+- A daemon thread, not a `ThreadPoolExecutor`, whose worker threads are joined at interpreter
+  exit, so one hung request would stop the process from ever exiting.
+- The thread runs `triage` in a `contextvars.copy_context()` of the caller, since a new thread
+  starts with an empty context and would not see the run's collector or deadline.
+- The record holds a `model_copy()` of the stats, since an abandoned run keeps updating the
+  original in the background.
 
 ## Tests
 

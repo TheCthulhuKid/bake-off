@@ -1,7 +1,14 @@
 import pytest
 
 from bakeoff.settings import SETTINGS
-from bakeoff.telemetry import ToolLimitExceeded, collect, record_usage
+from bakeoff.telemetry import (
+    RunLimitExceeded,
+    RunStats,
+    ToolLimitExceeded,
+    collect,
+    record_model_request,
+    record_usage,
+)
 from bakeoff.tools import SEARCH_LIMIT, get_issue, list_issues, search_issues
 
 pytestmark = pytest.mark.usefixtures("tiny_root")
@@ -48,3 +55,16 @@ def test_tool_limit_raises_inside_collect_and_usage_adds_up():
     # Outside collect() nothing is counted or limited.
     search_issues("tiny", "crash")
     assert stats.tool_calls == 2
+
+
+@pytest.mark.parametrize(
+    ("limits", "fired", "sent"),
+    [({"max_model_requests": 1}, "model_requests", 1), ({"timeout": 0}, "timeout", 0)],
+)
+def test_model_request_limits_raise_before_the_request(limits, fired, sent):
+    with collect(**limits) as stats, pytest.raises(RunLimitExceeded):
+        record_model_request()
+        record_model_request()
+    assert (stats.model_requests, stats.limit_fired) == (sent, fired)
+    # Stats are saved in results files, so loading them back must give the same stats.
+    assert RunStats.model_validate_json(stats.model_dump_json()) == stats
