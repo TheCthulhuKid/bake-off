@@ -1,0 +1,13 @@
+# Derived fixtures, built by scripts/derive_fixtures.py from the recorded fixtures.
+
+- name: click-empty
+  base: click
+  steps:
+    - step: slice
+      issues: []
+
+- name: click-two-issues
+  base: click
+  steps:
+    - step: slice
+      issues: [3077, 2847]
