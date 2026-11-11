@@ -149,6 +149,9 @@ returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
   implementation only. A judge that raises, such as on an API error or a verdict outside 1 to 5,
   is recorded as the record's `judge_error` and leaves `theme_score` `None`; what a failed call
   spent is not known, since the SDK raises before returning the usage.
+- **Reason:** every judged record keeps the verdict's reason as `judge_reason`, from the reply
+  or from the cache, so a score can be checked by hand from the results file alone. It is
+  `None` when the run wasn't judged or no verdict came back.
 
 ## Results files
 

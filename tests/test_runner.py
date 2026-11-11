@@ -19,7 +19,7 @@ REPORT = TriageReport(
 
 
 class StubJudge:
-    """Scores every report 4 for $0.50, or raises ``error`` if given."""
+    """Scores every report 4 for $0.50 with a reason, or raises ``error`` if given."""
 
     def __init__(self, error: Exception | None = None):
         self.error = error
@@ -27,7 +27,7 @@ class StubJudge:
     def score(self, report, case, repo) -> Judgement:
         if self.error:
             raise self.error
-        return Judgement(score=4, cost_usd=0.5)
+        return Judgement(score=4, cost_usd=0.5, reason="Clear groupings.")
 
 
 @pytest.fixture
@@ -57,6 +57,7 @@ def test_run_case_records_the_report_scores_and_cost(triage_with, monkeypatch):
     assert (record.latency_seconds, record.cost_usd) == (2.5, pytest.approx(3.0))
     # The judge's spend is kept apart from the run's own cost.
     assert (record.judge_cost_usd, record.judge_error) == (0.5, None)
+    assert record.judge_reason == "Clear groupings."
     # A judge that fails leaves the run and its other scores standing.
     failed = run_case("fake", CASE, repeat=3, judge=StubJudge(RuntimeError("judge down")))
     assert (failed.schema_valid, failed.scores.top_issue_precision) == (True, 1.0)

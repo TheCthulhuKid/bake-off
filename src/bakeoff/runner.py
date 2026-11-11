@@ -50,8 +50,8 @@ class RunRecord(BaseModel):
     latency_seconds: float
     cost_usd: float
     scores: Scores
-    # The judge's spend on this run's themes, apart from the run's own cost; 0 when not judged.
     judge_cost_usd: float
+    judge_reason: str | None
     judge_error: str | None
 
 
@@ -101,6 +101,7 @@ def run_case(
         cost_usd=SETTINGS.cost(recorded.input_tokens, recorded.output_tokens),
         scores=scores,
         judge_cost_usd=judgement.cost_usd,
+        judge_reason=judgement.reason,
         judge_error=judge_error,
     )
 

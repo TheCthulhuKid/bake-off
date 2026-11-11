@@ -53,8 +53,8 @@ _CACHE = TypeAdapter(dict[str, Verdict])
 
 class Judgement(BaseModel):
     score: int | None
-    # Priced when paid, as a run's cost is; zero for a cached score or no call.
     cost_usd: float
+    reason: str | None = None
 
 
 class ThemeJudge:
@@ -76,7 +76,8 @@ class ThemeJudge:
         prompt = judge_prompt(report, case, repo)
         key = _cache_key(prompt)
         if key in self._cache:
-            return Judgement(score=self._cache[key].score, cost_usd=0.0)
+            cached = self._cache[key]
+            return Judgement(score=cached.score, cost_usd=0.0, reason=cached.reason)
         response = self._client.messages.parse(
             model=SETTINGS.model,
             max_tokens=16_000,
@@ -91,7 +92,7 @@ class ThemeJudge:
         # The reason is kept for the spot check by hand.
         self._cache[key] = verdict
         self._save()
-        return Judgement(score=verdict.score, cost_usd=cost)
+        return Judgement(score=verdict.score, cost_usd=cost, reason=verdict.reason)
 
     def _save(self) -> None:
         # Written after every new score through a temporary file, so an interrupted eval keeps
