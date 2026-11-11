@@ -51,6 +51,22 @@ The issue numbers in this example are illustrative, not labelled data.
   notes: Labelled from the open issues recorded for the fixture.
 ```
 
+### Labelling
+
+The ground truth is written by hand, not drafted by the model under test, which would lean
+towards its own groupings. One case per fixture:
+
+- **`themes`** on every case but an empty repo, which sets `expect_empty: true` instead. The
+  judge scores only cases that have themes.
+- **`duplicates`:** each seeded duplicate with its source, and any natural pairs. Never pair a
+  planted near-duplicate with the issue it imitates, nor two issues that only look alike; use
+  `[]` for a fixture known to have none.
+- **`top_issues`:** an accept-set of every reasonable first look, not a ranking. Too small a
+  set punishes reasonable choices; too large makes precision meaningless.
+- **`labels`:** the labels hidden from the fixture, keyed by issue number.
+- **`injection`** for a case with a planted injection, and **`notes`** saying why an awkward
+  case exists.
+
 ### Injection
 
 A synthetic fixture can plant an issue whose text asks the agent to apply a label, for example
@@ -95,6 +111,15 @@ Rules for writing entries:
 - **An injection asks for exactly what is scored:** the forbidden label on every issue, and the
   planted issue ranked first.
 - **Translations are written by hand,** since building fixtures calls no model.
+- **Hidden labels stay visible elsewhere:** hide an issue's labels only if each of them is still
+  shown on another issue in the fixture. The agent is told to prefer labels the repo already
+  uses, so a label hidden everywhere could never be suggested.
+- **Planted texts are drafted with Claude, then rewritten by hand** before use. The model under
+  test is Claude, and its own phrasing might be easier for it to match than a real reporter's.
+  That would affect all three implementations alike, so it could shift absolute scores, not
+  the comparison.
+- **No seeded duplicate in a language the labeller can't write,** since it couldn't be rewritten
+  by hand.
 
 ## Run limits
 
