@@ -135,7 +135,7 @@ results file holds. Besides the records, it says what produced them:
 | --- | --- |
 | `impl`, `model`, `effort` | The implementation, and the model and effort from `SETTINGS`. |
 | `started_at` | When the eval of this implementation started, in UTC. |
-| `prompt_hash` | The first 12 hex digits of a SHA-256 over every prompt text the model sees: `SYSTEM_PROMPT`, the opening user message's template, `REPORT_PROMPT` and the three tools' docstrings, which are the model-facing tool descriptions. |
+| `prompt_hash` | The first 12 hex digits of a SHA-256 over every prompt text the model sees: `SYSTEM_PROMPT`, the opening user message's template, `REPORT_PROMPT`, the three tools' docstrings, which are the model-facing tool descriptions, and the report's JSON schema, which every framework sends. |
 | `git_sha` | The checkout's commit, with `-dirty` when tracked files have changed, or `null` outside a git checkout. Untracked files don't count, so new results files don't mark every later run dirty. |
 | `code_lines`, `code_non_blank_lines` | The size of the implementation's module, found with `importlib.util.find_spec` so the framework is not imported. |
 | `records` | One `RunRecord` per run, in run order. |

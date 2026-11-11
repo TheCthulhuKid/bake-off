@@ -1,16 +1,27 @@
 import subprocess
 from pathlib import Path
 
-from bakeoff.provenance import code_lines, git_sha, prompt_hash
+from bakeoff.cases import Case
+from bakeoff.contract import TriageReport
+from bakeoff.provenance import cases_hash, code_lines, git_sha, prompt_hash
 from bakeoff.tools import TOOLS
 
 
-def test_prompt_hash_changes_with_a_tool_docstring(monkeypatch):
+def test_prompt_hash_changes_with_a_tool_docstring_or_the_report_schema(monkeypatch):
     before = prompt_hash()
     # Docstrings are the model-facing tool descriptions, so they are prompt text too.
     monkeypatch.setattr(TOOLS[0], "__doc__", "A different description.")
-    assert prompt_hash() != before
-    assert len(before) == 12
+    redescribed = prompt_hash()
+    assert redescribed != before and len(before) == 12
+    # Every framework sends the report schema to the model, so it counts as well.
+    monkeypatch.setattr(TriageReport, "model_json_schema", classmethod(lambda cls: {}))
+    assert prompt_hash() != redescribed
+
+
+def test_cases_hash_changes_when_a_label_changes():
+    case = Case(name="c", repo="tiny", labels={1: ["bug"]})
+    assert cases_hash([case]) == cases_hash([case.model_copy()])
+    assert cases_hash([case]) != cases_hash([case.model_copy(update={"labels": {1: ["crash"]}})])
 
 
 def test_git_sha_is_dirty_only_for_changed_tracked_files(tmp_path):
