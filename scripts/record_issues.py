@@ -51,10 +51,16 @@ def _comments(client: httpx2.Client, issue: dict) -> list[Comment]:
     if not issue["comments"]:
         return []
     return [
-        Comment(author=c["user"]["login"], body=c["body"] or "")
+        Comment(author=_author(c), body=c["body"] or "")
         for batch in _pages(client, issue["comments_url"])
         for c in batch
     ]
+
+
+def _author(comment: dict) -> str:
+    # GitHub sends "user": null for a deleted account and shows such a comment as by "ghost".
+    user = comment["user"]
+    return "ghost" if user is None else user["login"]
 
 
 @click.command()
@@ -87,7 +93,7 @@ def main(source: str, name: str, limit: int, force: bool) -> None:
             ],
         )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(repo.model_dump_json(indent=2) + "\n")
+    path.write_text(repo.model_dump_json(indent=2) + "\n", encoding="utf-8")
     click.echo(f"recorded {len(repo.issues)} issues from {source} to {path}")
 
 

@@ -54,4 +54,4 @@ def load_repo(name: str) -> Repo:
     path = fixture_path(name)
     if not path.is_file():
         raise UnknownRepoError(f"no recorded repo {name!r} under {FIXTURE_ROOT}")
-    return Repo.model_validate_json(path.read_text())
+    return Repo.model_validate_json(path.read_text(encoding="utf-8"))

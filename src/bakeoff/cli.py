@@ -56,7 +56,7 @@ def run(impl: str, repo: str, out: Path | None) -> None:
     text = result.model_dump_json(indent=2)
     click.echo(text)
     if out is not None:
-        with out.open("x") as file:
+        with out.open("x", encoding="utf-8") as file:
             file.write(text + "\n")
 
 
