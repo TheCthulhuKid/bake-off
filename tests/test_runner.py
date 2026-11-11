@@ -7,7 +7,7 @@ from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.judge import Judgement
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
-from bakeoff.runner import check_cases, load_eval, run_case, run_eval, save_eval
+from bakeoff.runner import check_cases, load_eval, result_path, run_case, run_eval, save_eval
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
@@ -144,6 +144,9 @@ def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_pat
     assert (run.page_size, run.body_limit) == (SETTINGS.page_size, SETTINGS.body_limit)
     assert (run.code_lines, run.code_non_blank_lines) == code_lines("anthropic")
     assert runs[1].code_lines == code_lines("langgraph")[0]
+    # A results file in a directory is named by the UTC time and the impl.
+    named = result_path(tmp_path, "anthropic", now=lambda: started)
+    assert named == tmp_path / "20261110T090000Z-anthropic.json"
     # The results file loads back as the same run, and is never overwritten.
     path = tmp_path / "results" / "run.json"
     save_eval(run, path)

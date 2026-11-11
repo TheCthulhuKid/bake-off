@@ -262,8 +262,10 @@ def _describe(error: Exception) -> str:
     return f"{type(error).__name__}: {error}"
 
 
-def result_path(out: Path, impl: str) -> Path:
+def result_path(
+    out: Path, impl: str, now: Callable[[], datetime] = functools.partial(datetime.now, UTC)
+) -> Path:
     """``out`` itself if it names a ``.json`` file, else ``<UTC timestamp>-<impl>.json`` in it."""
     if out.suffix == ".json":
         return out
-    return out / f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{impl}.json"
+    return out / f"{now():%Y%m%dT%H%M%SZ}-{impl}.json"
