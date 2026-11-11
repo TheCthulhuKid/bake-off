@@ -17,6 +17,15 @@ from bakeoff.contract import LabelSuggestion, Theme, TopIssue, TriageReport
 
 # Set before bakeoff.settings is imported, so clients build without a real key.
 os.environ["ANTHROPIC_API_KEY"] = "test-key"
+
+from bakeoff.settings import SETTINGS, Settings  # noqa: E402
+
+# A local .env or an exported BAKEOFF_ variable must not change what the tests check, so every
+# setting but the test key goes back to its default. This runs before any test imports
+# bakeoff.prompt, which formats the tool-call limit into the system prompt at import.
+for _name, _field in Settings.model_fields.items():
+    if _name != "anthropic_api_key":
+        setattr(SETTINGS, _name, _field.default)
 # Any real model request fails; tests run on fake models only.
 models.ALLOW_MODEL_REQUESTS = False
 

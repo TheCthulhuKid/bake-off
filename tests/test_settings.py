@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from bakeoff.settings import Settings
 
@@ -18,3 +19,12 @@ def test_settings_read_env_and_price_runs(monkeypatch):
     assert unknown.cost(10, 10) == 0.0
     with pytest.raises(ValueError):
         unknown.max_output_tokens()
+
+
+@pytest.mark.parametrize(
+    "limit", ["max_tool_calls", "max_model_requests", "run_timeout", "body_limit", "page_size"]
+)
+def test_settings_reject_a_limit_that_is_not_positive(limit):
+    assert getattr(Settings(**{limit: 1}, _env_file=None), limit) == 1
+    with pytest.raises(ValidationError):
+        Settings(**{limit: 0}, _env_file=None)

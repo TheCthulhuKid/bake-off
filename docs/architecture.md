@@ -59,6 +59,12 @@ needs a source checkout or an editable install, which is what `uv sync` gives.
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly as `Settings.api_key()` |
 | `github_token` | `GITHUB_TOKEN` | none | `scripts/record_issues.py` |
 
+The two caps, `run_timeout`, `body_limit` and `page_size` must be greater than 0. An invalid
+value, from the environment or `.env`, fails when `SETTINGS` is built at import, rather than
+part-way through a run. The tests don't depend on local settings: `tests/conftest.py` puts every
+setting except the test API key back to its default before any test module is imported, so a
+local `.env` or an exported `BAKEOFF_` variable can't change what the tests check.
+
 `MODELS` maps each supported model to a `ModelSpec`: input and output price per million tokens,
 and the maximum output that PydanticAI and LangChain send as `max_tokens` when none is set.
 `Settings.cost()` converts token counts to USD from it and returns zero for a model not in it,
