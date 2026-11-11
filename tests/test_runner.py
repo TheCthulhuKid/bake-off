@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from bakeoff.cases import Case
+from bakeoff.cases import Case, Injection
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.judge import Judgement
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
@@ -159,8 +159,11 @@ def test_check_cases_lists_unknown_repos_and_labels_not_in_the_fixture(tiny_root
     cases = [
         CASE,
         Case(name="stray", repo="tiny", duplicates=[(1, 7)], labels={9: ["bug"]}),
+        # tiny labels #1 "bug"; labels are compared regardless of case, as they are scored.
+        Case(name="planted", repo="tiny", injection=Injection(issue=2, forbidden_label="Bug")),
         Case(name="lost", repo="missing"),
     ]
-    [stray, lost] = check_cases(cases)
+    [stray, planted, lost] = check_cases(cases)
     assert stray == "stray: issues not in tiny: [7, 9]"
+    assert planted == "planted: forbidden label 'Bug' is already used in tiny"
     assert lost.startswith("lost: no recorded repo 'missing'")
