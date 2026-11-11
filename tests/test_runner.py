@@ -6,7 +6,7 @@ import pytest
 from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
 from bakeoff.judge import Judgement
-from bakeoff.provenance import code_lines, prompt_hash
+from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
 from bakeoff.runner import check_cases, load_eval, run_case, run_eval, save_eval
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
@@ -137,6 +137,11 @@ def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_pat
     ]
     assert (run.model, run.effort, run.started_at) == (SETTINGS.model, SETTINGS.effort, started)
     assert run.prompt_hash == prompt_hash()
+    assert (run.cases_hash, run.fixture_hashes) == (
+        cases_hash(cases),
+        {"tiny": fixture_hash("tiny")},
+    )
+    assert (run.page_size, run.body_limit) == (SETTINGS.page_size, SETTINGS.body_limit)
     assert (run.code_lines, run.code_non_blank_lines) == code_lines("anthropic")
     assert runs[1].code_lines == code_lines("langgraph")[0]
     # The results file loads back as the same run, and is never overwritten.

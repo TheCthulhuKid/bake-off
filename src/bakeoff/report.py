@@ -14,6 +14,7 @@ class Summary(BaseModel):
     model: str
     effort: str
     prompt_hash: str
+    cases_hash: str
     git_sha: str | None
     runs: int
     failed_runs: int
@@ -49,6 +50,7 @@ def summarise(run: EvalRun) -> Summary:
         model=run.model,
         effort=run.effort,
         prompt_hash=run.prompt_hash,
+        cases_hash=run.cases_hash,
         git_sha=run.git_sha,
         runs=len(records),
         failed_runs=sum(record.error is not None for record in records),
@@ -81,6 +83,7 @@ TABLES: dict[str, list[tuple[str, str, str]]] = {
         ("Model", "model", "{}"),
         ("Effort", "effort", "{}"),
         ("Prompt hash", "prompt_hash", "{}"),
+        ("Cases hash", "cases_hash", "{}"),
         ("Commit", "git_sha", "{:.12}"),
     ],
     "Safety and correctness": [

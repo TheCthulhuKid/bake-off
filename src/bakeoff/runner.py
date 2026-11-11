@@ -15,7 +15,7 @@ from bakeoff.contract import InvalidReport, TriageReport
 from bakeoff.fixtures import Repo, UnknownRepoError, load_repo
 from bakeoff.impls import get_triage
 from bakeoff.judge import Judgement, ThemeJudge
-from bakeoff.provenance import code_lines, git_sha, prompt_hash
+from bakeoff.provenance import cases_hash, code_lines, fixture_hash, git_sha, prompt_hash
 from bakeoff.scoring import Scores, score_run
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import RunStats, collect, raise_if_limit_fired
@@ -141,6 +141,12 @@ class EvalRun(BaseModel):
     effort: str
     started_at: datetime
     prompt_hash: str
+    cases_hash: str
+    # Each case's repo name to a hash of its fixture file.
+    fixture_hashes: dict[str, str]
+    # What the tools return depends on these, and they aren't in the prompt.
+    page_size: int
+    body_limit: int
     # None outside a git checkout.
     git_sha: str | None
     code_lines: int
@@ -150,7 +156,7 @@ class EvalRun(BaseModel):
 
 def run_eval(
     impls: Sequence[str],
-    cases: Iterable[Case],
+    cases: Sequence[Case],
     repeats: int,
     *,
     judge: ThemeJudge | None = None,
@@ -167,6 +173,8 @@ def run_eval(
     started_at = now()
     # Taken before the first run, so they describe the code and prompts that ran.
     prompt, sha = prompt_hash(), git_sha()
+    labels = cases_hash(cases)
+    fixtures = {repo: fixture_hash(repo) for repo in sorted({case.repo for case in cases})}
     sizes = {impl: code_lines(impl) for impl in impls}
     records: dict[str, list[RunRecord]] = {impl: [] for impl in impls}
     for case in cases:
@@ -182,6 +190,10 @@ def run_eval(
             effort=SETTINGS.effort,
             started_at=started_at,
             prompt_hash=prompt,
+            cases_hash=labels,
+            fixture_hashes=fixtures,
+            page_size=SETTINGS.page_size,
+            body_limit=SETTINGS.body_limit,
             git_sha=sha,
             code_lines=sizes[impl][0],
             code_non_blank_lines=sizes[impl][1],

@@ -136,6 +136,9 @@ results file holds. Besides the records, it says what produced them:
 | `impl`, `model`, `effort` | The implementation, and the model and effort from `SETTINGS`. |
 | `started_at` | When the eval of this implementation started, in UTC. |
 | `prompt_hash` | The first 12 hex digits of a SHA-256 over every prompt text the model sees: `SYSTEM_PROMPT`, the opening user message's template, `REPORT_PROMPT`, the three tools' docstrings, which are the model-facing tool descriptions, and the report's JSON schema, which every framework sends. |
+| `cases_hash` | The first 12 hex digits of a SHA-256 over the cases that ran, after any `--repo` filter. Relabelling a case changes every score, so files with different hashes should not be compared. |
+| `fixture_hashes` | Each case's repo name, mapped to a short SHA-256 of its fixture file, which changes if the fixture is re-recorded or edited. |
+| `page_size`, `body_limit` | The tool settings from `SETTINGS`: what the tools return depends on them, and they are not in the prompt. |
 | `git_sha` | The checkout's commit, with `-dirty` when tracked files have changed, or `null` outside a git checkout. Untracked files don't count, so new results files don't mark every later run dirty. |
 | `code_lines`, `code_non_blank_lines` | The size of the implementation's module, found with `importlib.util.find_spec` so the framework is not imported. |
 | `records` | One `RunRecord` per run, in run order. |
@@ -161,7 +164,7 @@ title, `Summary` field and format. A value with no data prints as `n/a`.
 
 | Table | Columns |
 | --- | --- |
-| Runs | Start time, model, effort, prompt hash and commit, so files that should not be compared are easy to spot. |
+| Runs | Start time, model, effort, prompt hash, cases hash and commit, so files that should not be compared are easy to spot. |
 | Safety and correctness | Runs; schema validity, citation validity and injection resisted as means over the runs that measured them; failed runs (any error), runs that hit a limit, runs that timed out. |
 | Quality | Duplicate precision and recall, label hit rate, top-issue precision, runs with no top issues (`top_issues_missing`), mean theme score. |
 | Cost and speed | Latency p50 and p95 (nearest rank, over every run), tokens, cost and tool calls per run, the judge's total spend, and the implementation's total and non-blank lines. |
