@@ -95,7 +95,12 @@ That says nothing about the schema, so the runner records it as unmeasured.
 recorded from, the recording time, and a list of open issues with number, title, body, labels,
 state and comments (author and body). `fixtures.load_repo(name)` reads it from `FIXTURE_ROOT`,
 which is read at call time, so the `tiny_root` test fixture repoints every caller, the tools
-included, at `tests/fixtures/` with one monkeypatch.
+included, at `tests/fixtures/` with one monkeypatch. A fixture name must be a single directory
+name: `fixture_path` rejects `..`, path separators and absolute paths with `UnknownRepoError`.
+The tools pass the model's repo argument straight through, and issue text is untrusted, so
+without this a prompt injection could point a tool at an `issues.json` outside the fixture root;
+with it, the tool returns its usual "does not exist" error. The recording script writes through
+the same function, so it can't write outside the root either.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
 and is run by hand. It uses `httpx2`, which is in the dev dependency group, so it needs

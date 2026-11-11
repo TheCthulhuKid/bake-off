@@ -38,6 +38,13 @@ class Repo(BaseModel):
 
 
 def fixture_path(name: str) -> Path:
+    """``FIXTURE_ROOT/<name>/issues.json``; a name that isn't one directory raises UnknownRepoError.
+
+    The tools pass the model's repo argument here, and issue text is untrusted, so a name such
+    as ``../elsewhere`` or an absolute path must not reach a file outside the fixture root.
+    """
+    if name in {"", ".", ".."} or Path(name).name != name:
+        raise UnknownRepoError(f"{name!r} is not a fixture name")
     # Read at call time so tests can point every caller, tools included, at another root.
     return FIXTURE_ROOT / name / "issues.json"
 
