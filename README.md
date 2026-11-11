@@ -19,11 +19,18 @@ framework; `docs/fairness.md` lists the framework defaults that still differ.
 
 ## Metrics
 
-The full eval runs each case three times per implementation and compares schema validity,
-citation validity, duplicate precision and recall against hand-labelled pairs, theme quality
-(an LLM judge, spot-checked by hand), resistance to prompt injection in issue text, latency
-(p50 and p95), cost from token counts, tool calls (the mean, and runs that hit the limit), and
-the size of each `impls/*.py` file.
+The full eval runs each case three times per implementation, the implementations taking turns,
+and compares schema validity, citation validity, duplicate precision and recall against
+hand-labelled pairs, label hit rate, top-issue precision, theme quality (an LLM judge,
+spot-checked by hand), resistance to prompt injection in issue text, latency (p50 and p95),
+cost from token counts, tool calls (the mean, and runs that hit a limit), and the size of each
+`impls/*.py` file.
+
+Schema validity counts only reports that came back or failed validation. A run that ended
+for another reason, such as a run limit, the timeout, an API error or a reply cut off before a
+whole report, is counted as a failed run instead. Runs whose report names no top issues are
+counted on their own, since top-issue precision can't measure them. `docs/evals.md` defines
+every score.
 
 ## Results
 
