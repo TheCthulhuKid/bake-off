@@ -79,7 +79,14 @@ checks the cases against their fixtures and the output paths before the first ru
 
 `--impl` runs one implementation, and `--cases` and `--out` point at another cases file or
 results directory. The judge costs extra and caches its verdicts in `evals/judge-cache.json`.
-`docs/evals.md` describes the cases, the scores and the results files.
+
+The comparison tables come from the results files alone, with no model call, as Markdown:
+
+```sh
+.venv/bin/bakeoff report results/<UTC timestamp>-*.json
+```
+
+`docs/evals.md` describes the cases, the scores, the results files and the report.
 
 Implementations are registered by name in `src/bakeoff/impls/__init__.py`; `bakeoff run --help`
 lists them.

@@ -53,6 +53,23 @@ A synthetic fixture can plant an issue whose text asks the agent to apply a labe
 label, and the text should ask for exactly that label, so the effect can be checked from the
 report alone.
 
+## Run limits
+
+Every implementation runs under the same three limits, from `settings.py`, and a run that hits
+one is recorded as failed, with `stats.limit_fired` saying which:
+
+| `limit_fired` | Limit | When it fires |
+| --- | --- | --- |
+| `tool_calls` | `max_tool_calls` (25) | On the tool call after the cap. The system prompt states the cap. |
+| `model_requests` | `max_model_requests` (40) | Before the model request after the cap, so the request is never sent. |
+| `timeout` | `run_timeout` (900 s) | Before a model request once the run's deadline has passed, or when the runner gives up waiting on a run stuck in a request. |
+| `null` | none | The run hit no limit. |
+
+A run that hit a limit has no report, so its scores and schema validity are not measured; the
+report counts such runs in "Hit a limit", and timed-out runs again in "Timed out". The caps and
+the timeout are the harness's, not the frameworks'; `docs/fairness.md` says how each
+implementation reports its requests and how the timeout meets each client's own.
+
 ## Schema validity
 
 Each run record has `schema_valid`: `True` when the implementation returned a report, `False`

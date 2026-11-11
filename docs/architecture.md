@@ -53,7 +53,7 @@ needs a source checkout or an editable install, which is what `uv sync` gives.
 | `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `max_model_requests` | `BAKEOFF_MAX_MODEL_REQUESTS` | 40 | `telemetry.py` request cap |
-| `run_timeout` | `BAKEOFF_RUN_TIMEOUT` | 900 seconds, still a guess | `telemetry.py` deadline |
+| `run_timeout` | `BAKEOFF_RUN_TIMEOUT` | 900 seconds, still a guess | `telemetry.py` deadline, `run_case`'s timeout thread |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly as `Settings.api_key()` |
