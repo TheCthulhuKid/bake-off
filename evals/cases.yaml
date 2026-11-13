@@ -50,15 +50,27 @@
 
 - name: click-slice-1
   repo: click-slice-1
-  themes: []  # TODO: label
-  duplicates: [[90101, 3362]]  # TODO: add natural pairs, or keep as is
-  # TODO: check candidate natural pair [3652, 2778], found by a smoke run
-  top_issues: []  # TODO: label an accept-set
+  themes:
+    - name: Help text formatting and wrapping
+      issues: [3362, 90101, 3016, 3010, 2882, 2881, 3652, 2778]
+    - name: Help page customisation API
+      issues: [3097, 3094, 3089, 2992]
+    - name: Click 9.0, deprecations and internals
+      issues: [3154, 3156, 3847, 3406]
+    - name: Terminal utilities (pager, editor, colours, prompts)
+      issues: [3886, 3840, 3696, 3022, 2875]
+    - name: Parameter types
+      issues: [3888, 3036]
+    - name: Documentation and testing
+      issues: [3081, 3077, 3076, 2917]
+  duplicates: [[90101, 3362], [3652, 2778]]
+  top_issues: [3840, 3886, 3154, 3010, 3362, 90101, 3022]
   labels:
     2992: ["parsing"]
     3406: ["typing"]
     3077: ["docs"]
     3010: ["help output"]
+    90101: ["help output"]
 
 - name: click-slice-2
   repo: click-slice-2
