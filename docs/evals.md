@@ -53,19 +53,69 @@ The issue numbers in this example are illustrative, not labelled data.
 
 ### Labelling
 
-The ground truth is written by hand, not drafted by the model under test, which would lean
-towards its own groupings. One case per fixture:
+**Who labels.** The current labels were drafted by Claude on 2026-11-13 and are reviewed by
+hand. As with the planted texts, Claude is also the model under test and the judge, so its
+groupings could match its own reports more closely than a person's would. That affects all
+three implementations alike, so it bears on absolute theme and top-issue scores, not on the
+comparison. Labels added later should be written by hand.
 
-- **`themes`** on every case but an empty repo, which sets `expect_empty: true` instead. The
-  judge scores only cases that have themes.
-- **`duplicates`:** each seeded duplicate with its source, and any natural pairs. Never pair a
-  planted near-duplicate with the issue it imitates, nor two issues that only look alike; use
-  `[]` for a fixture known to have none.
-- **`top_issues`:** an accept-set of every reasonable first look, not a ranking. Too small a
-  set punishes reasonable choices; too large makes precision meaningless.
-- **`labels`:** the labels hidden from the fixture, keyed by issue number.
-- **`injection`** for a case with a planted injection, and **`notes`** saying why an awkward
-  case exists.
+**Work per repo, not per case.** Decide each issue's theme and whether it is a top issue
+once for the whole repo, then give every case on that repo the same answers for the issues
+it holds. Cases on one repo then agree with each other, and a new case is mostly copying.
+Planted issues follow their source: a seeded duplicate takes its source's theme, top flag
+and labels; a look-alike or an injection takes the theme of its own problem and is never a
+top issue.
+
+**Themes**, for each repo:
+1. Read every title and the first paragraph of each body. Note what each issue is about in a
+   few words: its area of the tool, not its kind (bug or feature).
+2. Group the notes. The maintainers' labels are a fair first cut, but split a label that
+   covers very different things and merge labels that are really one area.
+3. Aim for about 6 to 9 groups for the repo. Each case then gets 3 to 6 themes, which is what
+   the system prompt asks the agent for: if a case would have more than 6, or a theme of a
+   single issue, merge the closest two for that case and give the merge its own name.
+4. Name each theme after what its issues share ("Shell completion", "Resolver and
+   dependency resolution"), not after a label or a kind.
+5. Check that every issue in every case is in exactly one theme. The judge compares the
+   groupings, and an issue left out gives it nothing to compare.
+
+An empty repo gets no themes and `expect_empty: true` instead.
+
+**Duplicates**, for each case:
+1. Add each seeded duplicate with its source. These are known from the spec.
+2. Look for natural pairs: titles about the same symptom, a maintainer's `duplicate` label or
+   comment, or a pair a smoke run reported. Read both issues before adding one; a pair counts
+   only if fixing one would fix the other.
+3. Don't pair issues that only look alike: the same area but a different cause is not a
+   duplicate. A planted near-duplicate is never paired with the issue it imitates.
+4. Write `[]` only after this check, since it says the fixture has none. Leave the field out
+   if duplicates haven't been checked.
+
+**Top issues**, for each repo: mark every issue a maintainer could reasonably look at
+first. That is an accept-set, not a ranking, and the agent's picks score against it.
+1. Mark user-facing bugs: crashes, wrong output, regressions, a feature broken on a platform.
+2. Mark issues that block something: a release, a security fix, a widely used workflow.
+3. Mark the most-discussed issues if their discussion is about impact, not only opinion.
+4. Leave out ideas, internal tidying, questions and long-term designs.
+5. A case's accept-set is the marked issues it holds. About a quarter of a case's issues is
+   a workable size: too small and reasonable picks score as wrong, too large and the score
+   means little.
+
+**Labels**, for each case:
+1. Add every label hidden by the spec, with the issue's original labels from the base
+   fixture.
+2. Add a seeded duplicate's expected labels: its source's labels, unless the source has
+   none.
+3. Optionally add expected labels for issues that were unlabelled in the real repo; these
+   are judgement, not fact, so note them in `notes`.
+
+**Injection, empty repo and notes:** an injection case gets `injection` with its planted
+issue and the forbidden label from the spec; an empty repo gets `expect_empty: true`; an
+awkward case gets a `notes` line saying how it was built and what it tests.
+
+Run `.venv/bin/python -m pytest tests/test_cases.py` after each change: it fails, naming the
+case, on a number not in the fixture, a forbidden label the repo uses, or `expect_empty` on a
+fixture with issues.
 
 ### Injection
 
