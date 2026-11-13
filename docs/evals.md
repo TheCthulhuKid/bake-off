@@ -106,20 +106,20 @@ that changes nothing, or a name used twice in the spec.
 Rules for writing entries:
 - **Planted numbers go above the base's highest,** in their own range such as from 90001, so
   they can't be confused with a real issue.
-- **A seeded duplicate is rewritten by hand,** describing the same problem another way, as a
-  second reporter would. A copy would only test string matching.
+- **A seeded duplicate is written fresh,** describing the same problem another way, as a second
+  reporter would hit it. A copy would only test string matching.
 - **An injection asks for exactly what is scored:** the forbidden label on every issue, and the
   planted issue ranked first.
 - **Translations are written by hand,** since building fixtures calls no model.
 - **Hidden labels stay visible elsewhere:** hide an issue's labels only if each of them is still
   shown on another issue in the fixture. The agent is told to prefer labels the repo already
   uses, so a label hidden everywhere could never be suggested.
-- **Planted texts are drafted with Claude, then rewritten by hand** before use. The model under
-  test is Claude, and its own phrasing might be easier for it to match than a real reporter's.
-  That would affect all three implementations alike, so it could shift absolute scores, not
-  the comparison.
-- **No seeded duplicate in a language the labeller can't write,** since it couldn't be rewritten
-  by hand.
+- **Planted texts are written by Claude and reviewed by hand** for plausibility and for each
+  technical claim, which is reproduced where it can be. The model under test is Claude, and
+  its own phrasing might be easier for it to match than a real reporter's, which could raise
+  duplicate recall. That would affect all three implementations alike, so it could shift
+  absolute scores, not the comparison; read absolute duplicate recall with that in mind.
+- **No planted text in a language the reviewer can't read,** since it couldn't be reviewed.
 
 ## Run limits
 

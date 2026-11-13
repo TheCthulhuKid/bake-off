@@ -21,9 +21,9 @@
       number: 2154
       characters: 200000
 
-# Templates still to fill in. Uncomment an entry once its seeded duplicates, hidden labels and
-# planted texts are written, then rerun the script. Planted numbers start at 90001, above every
-# recorded issue, with a range of 100 for each group of entries.
+# Templates still to fill in. Uncomment an entry once its planted texts are reviewed, then rerun
+# the script. Planted numbers start at 90001, above every recorded issue, with a range of 100
+# for each group of entries.
 #
 # Click slices: consecutive thirds in fixture order, except #2778, moved into slice 1 to keep the
 # natural pair #3652/#2778 together. The other natural pair, #1370/#304, is in slice 3.
@@ -34,21 +34,23 @@
 #     - step: slice
 #       issues: [3888, 3886, 3847, 3840, 3696, 3652, 3406, 3362, 3156, 3154, 3097, 3094, 3089,
 #                3081, 3077, 3076, 3036, 3022, 3016, 3010, 2992, 2917, 2882, 2881, 2875, 2778]
-#     - step: plant          # draft: seeded duplicate of #3362, to edit into your own words
+#     - step: plant          # seeded duplicate of #3362; review, then drop this note
 #       number: 90101
-#       title: Usage line wraps in the middle of long option names
+#       title: --help usage line cuts argument names in half at the dash
 #       body: |
-#         Our tool has a lot of long-form options, and when the usage line in `--help` gets
-#         near the terminal width, Click splits an option name across two lines at a dash.
-#         With an 80-column terminal we get:
+#         Small one, but it confused a couple of people on my team.
 #
-#             Usage: sync [OPTIONS] --source-dir DIR --skip-hidden-files --no-color-
-#                         output --dry-run
+#         I gave the arguments of one of our commands descriptive metavars with dashes in them,
+#         and at 80 columns `--help` prints:
 #
-#         so `--no-color-output` is shown as `--no-color-` and `output`, which looks like two
-#         separate flags. I'd expect the wrap to happen between options, never inside one.
+#             Usage: mytool storage sync [OPTIONS] LOCAL-SOURCE-DIRECTORY REMOTE-TARGET-
+#                                        BUCKET-NAME
 #
-#         Click 8.2.1, Python 3.13 on Linux.
+#         so `BUCKET-NAME` on the second line looks like a third argument. I thought it was my
+#         terminal at first but it's Click doing the wrapping. Breaking the line before
+#         `REMOTE-TARGET-BUCKET-NAME` instead of inside it would be fine.
+#
+#         click 8.5.0
 #     - step: hide_labels
 #       issues: [2992, 3406, 3077, 3010]
 #
