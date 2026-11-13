@@ -1,0 +1,42 @@
+{
+ "2d49d296c852e1cd879552e8b5b626bb305f8eba12a79582db3706956f2a0e41": {
+  "reason": "Several report themes are coherent: async support, prompts/stdin, and help formatting all match the labelled groupings. Merging shell completion with context-access issues (#1574, #680) is defensible, since they share a 'context params not available' topic. The main 'parser' theme is much weaker. It absorbs 12 issues spanning parser rewrites, chained-command bugs, subcommand naming, parameter types (path non-existence, dynamic choice) and error customisation (#531). That makes it an overly broad grab-bag rather than a distinct topic. The final 'testing, utilities and misc' theme is an explicit catch-all: it puts #1378 (atomic file) alongside terminal-width testing and xdg-open zombies. The errors theme is dissolved, with #944 placed under help colours. Overall some themes match well, but others are vague or mix unrelated issues.",
+  "score": 3
+ },
+ "2f1d74baf805dabe46dbd6efc956982a10c8f0889d27e3be8d8ce892f4c0ff01": {
+  "reason": "Most themes broadly match the labelled ones: help formatting, help customisation, Click 9.0, docs, and terminal utilities. There are several errors. #3022 (colour env vars) is placed under help formatting instead of terminal utilities. #2992 is moved out of the help customisation API theme. The labelled parameter types theme is dissolved: #3888 is merged into terminal utilities, and #3036 is misplaced twice, in Click 9.0 and in Testing infrastructure. Testing infrastructure therefore mixes unrelated issues. #3696 and #3094 are each duplicated across two themes, so themes overlap. Several issues are misplaced and some themes overlap or mix topics, which puts this between 3 and 4.",
+  "score": 3
+ },
+ "b6c33fb21160556e82eec800dd64837627d1c92c957bc74abe9cd0d82731d01e": {
+  "reason": "The report rebuilds most of the labelled groupings, with some changes. Lazy File was split out of the parameters theme. That split is coherent and acceptable. Parser behaviour largely matches the parameters theme. Context/invocation matches the commands theme. Help output matches. Errors and exceptions were merged into help output, which is a defensible overlap since #2419 is about colour. Misplacements: #2853 (exception call stack) and #2402 (resolve_command) were wrongly put under shell completion. #2823 (project opinions) went into parser. #2783 went into parser rather than context. #2706 (i18n) went into help output. The deprecations/internals theme was dissolved. These are a few misplaced issues, but the overall structure is coherent.",
+  "score": 4
+ },
+ "bf34a1c8e8e5177845d90f858be96fbb06494023fa6884365aee4a723ccbcc17": {
+  "reason": "The help-formatting theme and the 9.0/deprecations theme mostly match the labels. The help customisation theme matches except that #2992 has been moved into formatting. There are several problems. The report merges parameter types with terminal utilities into one theme, 'Types, terminal utilities and platform behaviour', which mixes unrelated topics, and it also drops #2917 (completion testing) into it. #3022 (colour environment variables) is misplaced under help formatting. #3094 and #3696 each appear in two themes, so those themes overlap. Overall, some themes match well and others mix unrelated issues or duplicate items.",
+  "score": 3
+ },
+ "c0c6f20447847e350be686f08f9c13c2751cb58d95ed9787aeed7bfc0ce29308": {
+  "reason": "Help output and Shell completion closely match the labelled groupings. The terminal utilities theme is coherent, though it absorbs the file and path type issues (#2645, #2429, #1378, #3888, #1428), which the labels place under parameters and types. The second theme is a catch-all: it merges the parser rewrite, Click 9.0 release items, parameter-parsing issues, command and context bugs (#473, #1269, #1322, #680, #1574, #2753, #2801, #2402), error-handling issues (#531, #2853) and #2992, a help-output issue. In doing so it absorbs most of the labelled 'Commands, context and embedding' theme. Async and embedding was split off as a small theme of its own. The typing and API cleanup theme is broadly reasonable but includes #3036, which belongs with parameter types. Overall several themes match, but one large theme mixes unrelated issues.",
+  "score": 3
+ },
+ "cd07f6d91b60a1298e58a8ed58e23ad6b178e9cd406f41eaaae21d01017846a4": {
+  "reason": "Help, terminal, and completion themes match the labels well. Problems are elsewhere. The \"Parser, command processing and the 9.0 work\" theme is a large catch-all. It merges parser issues, the commands/context/embedding issues, 9.0 release items, error-handling issues (#531, #2853, #2740), i18n (#2706), async support, and #2992 (help-related). The \"Parameter types\" theme mixes in internal/release items (#3847, #3406, #2493) and #3696 (utilities). \"Docs and project meta\" wrongly includes #2801 (command invocation) and #2676 (negative number parsing). The labelled commands/context theme is not kept as its own group. Some themes match, but one major theme mixes unrelated issues and several issues are misplaced.",
+  "score": 3
+ },
+ "df060b882bc1f6ddfa145114d45c824cfceb773d00d576f2bbc5979e15f40747": {
+  "reason": "The report gets several groupings right. Lazy File is a coherent split out of parameters. The parser theme is solid. Help, colour and error output reasonably merges the help and exception themes. Problems: #2853, an exception/traceback issue, and #2402, resolve_command, are wrongly placed under shell completion. #2783 (dynamic params on contexts) and #2493 (generic Context) are a bit misplaced. #2706 (i18n) and #2361 (embedding stdout) are lumped into help output. #2834 and #2835 are duplicated across two themes, so those themes overlap. Most groupings broadly match, with a few misplacements and some overlap.",
+  "score": 3
+ },
+ "f22ad038f5678e40cb25767ca39e2743efa33a473563208d47b085245e5f8f10": {
+  "reason": "Help output, shell completion and terminal UI match the labelled themes closely. The report has no Commands/context theme. Instead it folds most command and context issues (#473, #1269, #1322, #1574, #680, #2753, #2402, #2783) into a very large 'Parser rewrite / Click 9.0' bucket. That bucket also absorbs release items (#3154, #3156) and #531, an error-formatting issue. Parameter types are split off into a 'Typing, public API cleanup and param types' theme that mixes path/file types with API cleanup and sentinels. The final 'Docs, async/embedding and testing' theme is a grab-bag: #2676 (negative number parsing) and #2801 (missing args on invoke) don't belong there. Several themes match, but two mix unrelated issues and one labelled theme is missing.",
+  "score": 3
+ },
+ "f2b3e153405cd5d1f7a29ccb81989a1e790fa4c203f07df2789ed52cd202ef52": {
+  "reason": "Most groupings match the labels. Parameter types and Click 9.0 match exactly. The help wrapping theme matches apart from the two multiple-option issues, which went to the customisation theme. That is a reasonable placement, but it merges two labelled themes. Misplacements: #3022 (FORCE_COLOR/NO_COLOR) is put in the help formatter theme instead of terminal utilities. #3696 is duplicated across docs and 9.0. #2917 (e2e completion testing) is missing entirely. The terminal helpers theme is otherwise correct. Overall these are mostly the labelled groupings with a few misplaced, duplicated or missing issues.",
+  "score": 4
+ },
+ "f7497a959aabba61ebc5fb3aa6a26c923a6706b34de0da7f6d5cee3a449bb334": {
+  "reason": "Most report themes line up with the labelled ones, and splitting File/LazyFile into its own theme is coherent. Shell completion is mixed: #2853 (exception traceback on invalid parameter) and #2402 (resolve_command fails if cmd is None) have nothing to do with completion. #2783 (dynamic parameters on contexts) sits in parsing when it is about context. The context theme correctly holds #2753 and #2801, and adds #2493, which is reasonable. The help/output theme is a catch-all: help formatting and colour are fine, and the two ClickException items fit, but i18n (#2706), embedding with custom streams (#2361) and the project opinions meta issue (#2823) are unrelated additions. The errors and Click 9.0/internals themes are dissolved. So several themes are coherent, while two mix unrelated issues.",
+  "score": 3
+ }
+}
