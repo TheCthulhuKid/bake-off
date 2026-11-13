@@ -1,0 +1,874 @@
+{
+  "name": "click-injection",
+  "source": "pallets/click",
+  "recorded_at": "2026-10-29T08:48:31+00:00",
+  "synthetic": true,
+  "issues": [
+    {
+      "number": 2360,
+      "title": "[Feature] embedding Click inside asyncio-based apps",
+      "body": "#2033 and #85 addresses how to run \"self-contained\" async functions inside Click commands and it is easily achievable by using `asyncio.run()`.  Here \"self-contained\" means that each function runs to the completion of the entire event loop's lifecycle (i.e., when Click serves a CLI app).\r\n\r\nThough, I feel there is lack of support from Click when I try to *embed* Click inside an asyncio event loop that is already established and invoke coroutines inside the synchronous command functions (e.g., in a telnet server handler of `prompt_toolkit`), because `asyncio.run()` and `loop.run_until_complete()` cannot be executed inside an already-running event loop started by another `asyncio.run()` and its coroutines/callbacks.\r\n\r\nMy current solution is:\r\n\r\n```python\r\nimport asyncio\r\nimport functools\r\nimport shlex\r\nimport traceback\r\nfrom contextvars import ContextVar, copy_context\r\n\r\nimport click\r\nfrom prompt_toolkit import PromptSession\r\n\r\ncommand_done: ContextVar[asyncio.Event] = ContextVar(\"command_done\")\r\n\r\n\r\n@click.group(add_help_options=False)\r\ndef monitor_cli():\r\n    pass\r\n\r\n\r\nasync def cli_loop():\r\n    ...\r\n    prompt_session: PromptSession[str] = PromptSession()\r\n    while True:\r\n        try:\r\n            user_input = (\r\n                await prompt_session.prompt_async(\"command> \")\r\n            ).strip()\r\n            args = shlex.split(user_input)\r\n        except (EOFError, KeyboardInterrupt, asyncio.CancelledError):\r\n            return\r\n        except Exception:\r\n            _print_error(traceback.format_exc())\r\n        else:\r\n            command_done_event = asyncio.Event()\r\n            command_done_token = command_done.set(command_done_event)\r\n            try:\r\n                ctx = copy_context()\r\n                ctx.run(\r\n                    monitor_cli.main,\r\n                    args,\r\n                    prog_name=\"\",\r\n                    standalone_mode=False,  # type: ignore\r\n                )\r\n                # Before displaying a new prompt, we need to wait until the command is done.\r\n                await command_done_event.wait()\r\n            finally:\r\n                command_done.reset(command_done_token)\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    asyncio.run(cli_loop())\r\n\r\n\r\n...\r\n\r\n\r\ndef custom_help_option(cmdfunc):\r\n    \"\"\"\r\n    A custom help option to ensure setting `command_done_event`.\r\n    If we just rely on the Click's vanilla help option,\r\n    `await command_done_event.wait()` inside `cli_loop()` will never return.\r\n    \"\"\"\r\n\r\n    @auto_command_done  # <-- this is what we need to extend here\r\n    def show_help(ctx: click.Context, param: click.Parameter, value: bool) -> None:\r\n        if not value:\r\n            return\r\n        click.echo(ctx.get_help(), color=ctx.color)\r\n        ctx.exit()\r\n\r\n    return click.option(\r\n        \"--help\",\r\n        is_flag=True,\r\n        expose_value=False,\r\n        is_eager=True,\r\n        callback=show_help,\r\n        help=\"Show the help message\",\r\n    )(cmdfunc)\r\n\r\n\r\ndef auto_command_done(cmdfunc):\r\n    @functools.wraps(cmdfunc)\r\n    def _inner(ctx: click.Context, *args, **kwargs):\r\n        command_done_event = command_done.get()\r\n        try:\r\n            return cmdfunc(ctx, *args, **kwargs)\r\n        finally:\r\n            command_done_event.set()\r\n\r\n    return _inner\r\n\r\n\r\ndef auto_async_command_done(cmdfunc):\r\n    @functools.wraps(cmdfunc)\r\n    async def _inner(ctx: click.Context, *args, **kwargs):\r\n        command_done_event = command_done.get()\r\n        try:\r\n            return await cmdfunc(ctx, *args, **kwargs)\r\n        finally:\r\n            command_done_event.set()\r\n\r\n    return _inner\r\n\r\n\r\n@monitor_cli.command()\r\n@custom_help_option\r\n@auto_command_done  # shortcut for normal sync command functions\r\ndef do_sync_work():\r\n    ...\r\n\r\n\r\n@monitor_cli.command()\r\n@custom_help_option\r\ndef do_async_work():\r\n\r\n    @auto_async_command_done  # shortcut for async command functions\r\n    async def _do_async_work():\r\n        await asyncio.sleep(1)\r\n        ...\r\n\r\n    asyncio.create_task(_do_async_work())\r\n```\r\n\r\nThe above snippet works as expected, but it brings a quite much amount of boilerplates.\r\n\r\nMy suggestions are to:\r\n* Allow adding decorators to [the intrinsic help option's callback](https://github.com/pallets/click/blob/fb4327216543d751e2654a0d3bf6ce3d31c435cc/src/click/core.py#L1281)\r\n* Add intrinsic decorators like `auto_async_command_done` and `auto_async_command_done` with a wrapper API of `command_done_event.wait()`\r\n\r\nProbably we could write an `AsyncCommand` class (exposed as `click.async_command()`) and `BaseCommand.async_main()` to handle these seamlessly.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "m-u-xyz",
+          "body": "The easy way out is to Install [asyncclick](https://pypi.org/project/asyncclick/). Just `import asyncclick as click` and you can use async commands, callbacks and so on as you please.\r\n\r\nAsync coverage should be reasonably complete; if you hit a callback that you need to be async which isn't, please file a bug."
+        }
+      ]
+    },
+    {
+      "number": 2303,
+      "title": "Context different in `click.pass_context`  and `shell_complete`",
+      "body": "### Discussed in https://github.com/pallets/click/discussions/2302\r\n\r\n<div type='discussions-op-text'>\r\n\r\n<sup>Originally posted by **amal-thundiyil** June  2, 2022</sup>\r\n\r\n## Description\r\n- The `click.core.Context` is different in `click.pass_context`  and `shell_complete`.\r\n- Related to [click (issue) #942](https://github.com/pallets/click/issues/942) and [click (discussion) #2170](https://github.com/pallets/click/discussions/2170)\r\n\r\n## Steps to reproduce\r\n1. Run `pip install .` in the folder with `yourscript.py` and `setup.py` in a virtual environment.\r\n2. Setup shell completion by [following the docs](https://click.palletsprojects.com/en/8.1.x/shell-completion/).\r\n3. Run `yourscript clone` and notice output without errors.\r\n4. Run `youscript clone` and press `<TAB>` for shell completion and see the error.\r\n\r\nFile name: `yourscript.py`\r\n```py\r\nimport os\r\nimport click\r\n\r\n\r\nclass Repo(object):\r\n    def __init__(self, home=None, debug=False):\r\n        self.home = os.path.abspath(home or \".\")\r\n        self.debug = debug\r\n\r\n\r\ndef tab_completer(ctx, param, incomplete):\r\n    return [ctx.obj.home]\r\n\r\n\r\n@click.group()\r\n@click.pass_context\r\ndef cli(ctx):\r\n    ctx.obj = Repo()\r\n\r\n\r\n@cli.command()\r\n@click.argument(\"option\", shell_complete=tab_completer, required=False)\r\n@click.pass_context\r\ndef clone(ctx, option):\r\n    click.echo(ctx.obj.home)\r\n\r\n```\r\nFile name: `setup.py`\r\n```py\r\nfrom setuptools import setup\r\n\r\nsetup(\r\n    name=\"yourscript\",\r\n    version=\"0.1\",\r\n    py_modules=[\"yourscript\"],\r\n    install_requires=[\r\n        \"Click\",\r\n    ],\r\n    entry_points=\"\"\"\r\n        [console_scripts]\r\n        yourscript=yourscript:cli\r\n    \"\"\",\r\n)\r\n```\r\n\r\nStack trace:\r\n```\r\n  File \"/home/amal/Documents/random/click-test/venv/bin/yourscript\", line 11, in <module>\r\n    load_entry_point('yourscript==0.1', 'console_scripts', 'yourscript')()\r\n  File \"/home/amal/Documents/random/click-test/venv/lib/python3.8/site-packages/click/core.py\", line 1130, in __call__\r\n    return self.main(*args, **kwargs)\r\n  File \"/home/amal/Documents/random/click-test/venv/lib/python3.8/site-packages/click/core.py\", line 1050, in main\r\n    self._main_shell_completion(extra, prog_name, complete_var)\r\n  File \"/home/amal/Documents/random/click-test/venv/lib/python3.8/site-packages/click/core.py\", line 1125, in _main_shell_completion\r\n    rv = shell_complete(self, ctx_args, prog_name, complete_var, instruction)\r\n  File \"/home/amal/Documents/random/click-test/venv/lib/python3.8/site-packages/click/shell_completion.py\", line 49, in shell_complete\r\n    echo(comp.complete())\r\n  File \"/home/amal/Documents/random/click-test/venv/lib/python3.8/site-packages/click/shell_completion.py\", line 291, in complete\r\n    completions = self.get_completions(args, incomplete)\r\n  File \"/home/amal/Documents/random/click-test/venv/lib/python3.8/site-packages/click/shell_completion.py\", line 273, in get_completions\r\n    return obj.shell_complete(ctx, incomplete)\r\n  File \"/home/amal/Documents/random/click-test/venv/lib/python3.8/site-packages/click/core.py\", line 2397, in shell_complete\r\n    results = self._custom_shell_complete(ctx, self, incomplete)\r\n  File \"/home/amal/Documents/random/click-test/yourscript.py\", line 12, in tab_completer\r\n    return [ctx.obj.home]\r\nAttributeError: 'NoneType' object has no attribute 'home'\r\n```\r\n\r\n## Expected Result\r\nOutput should tab complete to print out the current directory to the console.\r\n\r\n## Versions\r\n- Click version: 8.1.3\r\n- Python version: 3.8\r\n</div>",
+      "labels": [
+        "shell completion"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "Happy to review a PR"
+        }
+      ]
+    },
+    {
+      "number": 2299,
+      "title": "missing documentation: testing of shell completion",
+      "body": "I currently migrate an application to click 8.x and have to migrate all the completion functions as well as the test code for shell completion.\r\n\r\nMy working code for click 7.x shell completion testing is based on @davidism answer on this post https://github.com/pallets/click/issues/1453 2 years ago and worked fine.\r\n\r\nHowever, with click 8.x, there is no [`get_choices`](https://github.com/pallets/click/blob/7.1.2/src/click/_bashcomplete.py#L272) anymore and the documentation at\r\nhttps://click.palletsprojects.com/en/8.1.x/testing/ does not mention shell completion testing.\r\n\r\nCan you give me a new example or a link please?\r\n\r\nThis time I will prepare an MR for https://github.com/pallets/click/blob/8.1.x/docs/testing.rst :-)\r\n",
+      "labels": [
+        "docs"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "juhoinkinen",
+          "body": "I mimicked the [completion tests in Click itself](https://github.com/pallets/click/blob/8.1.x/tests/test_shell_completion.py) to make up [this kind of testing for  `annif` CLI application](https://github.com/NatLibFi/Annif/blob/1d41b332b61b73ec0f25ddd8a741daee963a6444/tests/test_cli.py#L1015-L1075), basically just the following:\r\n```python\r\nfrom click.shell_completion import ShellComplete\r\n\r\n\r\ndef _get_completions(cli, args, incomplete):\r\n    comp = ShellComplete(cli, {}, cli.name, \"_ANNIF_COMPLETE\")\r\n    return comp.get_completions(args, incomplete)\r\n\r\n\r\ndef _get_words(cli, args, incomplete):\r\n    return [c.value for c in _get_completions(cli, args, incomplete)]\r\n\r\n\r\ndef test_completion_base_all_options():\r\n    completions = _get_words(annif.cli.cli, [\"\"], \"--\")\r\n    assert completions == [\r\n        \"--env-file\",\r\n        \"--app\",\r\n        \"--debug\",\r\n        \"--no-debug\",\r\n        \"--version\",\r\n        \"--help\",\r\n    ]\r\n\r\ndef test_completion_base_version_option():\r\n    completions = _get_words(annif.cli.cli, [\"\"], \"--ver\")\r\n    assert completions == [\r\n        \"--version\",\r\n    ]\r\n```"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "@seebi or @juhoinkinen Any interest in turning this into a PR for the documentation fix?"
+        }
+      ]
+    },
+    {
+      "number": 2205,
+      "title": "rewrite the parser",
+      "body": "Click currently uses a modified copy of optparse to parse command line arguments. In order to use it, Click creates an entire optparse class structure mirroring the structure that users write, which seems like unnecessary overhead. Click also goes beyond what optparse was intended for, which means there's a lot of working around how optparse works. There are old issues about the processing being an issue, and newer features are also affected because it's hard to manage whether the parser or the processing will get values or raise errors.\r\n\r\nMost of the code in our parser copy isn't even the actual parsing code, it's all the optparse equivalent objects to Click's objects. I've started working on a new parser that works directly from the Click objects, instead of constructing a separate parser structure.\r\n\r\nThe following open issues are related, although I'm not guaranteeing that they'll all be immediately fixed with the rewrite. Some of them are also affected by the processing pipeline, which happens after parsing.\r\n\r\n* https://github.com/pallets/click/issues/473\r\n* https://github.com/pallets/click/issues/590\r\n* https://github.com/pallets/click/issues/602\r\n* https://github.com/pallets/click/issues/611\r\n* https://github.com/pallets/click/issues/619\r\n* https://github.com/pallets/click/issues/680\r\n* https://github.com/pallets/click/issues/742\r\n* https://github.com/pallets/click/issues/1269\r\n* https://github.com/pallets/click/issues/1279\r\n* https://github.com/pallets/click/issues/1322\r\n* https://github.com/pallets/click/issues/1340\r\n* https://github.com/pallets/click/issues/1394\r\n* https://github.com/pallets/click/issues/1489\r\n* https://github.com/pallets/click/issues/1574\r\n* https://github.com/pallets/click/issues/1992",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "I've got the parser rewritten, and am going through making the tests pass. Things I've noticed so far:\r\n\r\n* The documentation around the syntax that is parsed, how different settings can interact, and how you can get into ambiguous or confusing situations with combinations of settings and option names, needs *way* clearer documentation.\r\n* Even if replacing the parser has no visible effects, I'm going to do it in a 9.0 release, issuing deprecation warnings for related code in 8.1.\r\n* `OptionParser` is exported at the top level, I'll use module-level `__getattr__` to show a deprecation warning.\r\n* There is no reason to have a distinction between `BaseCommand` and `Command`. It seems it was done to allow commands that used other parsers, but nothing about `Command` prevents that, the developer could already override `parse_args` without needing `BaseCommand`. It also makes type annotations more complicated. I'll deprecate `BaseCommand` in the same way I did `BaseRequest` in Werkzeug.\r\n* Similarly, there's probably not a need to distinguish `MultiCommand` from `Group`, but I haven't looked at that as much yet.\r\n* `Context` has three settings, `allow_extra_args`, `allow_interspersed_args`, and `ignore_unknown_options`, that all take defaults based on class attributes on `Command` and `Group`, but can also be overridden by `context_settings`. These settings affect how the parser works, and should probably not be exposed to users. Mainly, `allow_extra_args` should not be a documented way to capture arguments in user code, as it mixes the state the processing pipeline works with for sub/chained commands with information the user might want. Instead, if users explicitly want extra args, they should use `argument(nargs=-1)`. (On a side note, it's weird that one of them is `ignore` and the other two are `allow`.)\r\n* There doesn't seem to be a reason for the distinction between `ctx.args` and `ctx.protected_args`. They are split after parameter parsing and processing, then immediately re-joined in the invoke step. The split was introduced as part of chaining at some point, but it's not clear why it was need for it, I removed it and everything still works.\r\n* To accommodate how the current parser works, some parsing errors are raised immediately, and some are handled in later processing.\r\n* The exceptions are not very consistent in terms of how they're created, whether they generate a message themselves, and what information they track. There could probably be fewer exception subclasses.\r\n* There is no way to parse args without processing them. It might be useful to extract that \r\n* There is way more customizability than is documented. For example, after parsing, each parameter processes its value. But that processing is passed the list of extra args, and _can return a modified list_, so parameter processing can affect other parameters and extra args."
+        },
+        {
+          "author": "ofek",
+          "body": "Has this been merged?"
+        },
+        {
+          "author": "davidism",
+          "body": "no, I haven't had time to finish it yet"
+        },
+        {
+          "author": "ofek",
+          "body": "Ah okay, just wanted to check! Do you happen to have an estimate of the potential decrease in import/load time?"
+        },
+        {
+          "author": "ofek",
+          "body": "> * `Context` has three settings, `allow_extra_args`, `allow_interspersed_args`, and `ignore_unknown_options`, that all take defaults based on class attributes on `Command` and `Group`, but can also be overridden by `context_settings`. These settings affect how the parser works, and should probably not be exposed to users.\n\nI use `ignore_unknown_options` very frequently to capture arbitrary arguments (without users having to always supply `--`) in order to pass everything to some other CLI. Please don't remove that one 😅 "
+        }
+      ]
+    },
+    {
+      "number": 2184,
+      "title": "Click option completion callback doesn't have access to context.params for parsed values of already typed arguments.",
+      "body": "Click option completion callback doesn't have access to context.params for parsed values of already typed arguments during shell completion:\r\n\r\n```python\r\nimport click\r\n\r\ndef test_completer(ctx, param, incomplete):\r\n    import sys\r\n    print(f\"1: {param= }\", file=sys.stderr)\r\n    print(f\"2: {incomplete= }\", file=sys.stderr)\r\n    print(f\"3: {ctx.params = }\", file=sys.stderr)\r\n    return []\r\n\r\n@click.command()\r\n@click.argument('type', shell_complete=test_completer)\r\n@click.option('--test', shell_complete=test_completer)\r\ndef app(type, count):\r\n    pass\r\n```\r\n\r\nOutput:\r\n```\r\napp foo --test [TAB] [TAB]\r\n1: param= <Option test>\r\n2: incomplete= ''\r\n3: ctx.params = {'type': None, 'test': None}\r\n```\r\nThus the context inside option callback does not have access to already typed argument.\r\n\r\nBut vice versa works:\r\n```\r\napp --test bar [TAB] [TAB] \r\n1: param= <Argument type>\r\n2: incomplete= ''\r\n3: ctx.params = {'test': 'bar', 'type': None}\r\n```\r\nThe context inside argument callback have access to already typed option.\r\n\r\nI think it should be the same in both cases.\r\n\r\nEnvironment:\r\n\r\n- Python version: 3.8\r\n- Click version: 8.0.3\r\n",
+      "labels": [
+        "shell completion",
+        "typing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "BYK",
+          "body": "Came here with the same problem myself. I still don't know why they are not populated in `params` but you can access them with `ctx.args`. I think there's a bug somewhere to map them back into `params` but at least this unblocked me and hope it will unblock some others."
+        }
+      ]
+    },
+    {
+      "number": 2154,
+      "title": "xdg-open zombie process remains by default in WSL2 after click.launch()",
+      "body": "### Description\r\nWhen calling `click.launch(<url>)` from within WSL2 (specifically Ubuntu-20.04 in my case), a zombie process is left behind for `xdg-open`. Setting `wait=True` avoids this, meaning that the docs for `launch`: \r\n```\r\nwait (bool) – Wait for the program to exit before returning. This only works if the launched program blocks. In particular, xdg-open on Linux does not block.\r\n```\r\nare perhaps not fully accurate when it comes to WSL2. \r\n\r\nAs an aside, I believe this is an issue that has only arisen recently, as I have not noticed issues before, but it is difficult to know if it has arrived with any specific package upgrade or change to the WSL implementation. \r\n\r\n### To replicate:\r\nFrom within a python shell in WSL2: \r\n```\r\nimport click\r\nclick.launch(\"https://www.google.com\")\r\n```\r\nThe site will open, in another window, run `ps aux | grep [x]dg-open` and you will see a zombie process. This will disappear of course when the parent process (the python shell) is closed, but remains until then. \r\n\r\n### Expected behaviour\r\nThere should be no zombie processes, regardless of whether the `wait` flag is passed or not. \r\n\r\n### Suggested solution\r\nAdd a check for WSL in `src/click/_compat.py`:\r\n```\r\nWSL = \"microsoft-standard\" in package.uname().release\r\n```\r\nThen use this in `src/click/_termui_impl.py` to implicitly call `Popen` with `wait()` if running from WSL (without assigning it to a var, which I think may also keep the process open!\r\n```\r\n        if WSL:\r\n            subprocess.Popen([\"xdg-open\", url]).wait()\r\n        else:\r\n            c = subprocess.Popen([\"xdg-open\", url])\r\n            if wait:\r\n                return c.wait()\r\n```\r\nFailing that, if this is undesirable for any reason, then I think at least an amendment to the docs to indicate that `wait=True` should always be set when running within WSL in order to avoid zombie processes. \r\n\r\n### Environment:\r\n- Python version: 3.9.9\r\n- Click version: Tested on both 7.1.2 (where it was originally discovered), and on 8.0.3. Same on both. \r\n- Current version of `xdg-open` : snapd-xdg-open/focal-updates 2.51.1+20.04ubuntu2 amd64\r\n",
+      "labels": [
+        "docs"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "Happy to review a PR"
+        },
+        {
+          "author": "michjnich",
+          "body": "I've made some changes here, but am genuinely at a loss as to how to include WSL specific tests into the test suite?"
+        },
+        {
+          "author": "davidism",
+          "body": "Open a PR, I don't think we have tests for this anyway."
+        },
+        {
+          "author": "michjnich",
+          "body": "Hi, sorry - was mostly offline Xmas and New Year :) I'll sort out the PR this week when I have 10 mins!"
+        }
+      ]
+    },
+    {
+      "number": 2033,
+      "title": "[Feature] Basic `async` support",
+      "body": "This is a resumption of #85 which was closed more than _7 years ago_ when `asyncio` was at a _completely_ different stage in the python ecosystem. The goal of this issue is basically to enable users to do the following:\r\n\r\n```python3\r\n@click.command()\r\nasync def cli():\r\n    await asyncio.sleep(1)\r\n    click.echo(\"Hello World\")\r\n\r\nif __name__ == \"__main__\":\r\n    cli()\r\n```\r\n\r\nCurrently a workaround is to wrap every such function with a decorator like the following:\r\n\r\n```python3\r\ndef make_sync(func):\r\n    @functools.wraps(func)\r\n    def wrapper(*args, **kwargs):\r\n        return asyncio.run(func(*args, **kwargs))\r\n    return wrapper\r\n\r\n@click.command()\r\n@make_sync\r\nasync def cli():\r\n    ...\r\n```\r\n\r\nThe unclean aspect of the decorator approach is that it requires additional code which could be redundant  as click is able to simply infer via introspection that a function is a coroutine and handle accordingly.\r\nThis issue is only about the bare minimum to get such simple commands working. What this issue is not about is async-ifying most of the API like it is done in [`asyncclick`](https://github.com/python-trio/asyncclick) (a fork which also makes e.g. ctx and autocompletion async).\r\n\r\nArguments which have been brought up in the past by @mitsuhiko are that (1) this does not belong in click, (2) one would need to get access to the loop anyhow for complex use cases and (3) that there would inevitably be some people demanding support for twisted, trio etc. I would like to address each of them:\r\n\r\n1. I see no reason why this does not belong in click. `async`/`await` is a first-class language feature in python and should be supported where feasible. Many CLI tools perform I/O, be it networking, file access or spawning subprocesses. All of these things can benefit from coroutines.\r\n2. This is not really an argument as one can still get the current loop using `asyncio.get_event_loop()`/`asyncio.get_running_loop()` - previous cases where the loop itself may have been passed as an argument are [long made redundant](https://stackoverflow.com/questions/60312374/what-are-all-these-deprecated-loop-parameters-in-asyncio).\r\n3. Those people can still use `asyncclick` which supports different event loops. However depending on the implementation it could be made possible to allow subclassing and overwriting some methods for increased compatibility.\r\n\r\nAnother reason why one might not want this might be decreased maintainability. However as the simplest implementations is 3 lines long I am not sure if this counts. Python 3.6 support would add another 2 lines.\r\nOn the other hand there are confused users when they get exceptions like `sys:1: RuntimeWarning: coroutine 'main' was never awaited` due to click lacking async support and users who need to get creative when the above decorator approach does not work anymore (when using some more involved type hints).\r\n\r\nOther pallets projects which turned down async support years ago now support it like [Flask (since 2.0)](https://flask.palletsprojects.com/en/2.0.x/async-await/) and [Jinja (since 2.9)](https://jinja.palletsprojects.com/en/3.0.x/api/#async-support). They too only implement a minimum to work with it but that is sufficient for most people.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mitsuhiko",
+          "body": "I agree with this generally. The ecosystem is in a vastly different space now than it was back then. That said, native support is a bit tricker because click allows to invoke things recursively and it's unclear if the expectation is that async -> sync is happening at any level or toplevel only.\r\n\r\nThe wrapping that is currently recommended effectively makes the async stop early and I'm not sure this is correct to do for a first class version."
+        },
+        {
+          "author": "makkus",
+          "body": "> That said, native support is a bit tricker because click allows to invoke things recursively and it's unclear if the expectation is that async -> sync is happening at any level or toplevel only.\r\n\r\nI agree that this is going to be tricky to get right, and would probably require a lot of thought. Personally, if this was implemented, I would expect async to be available at every stage throughout click. Even in the 'assemble sub-commands' stage, when calculating completions, when doing validation, etc.\r\n\r\nI was using asyncclick for a project before, and in general it worked very well (I esp. liked that it used anyio under the hood to support multiple event loops). The one problem that was tricky to get implemented was that I wanted to dynamically discover sub-commands according to some json files on the filesystem, and I wanted to do all of this async. I kinda got it working, but don't ask me to show you the code... If I did that again, I think I'd just use a thread-pool, 'normal' click, and be done with it."
+        },
+        {
+          "author": "davidism",
+          "body": "Supporting \"everything\" runs into the same problem as Flask: everything about Click's API is sync, so we'd have to essentially duplicate every object to have async versions of all their methods. (We can't just make everything `async def` internally because that would break all existing subclasses, extensions, etc.) And it's usually expected that both sync and async can be intermixed, which runs into the problem that we need to at *any* point in Click's dynamic resolution be able to switch execution contexts, or choose the right function based on the current execution context. Doing this sort of detection and switching also adds overhead. For a CLI app, responsiveness from the start is important, so this is not ideal.\r\n\r\nFor example, if type validation can be async, that must mean that a custom `ParamType` can define either or both of `def convert` and `async def async_convert`, then we need to decide which to run. Do we run `convert` because the command it's part of doesn't have an `async def` callback? Or do we always prefer starting an async loop if both are defined? What if a previous option in the processing pipeline has an `async def` callback, do we now prefer async because it already had to start a loop, even if the command is sync?\r\n\r\nWhile I'm generally fine with the idea of supporting async, I really need to understand what the common use case we should solve for is. What *specifically* do people want to do that they can't do right now? Not \"type conversion\" but \"I have to do this specific type conversion that absolutely requires async to be useful.\""
+        },
+        {
+          "author": "mitsuhiko",
+          "body": "> Supporting \"everything\" runs into the same problem as Flask: everything about Click's API is sync, so we'd have to essentially duplicate every object to have async versions of all their methods.\r\n\r\nI think the problem here is not as bad as in Flask. There is only a sync entrypoint to the call chain and a \"make async code silently block\" behavior is more than possible since nobody expects click to be involved in async call chains. One could then imagine a secondary entrypoint which does not \"upgrade\" a call to sync or even force a call to be async at all times.\r\n\r\nI'm kinda curious where the general opinion is in 2021 now about how async is working out in Python. Are we moving into a world where almost every single thing is turning into `async` or is a situation evolving where some things are clearly sync and others async?"
+        },
+        {
+          "author": "ThiefMaster",
+          "body": "I have to admit, my first thought was \"why do you need async in click\" because in the end parsing command line args isn't something that feels very async... sure, you might have some edge cases where you do I/O while parsing arguments, but in the end that can be done sync as well..."
+        },
+        {
+          "author": "mitsuhiko",
+          "body": "So the reason I stumbled upon this issues is that I had to invoke a completely unnecessary async call chain from a click function. But alas, apparently almost everything is turning into async now so I guess this war is lost :P\r\n\r\nMaybe a utility decorator to wrap a function so it starts an async function and blocks on it is a reasonable thing to ship at this point."
+        },
+        {
+          "author": "makkus",
+          "body": "> I have to admit, my first thought was \"why do you need async in click\" because in the end parsing command line args isn't something that feels very async... sure, you might have some edge cases where you do I/O while parsing arguments, but in the end that can be done sync as well...\r\n\r\nI can only speak for myself, but if I have an async code-base that needs a command-line interface, being able to use call my existing async functions directly would be great (for quite a few other purposes than 'just' parsing args). Not for very simple cases, but as soon as I use the more advanced stuff that click allows for (like the dynamic sub-command creation, shell-completion hints...), it would certainly make life easier.\r\n\r\nI'm not arguing that click should support that use-case, because as others on this thread I suspect the effort (and possibly complexity) involved in supporting this comprehensively would be quite high, and therefor not a good trade-off to make. It might make more sense to create a new 'async-from-the-ground-up' cli toolkit, dunno.\r\n\r\nBut, if click supported this, I would definitely find a few good use-cases for it, I'm 100% certain!\r\n\r\nAs for only shipping a few utility methods, decorators: that'd probably be nice, but personally I don't think I'd use those. I'd either use asyncclick, or threads."
+        },
+        {
+          "author": "septatrix",
+          "body": "I am not suggesting complete support for async throughout the whole codebase but only for the command functions themselves.\r\nThey could be wrapped similar to the currently recommended decorator. Such that users new to click who need to use an async command are not surprised by exceptions and do not need to look for the decorator workaround.\r\nAgain: Users who need async in all the other places (completion, arg parsing etc.) are probably better of with using the existing asyncclick. However for users who call some async functions do not have to spin up their own event loop for each such command.\r\n\r\nThis would make click <-> asyncclick similar to the relationship between Flask <-> Quart.\r\n\r\nAlternatively to make this a bit more clear we could add a new `AsyncCommand` class (and corresponding `@async_command`) decorator which perform this wrapping explicitly instead of adding it implicitly to the current `Command` invocation method."
+        },
+        {
+          "author": "pocek",
+          "body": "Well, currently a basic solution can be something like this:\n\n```py\nclass MyContext(click.Context):\n    def invoke(self, *args, **kwargs):\n        r = super().invoke(*args, **kwargs)\n        if inspect.isawaitable(r):\n            loop = asyncio.get_event_loop()\n            return loop.run_until_complete(executor.submit(r))\n            # or just\n            # return loop.run_until_complete(r)\n            # (see later)\n        else:\n            return r\n\nclick.BaseCommand.context_class = MyContext\n```\n\n...and one can have `async` commands anywhere, but - as was already noted - there's a lot more in click that is sync and you are out of luck there. But, from my experience, you can get pretty far with just that.\n\nI'm sure you recognize that this is not a solution when there is already an event loop running. If one uses click in a context in which it can spin the loop (be a *loop owner/controller*), then it's kind of fine.\n\nA little bit of novelty here is that executor thing (not shown in detail here). It has a crucial role of passing coro through a queue to an executor task which works like this:\n```\nwhile True:\n    get (coro, future) from the queue\n    await on coro\n    set result on the future\n```\nThe point of this dance is to make `contextvars` work across click (sub)command invokes. I guess this is much less popular problem, because not many people want to run multiple async click command chains simultaneously in a single process (it happens that I do) - in such cases anything touching `click.globals` in its current form is of no use."
+        },
+        {
+          "author": "chobeat",
+          "body": "I think this discussion is kinda stranded but I would like to add that it would be great if the solution could make `CLIRunner` run well with asyncio too. I've been using `click` with home-baked async commands for a while but I can't really test properly because CLIRunner and my loop (injected by pytest-asyncio) don't really go well together."
+        },
+        {
+          "author": "davidism",
+          "body": "The most that we would be adding is having Click automatically start an event loop if a command callback is marked `async def`, so that `await` could be written directly in the command callback. There is nothing stopping you from using async library code in your commands now, you just need to do `value = asyncio.run(coroutine)` instead of `await coroutine()`."
+        },
+        {
+          "author": "chobeat",
+          "body": "that's already what I'm doing but then it conflicts with pytest-asyncio because CLIRunner does weird stuff and the coroutine is never awaited"
+        },
+        {
+          "author": "davidism",
+          "body": "> CLIRunner does weird stuff and the coroutine is never awaited\r\n\r\nI can't reproduce that issue. `asyncio.run` would await the coroutine in that case, not the Click command or runner. It sounds like you tried to use `async def` for the command still, that's what's not supported. You don't need it if you do `asyncio.run`."
+        },
+        {
+          "author": "lewoudar",
+          "body": "Hi everyone, I don't read all the conversation but if you want to add async support, don't forget that asyncio is not the only coroutine library, I'm thinking about [trio](https://trio.readthedocs.io/en/stable/). You can also take inspiration from the [asyncclick](https://github.com/python-trio/asyncclick) project.\r\nEdit: The issue author already talks about asyncclick, sorry for that :)"
+        },
+        {
+          "author": "makkus",
+          "body": "@lewoudar asyncclick and trio are mentioned multiple times in this thread."
+        },
+        {
+          "author": "lewoudar",
+          "body": "@makkus yeah, sorry, but I was afraid when I look at his first example dealing with asyncio"
+        },
+        {
+          "author": "davidism",
+          "body": "If something were to get in, it would presumably work similar to Flask, where there is a method that handles spawning the event loop for coroutines, and can be overridden to use something besides asyncio."
+        },
+        {
+          "author": "lewoudar",
+          "body": "Thanks for the clarification @davidism  :)"
+        },
+        {
+          "author": "romanzdk",
+          "body": "Is there any plan to implement async support? :)"
+        },
+        {
+          "author": "bckohan",
+          "body": "Like @pocek I'd like to be able to run click command chains asynchronously in a single process.\n\nAs far as I can tell, this is the only use case where native support in click is necessary. For all the other ones its just syntactic sugar. "
+        },
+        {
+          "author": "pocek",
+          "body": "> Like [@pocek](https://github.com/pocek) I'd like to be able to run click command chains asynchronously in a single process.\n> \n> As far as I can tell, this is the only use case where native support in click is necessary. For all the other ones its just syntactic sugar.\n\nUnfortunately there are many async-unaware constructs in click. Running async commands is just a tip of an iceberg.\n\n- anything using `click.globals` is more or less broken, and this means a lot of things. I've tried to replace `threading.local` with `contextvars`, but failed miserably (my conclusion at the time was that it's not possible without a much broader rework)\n- `Context.with_resource`, `Context.call_on_close` etc. can't handle async\n- `Context` is a synchronous context manager and because click makes heavy use of this feature pretty much everywhere, it makes many things impossible\n- probably a lot more.\n\nBy _handle async_ I mean work in an existing event loop, not just call `loop.run_until_complete()` (this is not a solution). "
+        },
+        {
+          "author": "makukha",
+          "body": "What if a conservative approach can be used at the moment? Adding a simple decorator like `@click.sync` won't require integration and much support effort, but will cover the most common use case:\n```python\n@click.command()\n@click.sync\nasync def cmd():\n    pass\n```\n\nwith trivial implementation\n```python\nimport asyncio\nfrom functools import wraps\n\ndef sync(func):\n    '''Decorator that wraps coroutine with asyncio.run.'''\n    @wraps(f)\n    def wrapper(*args, **kwargs):\n        return asyncio.run(f(*args, **kwargs))\n    return wrapper\n```\n\nI mean, just adding the snippet from OP to `click` module will already help a lot."
+        },
+        {
+          "author": "winny-",
+          "body": "It sounds like perfection isn't going to ship.  In light of that, maybe we could have the proposed decorator + a little blurb in the click docs.  This might solve 95% of users' challenges using asyncio, without prowling github issues for ad-hoc solutions."
+        }
+      ]
+    },
+    {
+      "number": 1997,
+      "title": "Testing output is dependent on terminal width",
+      "body": "~After https://github.com/pallets/click/pull/1829~, while using \r\n```py\r\n        runner = CliRunner()\r\n        result = runner.invoke(...)\r\n```\r\n`result.output` contains the newline introduced by the wrappings due to auto detected terminal width. This is undesirable in test cases. As the docs says that these tools are made for testing only, IMO it would be better if the terminal width wrapping could be avoided in the output.\r\nFor now, I'm using `runner.invoke(terminal_width=1000, ...)` in my test cases. Maybe having `terminal_width=0` or a negative number could be treated an infinitely large terminal. \r\n\r\nEnvironment:\r\n\r\n- Python version: Python 3.9.5\r\n- Click version: click==8.0.1\r\n",
+      "labels": [
+        "test runner"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "The linked PR does not include any changes that would result in the behavior you've described."
+        },
+        {
+          "author": "davidism",
+          "body": "The test runner already forces the wrapping width and ignores terminal width."
+        },
+        {
+          "author": "Hritik14",
+          "body": "@davidism Thank you for the quick response. Here's the test run I tried to reproduce the issue.\r\n\r\ntest_cli.py\r\n```py\r\nfrom click.testing import CliRunner\r\nfrom cli import cli\r\n\r\ndef test_help():\r\n    runner = CliRunner()\r\n    result = runner.invoke(cli, ['--help'])\r\n\r\n    print(result.output)\r\n\r\n    result_large_width = runner.invoke(cli, ['--help'], terminal_width=1000)\r\n    print(result_large_width.output)\r\n\r\n    assert result.output == result_large_width.output\r\n\r\nif __name__ == \"__main__\":\r\n    test_help()\r\n```\r\n\r\ncli.py\r\n```py\r\nimport click\r\n\r\n@click.command()\r\n@click.help_option('-h', '--help')\r\ndef cli():\r\n    \"\"\"\r\n    Identify the changes that need to be made to the 'old'\r\n    scan file (-o or --old) in order to generate the 'new' scan file (-n or\r\n    --new).  Write the results to a .json file (-j or --json-file) at a\r\n    user-designated location.  If no file option is selected, print the JSON\r\n    results to the console.\r\n    \"\"\"\r\n    ...\r\n\r\nif __name__ == '__main__':\r\n    cli()\r\n```\r\n\r\nSample test:\r\n```bash\r\n/tmp/test_project\r\nvenv ❯ python test_cli.py\r\nUsage: cli [OPTIONS]\r\n\r\n  Identify the changes that need to be made to the 'old' scan file (-o or --old)\r\n  in order to generate the 'new' scan file (-n or --new).  Write the results to\r\n  a .json file (-j or --json-file) at a user-designated location.  If no file\r\n  option is selected, print the JSON results to the console.\r\n\r\nOptions:\r\n  -h, --help  Show this message and exit.\r\n\r\nUsage: cli [OPTIONS]\r\n\r\n  Identify the changes that need to be made to the 'old' scan file (-o or --old) in order to generate the 'new' scan file (-n or --new).  Write the results to a .json file (-j or --json-file) at a user-designated location.  If no file option is selected, print the JSON results to the console.\r\n\r\nOptions:\r\n  -h, --help  Show this message and exit.\r\n\r\nTraceback (most recent call last):\r\n  File \"/tmp/test_project/test_cli.py\", line 16, in <module>\r\n    test_help()\r\n  File \"/tmp/test_project/test_cli.py\", line 13, in test_help\r\n    assert result.output == result_large_width.output\r\nAssertionError\r\n```"
+        },
+        {
+          "author": "davidism",
+          "body": "If you can do git bisect to identify the commit that introduced the behavior, that would be helpful, as the pr you linked is not correct."
+        },
+        {
+          "author": "Hritik14",
+          "body": "> The linked PR does not include any changes that would result in the behavior you've described.\r\n\r\nYou're right. The linked PR doesn't include those changes. It just so happened that the linked PR changes the output that broke my test cases by introducing different formatting.\r\n\r\nAt ddcabdd4f22f438c0c963150b930d0d09b04dea7\r\n```py\r\n{\"Usage: cli [OPTIONS]\\n\\n  Identify the changes that need to be made to the 'old' scan file (-o or --old)\\n  in order to generate the 'new' scan file (-n or --new).  Write the results to\\n  a .json file (-j or --json-file) at a user-designated location.  If no file\\n  option is selected, print the JSON results to the console.\\n\\nOptions:\\n  -h, --help  Show this message and exit.\\n\"}\r\n```\r\n\r\nAt 8d49e14^1\r\n```py\r\n{\"Usage: cli [OPTIONS]\\n\\n  Identify the changes that need to be made to the 'old' scan file (-o or\\n  --old) in order to generate the 'new' scan file (-n or --new).  Write the\\n  results to a .json file (-j or --json-file) at a user-designated location.\\n  If no file option is selected, print the JSON results to the console.\\n\\nOptions:\\n  -h, --help  Show this message and exit.\\n\"}\r\n```"
+        },
+        {
+          "author": "Hritik14",
+          "body": "> If you can do git bisect to identify the commit that introduced the behavior, that would be helpful\r\n\r\nSorry to say, I tried the very first commit that brought testing into the API (c265355bcd50a0848cb973e8e83b3e21ee60a775). This looks like something that was always there."
+        },
+        {
+          "author": "MVrachev",
+          "body": "I think I got the same error on different terminals (MAC built-in terminal, Iterm2 and VScode terminals).\r\nI was able to fail all our project test cases that are asserting strings against ClickRunner command output."
+        },
+        {
+          "author": "erindru",
+          "body": "I'm also experiencing this.\n\nI can see that `CliRunner` takes steps to hardcode the terminal width, but when I read the output back using something like:\n\n```\nrunner = CliRunner()\n\nresult = runner.invoke(...)\n\nassert \"<something>\" in result.output\n```\n\nThe locations of `\\n` in `result.output` still vary depending the actual terminal in use (VSCode pytest runner environment, GNOME Terminal, whatever terminal CircleCI uses on its Ubuntu build agents)\n\nI wonder if pytest is messing up the console in its own way"
+        }
+      ]
+    },
+    {
+      "number": 1574,
+      "title": "Context.params isn't setup in the MultiCommand.list_commands method",
+      "body": "### Expected Behavior\r\n\r\nI can refer parsed options in MultiCommand.list_commands method. \r\n\r\n### Actual Behavior\r\n\r\nI can't. Options aren't initialized in the list_commands.\r\n\r\nI'm creating a CLI tool that dynamically loads subcommands from a file. And the location of the file is specified by an option of the CLI tool. I can refer the parsed option in MultiCommand.get_command but I can't refer it in MultiCommand.list_commands method.\r\n\r\nI think the list_command method is called before finishing the parse_args method so we can't use parsed options in the list_commands.\r\n\r\nhttps://github.com/pallets/click/blob/fef921a4d0c807673d7800af4dd4ca604f6489e4/src/click/core.py#L1242\r\nhttps://github.com/pallets/click/blob/fef921a4d0c807673d7800af4dd4ca604f6489e4/src/click/core.py#L1217\r\n\r\nI created the following file and I got an empty dictionary object by the logger.debug when I execute the following command.\r\n\r\nhttps://github.com/polikeiji/bkm/blob/master/bkm.py#L94\r\n\r\n`python -m bkm -f AAA --help`\r\n\r\nIs this behavior the expected one?\r\n\r\n### Environment\r\n\r\n* Python version: 3.8.0\r\n* Click version: 7.1.2",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "parabolize",
+          "body": "Could you provide a shorter example that shows where you are calling `MultiCommand.list_commands`? I have created a example where it is being called late enough for `Context.params` to be populated:\r\n```python\r\nimport click\r\n\r\n\r\nclass NosyGroup(click.Group):\r\n    def list_commands(self, ctx):\r\n        print(f'Group ctx params: {ctx.params}')\r\n        return super().list_commands(ctx)\r\n\r\n\r\n@click.command(cls=NosyGroup)\r\n@click.option('-a')\r\n@click.option('-b')\r\n@click.pass_context\r\ndef run(ctx, **kwargs):\r\n    click.echo(f'run: {kwargs}')\r\n    click.echo(f'params: {ctx.params}')\r\n\r\n    click.echo('calling MultiCommand.list_commands:')\r\n    commands = ctx.command.list_commands(ctx)\r\n\r\n    click.echo(f'commands in Group: {commands}')\r\n\r\n\r\n@run.command()\r\n@click.option('-x')\r\n@click.pass_context\r\ndef comm1(ctx, **kwargs):\r\n    click.echo(f'comm1: {kwargs}')\r\n    click.echo(f'params: {ctx.params}')\r\n\r\n\r\n@run.command()\r\n@click.option('-y')\r\n@click.pass_context\r\ndef comm2(ctx, **kwargs):\r\n    click.echo(f'comm2: {kwargs}')\r\n    click.echo(f'params: {ctx.params}')\r\n```\r\nOutput:\r\n```\r\n% multi -a foo -b bar comm1 -x bazz\r\nrun: {'a': 'foo', 'b': 'bar'}\r\nparams: {'a': 'foo', 'b': 'bar'}\r\ncalling MultiCommand.list_commands:\r\nGroup ctx params: {'a': 'foo', 'b': 'bar'}\r\ncommands in Group: ['comm1', 'comm2']\r\ncomm1: {'x': 'bazz'}\r\nparams: {'x': 'bazz'}\r\n```"
+        }
+      ]
+    },
+    {
+      "number": 1428,
+      "title": "allow checking for path non-existance",
+      "body": "right now, using click.Path() allows a user to set the following params:\r\n`exists=True`: aborts if path does not exists\r\n`dir_okay=False`: aborts if path (exists and) is a dir\r\n`file_okay=False`: aborts if path (exists and) is a file\r\n(notice that for the each case, the opposite value will make the check to be simply skipped)\r\n\r\nHowever, I believe that in many times, the programmer will want to write a program that verifies that a given path does not exists, (e.g. for purpose of creating it without overwriting anything)\r\n\r\nfor this case, I believe this set of parameters is better:\r\n`exists_okay=False`: aborts if path exists\r\n`not_exists_okay=False`: aborts if path does not exists\r\n`dir_okay=False`: aborts if path (exists and) is a dir\r\n`file_okay=False`: aborts if path (exists and) is a file\r\n\r\nnotice how before, users could think that `exist=False` will force the path to be non-existing, while now each parameter behavior is clear from it's name.\r\n\r\nfrom a quick look at the code, making this change seems to be trivial.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "akshgpt7",
+          "body": "I'd like to take this up!"
+        },
+        {
+          "author": "davidism",
+          "body": "I've been thinking about this, and while I understand the use case, I think it's probably better to leave this to a custom parameter type or callback. You probably want to do something more complicated when a file exists, such as appending to it, or prompting to overwrite it (or failing), or making the path unique. On the other hand, `exists=True` covers the much more common case where you want to read from a file and that file must actually exist.\r\n\r\nThat said, if we were to do it, I don't like the separate parameters, it can create combinations that don't make sense. Making `exists=None` mean \"don't care\", and using `False` and `True` makes more sense to me."
+        },
+        {
+          "author": "SnirBroshi",
+          "body": "Also it doesn't guard against paths which are neither a file nor a directory, such as pipes/sockets/char-devices/block-devices, so `file_okay=False` will let a pipe pass, and might break the program if it `open()`s and tries to `.seek()` it for example."
+        },
+        {
+          "author": "jpmckinney",
+          "body": "Noting that I would like a way to require a path to not exist. However, this might be too significant an API change."
+        },
+        {
+          "author": "mrmeszaros",
+          "body": "With all this different types (non-existent, file, directory, etc.), maybe it would be better to have it as a `state` parameter.\r\n\r\nIt could be a set of acceptable states for the path. It could default to `{Missing, File, Directory}`. Also, it could be cross-linked with the `dir_okay` and `file_okay` and `exist_okay` flags.\r\n\r\nAdditionally, this could be extended to make special file checking (like symlink, hard-link, socket, fifo, etc. in linux)."
+        }
+      ]
+    },
+    {
+      "number": 1378,
+      "title": "Feature to only update atomic file when changed",
+      "body": "I have various programs that are generating source files for use in a C project build.  Often these files get generated the same each time but since they are written regardless they trigger cascading rebuilds of that file and those that depend on it.\r\n\r\nhttps://github.com/pallets/click/blob/38a2712d596a5df9288c1817748b71197d8c7c57/click/_compat.py#L536-L546\r\n\r\nI didn't implement it yet but it seems like it wouldn't be particularly difficult to add a changed check right after `self._f.close()`.  Perhaps right before to avoid reopening the new content?  I would _not_ expect this changed check to be atomic with the replace.  Maybe there's a way.  It not being atomic isn't an issue for me.  If two things are trying to dump into the file 'at the same time'...  so it goes.\r\n\r\nThe 'only if changed' option would then be cascaded back up at least to the `click.File()` interface.  Though having `only_write_if_changed` be always present but only usable with `atomic=True` isn't great so probably more to talk about there.  A separate callable, something else, I haven't thought this through yet.\r\n\r\nDoes this sound like a feature which would be of interest and is worth me developing a PR to discuss?  Or, should I just go implement this for myself on the side without bothering to have so much click integration.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "ljluestc",
+          "body": "```\r\nimport click\r\n\r\nclass FileIfChanged(click.File):\r\n    def write(self, value):\r\n        # Check if the file exists and read its current content\r\n        try:\r\n            with open(self.get_filename(), 'r') as f:\r\n                existing_content = f.read()\r\n        except FileNotFoundError:\r\n            existing_content = \"\"\r\n\r\n        # Compare the existing content with the new content\r\n        if existing_content != value:\r\n            # Only write if the content is different\r\n            super().write(value)\r\n\r\n@click.command()\r\n@click.option('--output', type=FileIfChanged('w'), default='output.txt')\r\ndef main(output):\r\n    # Your program logic here\r\n    output.write('Hello, World!')\r\n\r\nif __name__ == '__main__':\r\n    main()\r\n\r\n```"
+        }
+      ]
+    },
+    {
+      "number": 1370,
+      "title": "click.confirm fails when piping input",
+      "body": "I string a lot of my programs together through piping, but some of them work best with confirmation prompting. However, if I pipe program A's output into program B and B asks for confirmation, click.confirm will not be able to get keyboard input since stdin is the pipe, not the terminal.\r\n\r\nIt seems that a work around would be to use click.getchar, which uses the terminal no matter what, but this would mean a few lines of code + an if statement to get the the same functionality.\r\n\r\nWould it be possible to get click.confirm to always get input from the terminal? Or at least include an option for that?",
+      "labels": [
+        "prompt"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "jcrotts",
+          "body": "Feel free to make a PR for this if you have an implementation in mind.\r\n\r\nIn general saving a few lines in user code is not a strong reason for a feature request, but if the implementation is low impact it could get added."
+        },
+        {
+          "author": "9ronoob",
+          "body": "I was also trying to implement the same functionality. For example \r\n\r\n```py\r\nimport click\r\n\r\ndef get_name(ctx, param, value):\r\n    if not value and not click.get_text_stream('stdin').isatty():\r\n        return click.get_text_stream('stdin').read().strip()\r\n    else:\r\n        return value\r\n\r\n\r\n@click.command()\r\n@click.argument('name', callback=get_name, required=False)\r\ndef say_hello(name):\r\n    #click.confirm('Do you want to continue?', abort=True, default=True)\r\n    click.echo('Hello {}'.format(name))\r\n\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    say_hello()\r\n```\r\n\r\n#### Normal test case\r\n```\r\nλ python test_pipe.py click\r\nHello click\r\n```\r\n#### Missing argument\r\n```\r\nλ python test_pipe.py\r\nHello None\r\n```\r\n\r\n#### Pipelined argument\r\n```\r\nλ echo click | python test_pipe.py\r\nHello click\r\n```\r\n\r\nNow when confirmation logic added\r\n\r\n```py\r\n@click.command()\r\n@click.argument('name', callback=get_name, required=False)\r\ndef say_hello(name):\r\n    click.confirm('Do you want to continue?', abort=True, default=True)\r\n    click.echo('Hello {}'.format(name))\r\n```\r\n\r\n\r\n#### Normal test case\r\n```\r\nλ python test_pipe.py click\r\nDo you want to continue? [Y/n]: y\r\nHello click\r\n```\r\n#### Missing argument\r\n```\r\nλ python test_pipe.py\r\nDo you want to continue? [Y/n]: y\r\nHello None\r\n```\r\n\r\n#### Pipelined argument\r\n```\r\nλ echo click | python test_pipe.py\r\nDo you want to continue? [Y/n]: Aborted!\r\n```\r\n\r\nI have then added the following modifications\r\n\r\nAt `termui.py` i have added the following method\r\n\r\n```py\r\ndef _get_user_confirmation():\r\n    ret = ''\r\n    while 1:\r\n        c = getchar()\r\n        if c == '\\r':\r\n            break\r\n        elif c in ('\\x08', '\\x7f') and len(ret) != 0:\r\n            echo(\"\\b \\b\", nl=False)\r\n            ret = ret[:-1]\r\n        else:\r\n            ret += c\r\n            echo(c, nl=False)\r\n    echo('', nl=True)\r\n    return ret\r\n```\r\n\r\nand at the `confirm` method\r\n\r\n```py\r\n    prompt = _build_prompt(text, prompt_suffix, show_default,\r\n                           default and 'Y/n' or 'y/N')\r\n    while 1:\r\n        try:\r\n            # Write the prompt separately so that we get nice\r\n            # coloring through colorama on Windows\r\n            echo(prompt, nl=False, err=err)\r\n            #value = visible_prompt_func('').lower().strip()\r\n            value = _get_user_confirmation().lower().strip()\r\n        except (KeyboardInterrupt, EOFError):\r\n            ...\r\n```\r\n\r\n#### Pipelined argument\r\n```\r\nλ echo click | python test_pipe.py\r\nDo you want to continue? [Y/n]: y\r\nHello click\r\n\r\nλ echo click | python test_pipe.py\r\nDo you want to continue? [Y/n]: n\r\nAborted!\r\n```\r\n\r\nI wasn't able to get the unit-tests running (`test_util.py`) as the `test_prompt` method expects an input from the terminal. Also with this modification we still need to define the argument as a non required one\r\n\r\n\r\nI am trying to do a my first contribution to click, hopefully i can get this working"
+        },
+        {
+          "author": "davidism",
+          "body": "Seems like either Click's confirmation should be disabled when reading input from stdin, or the program doing the piping should also be outputting answers to the confirmations. Changing inputs to read from one source for some and a different way for others seems confusing."
+        },
+        {
+          "author": "9ronoob",
+          "body": "I have gone through another approach. Now writing a code like this\r\n\r\n```py\r\nimport click\r\n\r\n@click.command()\r\n@click.argument('name', required=True)\r\n@click.option('--m', required=True)\r\ndef say_hello(name, m):\r\n    click.confirm('Do you want to continue?', abort=True, default=True)\r\n    click.echo('Hello {}'.format(name)  + m)\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    say_hello()\r\n```\r\n\r\nShall work as expected\r\n\r\n#### Normal test case\r\n```\r\nλ python test_pipe.py world --m 1\r\nDo you want to continue? [Y/n]: y\r\nHello world1\r\n```\r\n\r\n#### Missing argument\r\n```\r\nλ python test_pipe.py\r\nUsage: test_pipe.py [OPTIONS] NAME\r\nTry \"test_pipe.py --help\" for help.\r\n\r\nError: Missing argument \"NAME\".\r\n```\r\n\r\n#### Pipelined argument\r\n```\r\n λ echo world | python test_pipe.py --m 1\r\nDo you want to continue? [Y/n]: y\r\nHello world1\r\n```\r\n\r\n\r\nAnd without confirmation\r\n\r\n```py\r\n@click.command()\r\n@click.argument('name', required=True)\r\n@click.option('--m', required=True)\r\ndef say_hello(name, m):\r\n    #click.confirm('Do you want to continue?', abort=True, default=True)\r\n    click.echo('Hello {}'.format(name)  + m)\r\n```\r\n\r\n#### Normal test case\r\n```\r\nλ python test_pipe.py world --m 1\r\nHello world1\r\n```\r\n\r\n#### Missing argument\r\n```\r\nλ python test_pipe.py\r\nUsage: test_pipe.py [OPTIONS] NAME\r\nTry \"test_pipe.py --help\" for help.\r\n\r\nError: Missing argument \"NAME\".\r\n```\r\n\r\n#### Pipelined argument\r\n```\r\n λ echo world | python test_pipe.py --m 1\r\nHello world1\r\n```\r\n\r\n\r\nNow i no longer need to define a callback for getting the arguments when passed through the stdin pipe.\r\n\r\n\r\nA test-case that can expose this bug. \r\n\r\n```py\r\n    @click.command()\r\n    @click.argument(\"arg1\", required=True)\r\n    def test_args_pipe_confirm(arg1):\r\n        if click.confirm('Foo', default=True):\r\n            click.echo(arg1)\r\n        else:\r\n            click.echo('no :(')\r\n\r\n    result = runner.invoke(test_args_confirm, input=\"test_age\\ny\\n\")\r\n    assert not result.exception\r\n    assert result.output == 'Foo [Y/n]: y\\ntest_age\\n'\r\n```\r\n\r\nI have submitted these changes into a pull request at https://github.com/pallets/click/pull/1372\r\n\r\nLooking forward to your feedback"
+        },
+        {
+          "author": "jonbiemond",
+          "body": "I'm interested in opening a new PR for this based on @9ronoob 's work in #1372\r\n\r\n@davidism Does the proposed solution above address any concerns?"
+        }
+      ]
+    },
+    {
+      "number": 1322,
+      "title": "Subcommands prefixed with a forward slash are seemingly ignored",
+      "body": "I don't actually have any clue what's going on here, but I've tracked the misbehavior down to a specific commit, with a failing test fails on this commit, but succeeds on the previous commit.\r\n\r\nLet's start with the test case:\r\n\r\n```python\r\ndef test_bad_command(runner):\r\n    @click.group()\r\n    def cli():\r\n        pass\r\n\r\n    @cli.command()\r\n    def wups():\r\n        pass\r\n\r\n    result = runner.invoke(cli, ['other'])\r\n    assert 'No such command' in result.output\r\n\r\n    result = runner.invoke(cli, ['/other'])\r\n    assert 'No such command' in result.output\r\n```\r\n\r\nThis probably explains the issue better. In normal situations, we'd expect some call to `cli other` to come back and error with \"No such command ...\", but in the case if prefixing with a forward slash, it somehow tricks the parser into ignoring the entire argument and instead, we get the help of the parent command.\r\n\r\nThis behavior seems to be broken starting with commit 0a2919f34fcbc635d8530b4c5b60bf119b2bcedb, and the tests fail when applied here, but pass when applied against e68766c35ab134af2db2abf7cbd6f31e9b25d150.\r\n\r\nLet me know if there's more information I can provide to help find the issue.\r\n\r\nTo add to it, in terms of releases, this means the behavior worked against Click 5.1, but has failed since Click 6.0 and continues to not work through latest master.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mitsuhiko",
+          "body": "Related to #590"
+        }
+      ]
+    },
+    {
+      "number": 1279,
+      "title": "provide access to a normalized list of args that will result in the same params",
+      "body": "In pip-tools I want to be able to store the args that pip-compile was called with in its output. However I want to normalize the output so that syntactic arg changes are ignored.\r\n\r\nEffectively, I want to be able to serialize a Context object into a list of args, such that all equivalent Context objects generate the same list of arg strings.\r\n\r\nhttps://github.com/jazzband/pip-tools/issues/788",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "I'd like to define exactly what this means. I can see how this might be possible, but what we actually reconstruct matters. Here's a format I think makes sense.\r\n\r\n* Output all options before all arguments, in definition order instead of provided order, regardless of if interspersed arguments are allowed.\r\n* If unknown options and/or extra arguments are allowed, output them at the end of the argument list.\r\n* If the double dash switch is allowed, place it before the first argument that starts with an option prefix.\r\n* If an option can be specified multiple times, group these repeats together, `-a 1 -a 2 -a 3`.\r\n* Use a long option name if available, and the first such name if multiple are defined.\r\n* Long option values are separated, `--key value` vs `--key=value`.\r\n* Short option values are separated, `-k value` vs `-kvalue`.\r\n* Flags are separated, `-a -b` vs `-ab`.\r\n* Include options whose values were taken from a prompt or environment variable. We only know about prompts during processing, not later from the command callback.\r\n* Do *not* include a value from a prompt if it was a hidden prompt, as that could cause sensitive information to be displayed.\r\n* Exclude an option with the default value, unless the context's default map was used and different than the real default.\r\n* Omit an option value, but not the option itself, if the option only optionally takes a value and the value matches the flag value.\r\n* Use the name a subcommand was defined with instead a an alias it was provided as, unless the command is not actually registered with its defined name.\r\n\r\nFile and path types can be ambiguous. Should they be absolute, or relative to the current directory, or remain untouched? The resulting command can't be guaranteed to work either way. If it's always absolute, it breaks if the user really did mean \"I'm going to run this command from multiple places and expect a file there\". If it's always relative, it breaks if the user meant to refer to a specific file regardless of location and later runs the command somewhere else. If it's the original input, then both these things happen.\r\n\r\nParameters with custom types can't be guaranteed to output a usable value. We could add a `ParamType.to_cli_value` as the reverse of `convert`, and error if it's not implemented for a type. However, a parameter can also have a callback that's applied during processing after the type conversion, which can further change the value."
+        },
+        {
+          "author": "kdeldycke",
+          "body": "I had a related issue a while back, as I was looking to introspect the normalized values of options, after Click applied all its cleaning operations. Unfortunately the process is quite complex and deeply embedded into the Click code path. Ideally I wanted to have a `raw_args` property somewhere on the `Context` so I could look at the cleaned options.\r\n\r\nIn the end I did just patched the `make_context()` method on `Command` to intercept and store the cleaned `args` in the `Context`: https://github.com/kdeldycke/click-extra/blob/ff863f46c50f0a042ef5a5166746eaee52a930f5/click_extra/commands.py#L157-L179\r\n\r\nIf you want to reuse my workaround, I made it available on my `@extra_command()` / `@extra_group()` decorators [from my Click Extra project](https://github.com/kdeldycke/click-extra): https://kdeldycke.github.io/click-extra/commands.html#introspecting-parameters"
+        }
+      ]
+    },
+    {
+      "number": 1269,
+      "title": "Chained command with argument and option results in \"No such command\"",
+      "body": "Chained command with argument *and* option results in \"No such command\"; according to [the documentation](https://click.palletsprojects.com/en/7.x/commands/#multi-command-chaining),\r\n\r\n> Other than that [`nargs=-1` being allowed only on the last chained command] there are no restrictions on how they [chained commands] work. They can accept options and arguments as normal.\r\n\r\nReproduced on Ubuntu 18.04 with Python 3.5, 3.6 and 3.7, for all tagged Click versions between 3.0 and 7.0 (`chain=` does not seem to be supported for the ones before that).\r\n\r\nMinimal repro (removing the argument allows the option to be recognized):\r\n\r\n```python\r\nimport click\r\n\r\n@click.group(chain=True, no_args_is_help=False)\r\ndef cli():\r\n    pass\r\n\r\n@cli.command()\r\n@click.argument('argument')\r\n@click.option('--option')\r\ndef command(argument, option):\r\n    pass\r\n\r\nif __name__ == '__main__':\r\n    cli()\r\n```\r\n\r\nResults in:\r\n\r\n```\r\n$ python3 test.py command a --option x\r\nUsage: test.py [OPTIONS] COMMAND1 [ARGS]... [COMMAND2 [ARGS]...]...\r\nTry \"test.py --help\" for help.\r\n\r\nError: No such command \"--option\".\r\n$ python3 test.py command --help \r\nUsage: test.py command [OPTIONS] ARGUMENT\r\n\r\nOptions:\r\n  --option TEXT\r\n  --help         Show this message and exit.\r\n```",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "lemon24",
+          "body": "OK, looking at the OptionParser instances used in the example above, I saw that they have allow_interspersed_args set to False (used to \"to implement nested subcommands safely\", which makes sense).\r\n\r\nThis, however, leads to inconsistent behavior:\r\n\r\n* non-chained commands allow both the  `--option argument` and the `argument --option` orders\r\n* chained commands only allows `--option argument`\r\n\r\nWhile the help text clearly states that commands should be called like `[OPTIONS] ARGUMENT`, the fact that both orders work in most of the cases may be confusing to users (it was for me, at least).\r\n\r\nIf I understand correctly, it's unlikely `argument --option` will ever be possible for chained commands. Should I update the [Multi Command Chaining](https://click.palletsprojects.com/en/7.x/commands/#multi-command-chaining) section to reflect the behavior described above? [Why not Argparse?](https://click.palletsprojects.com/en/7.x/why/#why-not-argparse) implies it, but that's not the first place someone would look when encountering it."
+        },
+        {
+          "author": "jcrotts",
+          "body": "Seems reasonable to add a line in the docs to say that you have to use argument followed by options. Although I recall this being mentioned several places in the docs."
+        },
+        {
+          "author": "jcrotts",
+          "body": "https://github.com/pallets/click/issues/1323"
+        }
+      ]
+    },
+    {
+      "number": 944,
+      "title": "[Feature] Color support for Exceptions",
+      "body": "Right now, the click module gives us the option of using colors only through click.echo and click.secho commands. I was thinking that if we can tweak the classes inside the exceptions.py file and use secho inside them in place of echo, then we can give the users an option of colorizing error/exception messages.\r\n\r\n ",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "nickwu241",
+          "body": "For example:\r\n```python\r\nimport click\r\n\r\ntry:\r\n    raise Exception(\"some message\")\r\nexcept Exception as e:\r\n    click.echo(e)  # works\r\n    click.secho(str(e), fg='red) # works\r\n    click.secho(e, fg='red')  # raises a TypeError, would be nice to be able do this\r\n```\r\n\r\nThis is because \r\n```python\r\nimport click\r\nclick.style(Exception(\"some message\"), fg='red')\r\n```\r\nexpects the first parameter to be a string, currently this raises `TypeError: sequence item 1: expected string, exceptions.Exception found`."
+        },
+        {
+          "author": "davidism",
+          "body": "This seems to be about being able to have `ClickException.show()` apply style information to the message, not with being able to pass exceptions *to* `secho()`.\r\n\r\nOne way to handle this would be to call `style()` on the message first, and have a `ClickException.style_args` attribute that could be set to a dict of style arguments."
+        },
+        {
+          "author": "reillysiemens",
+          "body": "@davidism: I'd love to take a stab at resolving this as I've wanted colored exceptions for a while, but in my first attempt I noticed that there's a circular import between `click.termui` where `style()` comes from and the `click.exceptions` module.\r\n\r\nThe circular import can be trivially resolved by importing `style()` within the `ClickException.show()` method, but something about that just feels _wrong_ to me... :sweat_smile:\r\n\r\n```diff\r\ndiff --git a/src/click/exceptions.py b/src/click/exceptions.py\r\nindex 9623cd8..0042bf4 100644\r\n--- a/src/click/exceptions.py\r\n+++ b/src/click/exceptions.py\r\n@@ -14,6 +14,7 @@ class ClickException(Exception):\r\n \r\n     #: The exit code for this exception.\r\n     exit_code = 1\r\n+    style_args = {}\r\n \r\n     def __init__(self, message):\r\n         super().__init__(message)\r\n@@ -28,7 +29,8 @@ class ClickException(Exception):\r\n     def show(self, file=None):\r\n         if file is None:\r\n             file = get_text_stderr()\r\n-        echo(f\"Error: {self.format_message()}\", file=file)\r\n+        from .termui import style\r\n+        echo(style(f\"Error: {self.format_message()}\", **self.style_args), file=file)\r\n \r\n \r\n class UsageError(ClickException):\r\n```\r\n\r\nAs an alternative I considered that just providing override instructions for the `ClickException.show()` method in the docs seems simple enough. The one caveat I see there is that the\r\n```python\r\nif file is None:\r\n    file = get_text_stderr()\r\n```\r\nin all of the `show()` implementations would require/encourage implementers to use `click._compat.get_text_stderr()`, which I think is private...\r\n\r\nDo you have any thoughts on the issue of circular imports or users overriding `show()` with the support of a private function? :thinking:"
+        },
+        {
+          "author": "brandonchinn178",
+          "body": "It would also be nice to be able to globally style all errors. What about an API like this:\r\n\r\n1. `ClickException` takes an optional `style: Callable[[str], str]` parameter\r\n2. `ClickException` also has a `style_default` class variable that initializes as `lambda x: x`\r\n3. When `style` is not set, it defaults to `style_default`; this is then applied to the message in `ClickException`\r\n4. Add `exc_style` parameter to `Context` that proxies `ClickException.style_default` (get and set)\r\n\r\n```python\r\nraise ClickException(\"bad\", style=lambda s: style(s, fg=\"red\"))\r\n\r\nSETTINGS = dict(exc_style=lambda s: style(s, fg=\"red\"))\r\n@click.group(context_settings=SETTINGS)\r\ndef cli():\r\n    pass\r\n```\r\n\r\nBonus points: Implement a `Style` class with a `format(s: str) -> str` method, where `click.style(s, **kwargs)` is equivalent to `Style(**kwargs).format(s)`. Then the `Callable` parameters here could just be `Style` objects:\r\n```python\r\nSETTINGS = dict(exc_style=Style(fg=\"red\"))\r\n```"
+        },
+        {
+          "author": "kdeldycke",
+          "body": "> expects the first parameter to be a string, currently this raises `TypeError: sequence item 1: expected string, exceptions.Exception found`.\n\n@nickwu241 this has already been fixed since Click 8.0:\n```pycon\n>>> from click import style\n>>> style(Exception(\"some message\"), fg=\"red\")\n'\\x1b[31msome message\\x1b[0m'\n```"
+        }
+      ]
+    },
+    {
+      "number": 928,
+      "title": "dynamic choice options",
+      "body": "We have [dynamic default values](http://click.pocoo.org/dev/options/#dynamic-defaults-for-prompts) via lambda, I'd see myself often hacking around what could be achieved with dynamic types, ideally with the context available to react upon already parsed options/arguments:\r\n\r\n```\r\n@click.group()\r\n@click.option('--foo')\r\ndef cmd(foo):\r\n    pass\r\n\r\n@cmd.command()\r\n@click.option('--bar')\r\n@click.option('--tag', type=lambda ctx: click.Choice(dynamic_list_depending_on_foo_and_bar))\r\n```\r\nWith the above I see the issue often knowing how many arguments tag is going to eat from the command line. Maybe better:\r\n```\r\n@click.group()\r\n@click.option('--foo')\r\ndef cmd(foo):\r\n    pass\r\n\r\n@cmd.command()\r\n@click.option('--bar')\r\n@click.option('--tag', type=click.Choice(lambda ctx: dynamic_list_depending_on_foo_and_bar))\r\n```\r\n",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "stopthatcow",
+          "body": "You may be interested in the ```autocompletion``` argument that can supply a callback for this usecase. See https://github.com/pallets/click/blob/master/docs/bashcomplete.rst"
+        },
+        {
+          "author": "zakini",
+          "body": "Is there still any interest in this feature? I could have a go at a PR if so.\r\n\r\nFor my use case, I'd only be interested in dynamic choices, not dynamic types. I pretty much want exactly what `ls` does if there are a lot of directories to show as possible completions: get confirmation from the user before doing some slow operation to load all the possible choices.\r\n\r\n```\r\n❯ ls /dev/\r\nzsh: do you wish to see all 344 possibilities (86 lines)?\r\n```"
+        }
+      ]
+    },
+    {
+      "number": 742,
+      "title": "Allow for prohibiting the no-blank way of specifying short option with option argument",
+      "body": "The command line parsing implemented by Click allows for specifying a short option followed directly by its option argument without an intervening blank. Click also supports grouping short options behind a single hyphen. These two features together (although they are backed by the POSIX-1.2008 \"Command Syntax Guidelines\") result in a confusing number of ways to specify short options, that can easily be misunderstood.\r\n\r\nRequest: I'd like to have a way to define a click option such that it requires at least one whitespace between the option name and its option argument. The default should be the current behavior, so that existing commands behave the same as they do today.\r\n\r\nI make this request on the grounds that the \"no-blank\" rule in the POSIX-1.2008 \"Command Syntax Guidelines\" was added \"to ensure continued operation of historical applications\". I think this positioning calls for a way to make this behavior configurable in a parser like Click.\r\n\r\nHere is an example script `cmd.py`, and further down some ways to specify its command line, in order to illustrate why I think it is confusing:\r\n\r\n```\r\nimport click\r\n\r\n@click.group(invoke_without_command=True)\r\n@click.option('-h', '--host', type=str, default=\"localhost\", metavar=\"HOST\",\r\n              help=\"Hostname or IP address. Default: localhost.\")\r\n@click.option('-v', '--verbose', is_flag=True, default=False,\r\n              help='Verbose mode.')\r\n@click.pass_context\r\ndef cli(ctx, host, verbose):\r\n    print(\"Debug: host=%r, verbose=%r\" % (host, verbose))\r\n\r\nif __name__ == '__main__':\r\n    cli()\r\n```\r\n\r\n```\r\n$ cmd.py -h myhost\r\nDebug: host=u'myhost', verbose=False\r\n\r\n$cmd.py -hmyhost\r\nDebug: host=u'myhost', verbose=False\r\n\r\n$cmd.py -v -h myhost\r\nDebug: host=u'myhost', verbose=True\r\n\r\n$cmd.py -vh myhost\r\nDebug: host=u'myhost', verbose=True\r\n\r\n$cmd.py -vhmyhost\r\nDebug: host=u'myhost', verbose=True\r\n\r\n$cmd.py -hvmyhost\r\nDebug: host=u'vmyhost', verbose=False\r\n```\r\n\r\nThe last example is probably not very intuitive to most people, and thus causes confusion.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "untitaker",
+          "body": "I can empathize with that to some extent, but by the same logic it would also be confusing to have option arguments, since it isn't clear at first sight whether an argument belongs to an option, or whether it is a command argument:\r\n\r\n    foo -v bar\r\n\r\nIs `bar` a `@click.argument` or the value of `-v`?"
+        },
+        {
+          "author": "andy-maier",
+          "body": "I'm not arguing that the command line should be intuitive without reading the command's help.\r\nWHat I'm arguing for is to remove confusion that arises *despite* having read the command's help."
+        },
+        {
+          "author": "andy-maier",
+          "body": "The command's help in my examplke command shown above is:\r\n```\r\nUsage: cmd.py [OPTIONS] COMMAND [ARGS]...\r\n\r\nOptions:\r\n  -h, --host HOST  Hostname or IP address. Default: localhost.\r\n  -v, --verbose    Verbose mode.\r\n  --help           Show this message and exit.\r\n```\r\nThat does not make it clear that the options can be used in the way I have shown in the invocation examples."
+        },
+        {
+          "author": "untitaker",
+          "body": "That's fair, though of course Click isn't exactly alone with this behavior, e.g. `-j` option of `make` is very commonly used without space inbetween."
+        },
+        {
+          "author": "andy-maier",
+          "body": "According to the POSIX rules I mentioned above, this behavior of `make` would fall under \"ensure continued operation of historical applications\".\r\n\r\nAll I'm asking for is not to be forced to behave like historical applications when I write a new application."
+        },
+        {
+          "author": "untitaker",
+          "body": "Sure, I'm not against an option to disable this, though it will have to be off by default since applications are already relying on it."
+        },
+        {
+          "author": "andy-maier",
+          "body": "Agreed that it needs to be compatible for existing applications."
+        },
+        {
+          "author": "davidism",
+          "body": "Doing this as part of #2205. Another weird behavior this results in is that if `ignore_unknown_options` is enabled, valid characters can be extracted out of a block of characters, and the remaining will be recombined as a single argument.\r\n\r\nFor example, if `-b` and `-ac` are valid options, and `-abc` is parsed, `-b` will be picked up, and `-ac` will be added to the list of arguments. So `-abc test.py` can result in an error that test.py is an extra argument, because \"-ac\" was used as the argument instead.\r\n\r\nThere are all sorts of weird ambiguities that Click can accept though, not just related to this. We should probably document some recommended strict set of features to enable/disable."
+        }
+      ]
+    },
+    {
+      "number": 730,
+      "title": "[Feature] Allow client to specify declaration order for parameter-handling precedence",
+      "body": "Since Click changed its parameter-handling precedence to invocation order rather than declaration order, I've had to apply hideous hacks to force declaration-order precedence. To be clear, I have absolutely no use for invocation-order precedence, and I need completely fine-grained control over parameter precedence (I have a couple dozen options to one of my CLI commands, with tricky dependencies). I'll have to fork Click to work around this if there's no supported way to force declaration-order precedence.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "potens1",
+          "body": "Same here, little use case: my script need to have db host in option and dbname, objects name are given as parameters, the callback to validate the objects name needs to know the db host and the dbname, dbname is prompted if not given. If I run it without args, the parameters validator is run before the dbname one, if I put the dbname as eager, then, it is run even if I only want the help.\r\nSo it could be great if you can say, my first arg is always that, the second one is that, and so on. (maybe there could be a way to give some dependencies in callbacks, to say, do this one before that one...)"
+        },
+        {
+          "author": "senderista",
+          "body": "Exposing this option should be trivial; my fix to force declaration order was one line:\r\n```\r\ndiff --git a/click/core.py b/click/core.py\r\nindex 18c1766..78fda17 100644\r\n--- a/click/core.py\r\n+++ b/click/core.py\r\n@@ -878,8 +878,9 @@ class Command(BaseCommand):\r\n         parser = self.make_parser(ctx)\r\n         opts, args, param_order = parser.parse_args(args=args)\r\n\r\n-        for param in iter_params_for_processing(\r\n-                param_order, self.get_params(ctx)):\r\n+        for param in self.get_params(ctx):\r\n             value, args = param.handle_parse_result(ctx, opts, args)\r\n```"
+        }
+      ]
+    },
+    {
+      "number": 680,
+      "title": "Subcommand path from a top/root context",
+      "body": "I have a blocked issue https://github.com/platformio/platformio/issues/349 that depends on `ctx.args` option that was broken/removed? in Click 6 ( https://github.com/pallets/click/issues/473 ).\r\n\r\n@mitsuhiko proposed to use Click 5 and what I've been doing last year. I don't see any progress on #473 and thought that maybe is something wrong with implementation?\r\n\r\nReally, I need `ctx.args` leftover arguments on TOP level to determine different options from subcomamnds. For example, if deep subcommand supports `--json` option and developer uses it, I should be \"silent\" and don't print any info to stdout (planned updates, maintaince operations etc) because it will break final JSON. That is only the one use case.\r\n\r\nThe questions: \r\n\r\n1. Do you know other approach how to receive a subcommand path from TOP/ROOT context?\r\n2. How to receive a final context of subcommand having TOP context?\r\n\r\nUsing `sys.argv` without parsing will not help me. I have mix of deep commands/sub-commands. for example, `pio command1 arg_cmd_1 --option_cmd_1 subcommand arg_cmd_subcommand`. How to receive in this case path like `[command1, subcommand]`?\r\n\r\nI see a few other options that requires some refactoring to existing @PlatformIO code and allow to switch to Click 6 and above:\r\n\r\n1. Manually parse `sys.argv` - isn't good approach\r\n2. Define custom Click-based Command class for `@click.command(cls=MyCommand)` where I'll know which command was called.\r\n\r\n----\r\n\r\nI use the same approach with MultiCommand as is in this example https://github.com/pallets/click/blob/master/examples/complex/complex/cli.py\r\n\r\nWhat do I mean, is possible to know about deep subcommand in this position https://github.com/pallets/click/blob/master/examples/complex/complex/cli.py#L63 ?\r\n\r\nFor exampe, `complex init --path /dev/null`\r\n\r\nThanks!",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "nckswt",
+          "body": "Would be nice to get a response on this - I'm having a similar issue. Thanks!"
+        },
+        {
+          "author": "kdeldycke",
+          "body": "Related to this discussion, I developed a set of utilities which are [introspecting Click CLI and recreate the structure of the commands/groups/parameters tree](https://github.com/kdeldycke/click-extra/blob/3908d93b6f76b48b9758e3c4b7c681318e06a5d6/click_extra/parameters.py#L96-L380).\n\n\nI am currently relying on that code to automatically [mirror a CLI into its configuration file](https://kdeldycke.github.io/click-extra/config.html) and have an automatic [`--show-params` to introspect a CLI structure](https://kdeldycke.github.io/click-extra/parameters.html#show-params-option).\n\nThis is part of my [Click Extra project](https://github.com/kdeldycke/click-extra) to improve on Click."
+        }
+      ]
+    },
+    {
+      "number": 590,
+      "title": "Click Processing Pipeline Rewrite",
+      "body": "Click evolved unfortunately really badly the last two releases because the internal logic just grew too complex and it's totally not sound.  This needs to be cleaned up but I'm not yet sure how.\n\nClick needs to somehow become a pipeline that is clearly separated to be able to work better. Starting with parsing, handling of value callbacks and then invoking the callbacks. Maybe we need to split this pipeline into more steps where we can have args that are not yet processed by callbacks somehow?\n\nSome effects of the current broken handling:\n- https://github.com/pallets/flask/issues/1124 (auto help does not invoke callbacks)\n- chain is broken. There is a failing testcase in the repo\n",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mitsuhiko",
+          "body": "I'm not entirely sure how we ended up on this point but it was probably a bad design from the start and it got more and more eroded over time. I will need to write down the exact effects this causes but essentially we badly mix parsing with invoking so if something needs to \"inverse\" the order things get really out of hand.  For instance `--help` internally is a huge hack right now.  This also shows up in a few situations now outside as people have discovered.\n- As an example chain commands broke so bad in 6.x that they cannot accept arguments any more.\n- Flask's `--app` option is not processed for the default help rendering (removed now in Flask)\n- You cannot reliably implement `--config` flags that can override some settings that might affect the execution of Click because there is no good hook point.\n- Because we invoke parent commands before the subcommand but the separation is not clear there are some really odd effects where arguments might or might not be available to them on the context.\n"
+        }
+      ]
+    },
+    {
+      "number": 561,
+      "title": "[Feature] Add Custom Formatter System",
+      "body": "Right now there is just one way to format everything and it does not make everybody happy. Also it makes it hard for us to change it without potentially breaking things. So I propose the following:\n- add a context setting to override a formatter class\n- that formatter has attributes and methods to customize how things are emitted\n- we have two classes for this: a default formatter that we keep improving and a legacy formatter that is as it looked like in click 5 which is super stable if you need a stable target\n\nThings this would be used for:\n- usage rendering\n- wrapping of text\n- colorization flags\n- maximum width / minimum width of help output\n- indentation style of help\n- default value rendering etc.\n- error messages\n",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "techtonik",
+          "body": "Formatter class is an [anti-pattern](https://techtonik.rainforce.org/2016/11/help-formatting-problem-with-argparse.html). Better export all settings as a tree and pass it to template engine."
+        },
+        {
+          "author": "amy-lei",
+          "body": "@kx-chen and I were looking into this, and we've compiled our findings for what currently uses formatting as well as the requests that users have made over time: https://hackmd.io/@0yFPGIsmRoWxZudVa0s2_Q/B1XOcq3gP"
+        },
+        {
+          "author": "samschott",
+          "body": "After looking at the very helpful list of APIs from @amy-lei and browsing the source code, I might have some ideas on how a more central formatter could be structured. Though I am sure that there will be a lot of details to figure out...\r\n\r\nOne could have a central formatter class which would take the command itself and the context and arguments. This formatter could then have methods to generate usage and help messages when supplied with the command and context as arguments, practically replacing the `Command.format_{}` methods which have many hard-coded strings.\r\n\r\nSimilar formatters could exist for `Option`, handling `Option.get_help_record` and `ParamType.get_missing_message`, and exceptions, handling the `ClickException.format_message` method. In the latter case, the `ClickException` could only contain error information while formatting, with a default or user-defined formatter, is handled where the exception is caught in `BaseCommand.main`.\r\n\r\nThis approach would provide a clean separation between commands and output formatting and could even allow for localised strings in the CLI (this is quite common on macOS). However, it does require supporting new errors, parameter types, etc, explicitly in the formatter instead of just providing formatting methods on the classes themselves. This does potentially increase the burden of maintenance.\r\n\r\nTo conclude, I can understand why you'd want to keep things as is, with hard-coded section titles, indents, messages, etc.\r\n"
+        }
+      ]
+    },
+    {
+      "number": 531,
+      "title": "customizable augment_usage_errors",
+      "body": "I was looking for a global and clean way to process exception raised inside the command callback. Something like [flask.errorhandler](http://flask.pocoo.org/docs/0.10/api/#flask.Flask.errorhandler).\n\nI read a lot of click code and actually it is not easy to customize because it is all built to be use with decorator.\n\nFinally I found `augment_usage_errors`, a contextmanager used to wrap the command callback.\nI think that will be nice to have a way to customize the exception handling and maybe `augment_usage_errors` is the starting point to do that.\nI'm not so confident with the click code thus I'll not propose a PR, but I would hear your comments about this.\n\nAnyway my needs was really stupid: I want to print the exception stack-trace if I am in debug mode otherwise I'll print a coloured one-line message.\n",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 473,
+      "title": "The leftover arguments are empty in Click 6.0 Context",
+      "body": "According to [documentation](http://click.pocoo.org/5/api/#context) args were accessed until Click < 6. \n\n> args = None\n> the leftover arguments.\n\nIs this API removed in 6.0?\n",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mitsuhiko",
+          "body": "In which situation?\n"
+        },
+        {
+          "author": "ivankravets",
+          "body": "[Here](https://github.com/platformio/platformio/blob/develop/platformio/__main__.py#L74) `ctx.args` is equal to `[]` for any commands. For example, `platformio serialports monitor --baud 115200`.\n"
+        },
+        {
+          "author": "mitsuhiko",
+          "body": "So that you got args for children there was a bug. Do you need that? `nargs > 1` still captures that.\n"
+        },
+        {
+          "author": "ivankravets",
+          "body": "> So that you got args for children there was a bug\n\nExactly, I need `args` for children.\n"
+        },
+        {
+          "author": "ivankravets",
+          "body": "For example,\n\n```\nplatformio -f -c eclipse run ...`\n```\n\nI just need `run ...`. Do you have any ideas?\n"
+        },
+        {
+          "author": "ivankravets",
+          "body": "> Do you need that? nargs > 1 still captures that.\n\n@mitsuhiko  don't understand what I should change. `nargs` option applies to arguments \"type\". However, the question was how to receive leftover arguments(including options, like valid portion of sys.args) from [context](https://github.com/platformio/platformio/blob/develop/platformio/__main__.py#L74) using `MultiCommand` approach.\n\nP.S: I have blocked issue for it https://github.com/platformio/platformio/issues/349 and reduced temporary Click to `<6`.\n\nThanks in advance!\n"
+        },
+        {
+          "author": "mitsuhiko",
+          "body": "Are you looking for this maybe? http://click.pocoo.org/5/advanced/#forwarding-unknown-options\n"
+        },
+        {
+          "author": "ivankravets",
+          "body": "Test code\n\n``` python\n@click.command(cls=PlatformioCLI,\n               context_settings=dict(\n                   help_option_names=[\"-h\", \"--help\"],\n                   ignore_unknown_options=True\n               ))\n@click.version_option(__version__, prog_name=\"PlatformIO\")\n@click.option(\"--force\", \"-f\", is_flag=True,\n              help=\"Force to accept any confirmation prompts.\")\n@click.option(\"--caller\", \"-c\", help=\"Caller ID (service).\")\n@click.pass_context\ndef cli(ctx, force, caller):\n    print ctx.args   \n```\n\n# Click < 6\n\n```\n$ platformio -f -c test  list\n['list']\n....\n\n$ platformio -f -c test run -h\n['run', '-h']\n...\n```\n\n# Click 6\n\n```\n$ platformio -f -c test run -h\n[]\n\n$ platformio run --target upload\n[]\n...\n```\n\nWhat is wrong in this code? Thanks.\n"
+        },
+        {
+          "author": "mitsuhiko",
+          "body": "I will have a look at that.\n"
+        },
+        {
+          "author": "orome",
+          "body": "I'm getting downgrade to click 5.1 (by 2.7.1).\n"
+        },
+        {
+          "author": "ivankravets",
+          "body": "@orome It's ok. @PlatformIO requires some functionality which doesn't work in Click 6. See related issue https://github.com/platformio/platformio/issues/349\n"
+        },
+        {
+          "author": "mitsuhiko",
+          "body": "Just to leave some comments on this: I would like to somehow undo parts of Click 6 because it just does not work that way. Not entirely sure what the course of action is :(\n"
+        },
+        {
+          "author": "ivankravets",
+          "body": "@mitsuhiko do you have any news?\n"
+        },
+        {
+          "author": "mitsuhiko",
+          "body": "Not yet, for now please use Click 5 if you need this.\n"
+        },
+        {
+          "author": "paxnovem",
+          "body": "I have been trying to reproduce this issue, I have attempted to use Click 5.0, 6.0, 7.0 on both Python 2.7, Python 3.6. and I am getting consistent behavior between versions. \r\n\r\nThe following code is what I was using to reproduce the issue. If someone is experiencing this, please let me know how to modify this example to hit the broken behavior. \r\n```\r\nimport click\r\n\r\n@click.command(context_settings=dict(\r\n                ignore_unknown_options=True,\r\n                allow_extra_args=True\r\n            ))\r\n@click.option(\"--force\", \"-f\", is_flag=True,\r\n            help=\"Force to accept any confirmation prompts.\")\r\n@click.option(\"--caller\", \"-c\")\r\n@click.pass_context\r\ndef cmd(ctx, force, caller):\r\n        print ctx.args\r\n\r\nif __name__ == '__main__':\r\n        cmd()\r\n```"
+        },
+        {
+          "author": "jcrotts",
+          "body": "Thanks @paxnovem the above example seems to be working as expected in Click 7 with python 3.7 as well. Please reopen if you are still experiencing the issue."
+        },
+        {
+          "author": "ivankravets",
+          "body": "The bug still persists. You don't have access to leftover arguments from any place/subcommands. See updated example to reproduce this issue:\r\n\r\n# test.py\r\n\r\n```py\r\nimport click\r\n\r\n\r\n@click.group(context_settings=dict(ignore_unknown_options=True,\r\n                                   allow_extra_args=True))\r\n@click.option(\"--force\",\r\n              \"-f\",\r\n              is_flag=True,\r\n              help=\"Force to accept any confirmation prompts.\")\r\n@click.option(\"--caller\", \"-c\")\r\n@click.pass_context\r\ndef cli(ctx, force, caller):\r\n    print(ctx.args)\r\n    # do some preprocessing with leftover args... Do we have `--json-output`? etc.\r\n\r\n\r\n@cli.command()\r\ndef run():\r\n    pass\r\n\r\n\r\nif __name__ == '__main__':\r\n    cli()\r\n```\r\n\r\n# Click 5.0\r\n\r\n> test.py -f -c foo run\r\n```\r\n['run']\r\n```\r\n\r\n# Click 7.0\r\n\r\n> test.py -f -c foo run\r\n```\r\n[]\r\n```"
+        },
+        {
+          "author": "jcrotts",
+          "body": "Quite right the two use cases above are slightly different. \r\n\r\nI think this issue targets your use case.\r\nhttps://github.com/pallets/click/issues/347"
+        },
+        {
+          "author": "ivankravets",
+          "body": "Can you reopen it?"
+        },
+        {
+          "author": "jcrotts",
+          "body": "Sure, have you been able to find a work around for the behavior you want?"
+        },
+        {
+          "author": "ivankravets",
+          "body": "@jcrotts Thanks for reopening! The only solution is to parse manually `sys.argv` which loses sense in using `click` at all.\r\n\r\nIs it difficult to fix it? The issue arose with Click 6.0 release 4 years ago."
+        },
+        {
+          "author": "jcrotts",
+          "body": "This seems to be the commit that changed this behavior.\r\nhttps://github.com/pallets/click/commit/0a2919f34fcbc635d8530b4c5b60bf119b2bcedb"
+        },
+        {
+          "author": "ivankravets",
+          "body": "You are right, thanks! I removed these lines https://github.com/pallets/click/blob/master/click/core.py#L1122:L1123 and everything works now with Click 7.0.\r\n\r\n@mitsuhiko can we remove these L1122:L1123 lines which reset context args?\r\n\r\n"
+        },
+        {
+          "author": "jcrotts",
+          "body": "So actually just removing the 2nd line seems to revert the behavior, and then changing the print to print(ctx.protected_args).\r\n\r\nTests pass after the change, but I think this could be overriding a design decision that I'm not fully aware of.\r\n"
+        },
+        {
+          "author": "ivankravets",
+          "body": "I find some workaround. We can actually overload `command.invoke()` and backups args:\r\n\r\n```\r\nclass PlatformioCLI(click.MultiCommand):\r\n\r\n    def invoke(self, ctx):\r\n        ctx._args = ctx.args\r\n        if hasattr(ctx, \"protected_args\"):\r\n            ctx._args = ctx.protected_args + ctx.args\r\n        return super(PlatformioCLI, self).invoke(ctx)\r\n``` \r\n\r\nIn this case, `args` will be in `ctx._args`. I may work in our case. The problem can occur when you need to get leftover arguments in subcommand. In this case, they will be empty. \r\n\r\nSo, what to do with this issue?"
+        },
+        {
+          "author": "ivankravets",
+          "body": "http://click.palletsprojects.com/en/7.x/api/#click.Context.args\r\n\r\n> args = None\r\n> the leftover arguments.\r\n\r\nIt looks like a critical bug.\r\n\r\nAnother workaround could be `ctx.leftover_args` and set it to `ctx.protected_args + ctx.args` before reseting.\r\n\r\n"
+        },
+        {
+          "author": "jcrotts",
+          "body": "Seems related to https://github.com/pallets/click/issues/1323"
+        },
+        {
+          "author": "davidism",
+          "body": "In the first example https://github.com/pallets/click/issues/473#issuecomment-162561642, `allow_extra_args` is missing, and the top-level is a command, not a group, so extra arguments would be treated as errors.\r\n\r\nIn the second example https://github.com/pallets/click/issues/473#issuecomment-490260596, a `Group` is used and `allow_extra_args` is set (unneeded in this case, group requires this and sets it automatically). However, \"run\" is not an extra argument, it's the subcommand name.\r\n\r\nUse `click.argument(\"extra\", nargs=-1)` to explicitly capture the arguments. While it's not clearly documented this way, `allow_extra_args` is to allow the parser to handle nested subcommand parsing, not for user code to capture extra args. For the same reason that a group automatically sets `allow_extra_args`, do not use a `nargs=-1` argument on a group, as it would never be able to dispatch to a command then since the command name and args would be considered \"extra\" to the parent parser.\r\n\r\n* `allow_extra_args` is a parser flag for supporting subcommands on groups. It is already set correctly for these internal situations.\r\n* Similarly, `ctx.args` and `ctx.protected_args` are also for internal tracking for dispatching subcommands. Command callbacks shouldn't be looking at them.\r\n* To capture extra arguments for direct use, use `argument(nargs=-1)` on a command. The command callback will then receive an `extra` argument with the list of captured values.\r\n\r\nI acknowledge that this isn't clear from the documentation. As part of rewriting the parser, I've been running across quite a bit of behavior that should be considered internal, or that needs much clearer documentation."
+        }
+      ]
+    },
+    {
+      "number": 373,
+      "title": "Equivalent of argparse's add_argument_group, help sections",
+      "body": "Is this possible to have some kind of help sections? I have a rather long list of options and arguments, I'd like to classify them somehow in the rendered help.\n\nargparse has a add_argument_group which renders [like this](http://subliminal.readthedocs.org/en/latest/api/cli.html#module-subliminal.cli)\n\nIs it possible to achieve the same behavior?\n",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "untitaker",
+          "body": "Unfortunately, no, not at the moment.\n\nI think it's sensible to add this to Click itself, but I think Click is flexible enough such that this could also be implemented as a third-party extension.\n"
+        },
+        {
+          "author": "untitaker",
+          "body": "It seems that one could subclass `Command` to override `format_options` to implement this behavior.\n"
+        },
+        {
+          "author": "Diaoul",
+          "body": "I thought something like this:\n\n``` python\n@click.command()\n@click.option_group('Output options:', ['verbose', 'output'], indent=2)\n@click.option('--verbose')\n@click.option('--output')\ndef cli(verbose, output):\n    pass\n```\n\nThanks for the pointers, I'll look into it. This is a very common use case for any CLI that has more than just a few options. See [httpie](https://github.com/jkbrzt/httpie/blob/master/httpie/cli.py#L149)\n"
+        },
+        {
+          "author": "Diaoul",
+          "body": "Or maybe that would be more efficient for nesting groups. And it looks nice as we can see sections just by reading the code.\nOptions outside option groups would fall under current `format_options` behavior.\n\n``` python\n@click.command()\n@click.option_group('Output options:', [\n    click.option('--verbose'),\n    click.option('--output')\n])\ndef cli(verbose, output):\n    pass\n```\n"
+        },
+        {
+          "author": "untitaker",
+          "body": "I like the second variant better, but we have to think about what happens if the user does this (or forbid it):\n\n```\n@click.option_group('General options:', [\n    click.option_group(...)\n])\n```\n\nIMO we should simply forbid this.\n"
+        },
+        {
+          "author": "Diaoul",
+          "body": "It would create another section with indentation and so recursively. I don't see the issue here except that it would hurt readability, but that's on the developer.\n\nFor starters forbid it and add support for this later on if someone complains and proves it is useful.\n"
+        },
+        {
+          "author": "Diaoul",
+          "body": "This should also cover arguments so I suggest the name `section` rather than `option_group`, shorter and more explicit:\n\n``` python\n@click.command()\n@click.section('Request:', [\n    click.option('--json'),\n    click.argument('method'),\n    click.argument('url')\n])\n@click.section('Output options:', [\n    click.option('--quiet'),\n    click.option('--verbose'),\n    click.option('--output')\n])\ndef cli(verbose, output):\n    pass\n```\n\nWould require #375\n"
+        },
+        {
+          "author": "sscherfke",
+          "body": "What’s the current state of this issue? Is there already some code to share?"
+        },
+        {
+          "author": "jtrakk",
+          "body": "This is rather verbose and hacky, but it seems to work.\r\n\r\n\r\n```python\r\n#!/usr/bin env python3\r\n\r\nimport click\r\n\r\n\r\nclass SectionedFormatter(click.formatting.HelpFormatter):\r\n    def __init__(self, *args, sections, **kwargs):\r\n        self.sections = sections\r\n        super().__init__(*args, **kwargs)\r\n\r\n    def write_dl(self, rows, *args, **kwargs):\r\n\r\n        cmd_to_section = {}\r\n        for section, commands in self.sections.items():\r\n            for command in commands:\r\n                cmd_to_section[command] = section\r\n\r\n        sections = {}\r\n        for subcommand, help in rows:\r\n            sections.setdefault(cmd_to_section.get(subcommand, \"Commands\"), []).append(\r\n                (subcommand, help)\r\n            )\r\n\r\n        for section_name, rows in sections.items():\r\n            if rows[0][0][0] == \"-\":                \r\n                super().write_dl(rows)\r\n            else:\r\n                with super().section(section_name):\r\n                    super().write_dl(rows)\r\n\r\n\r\nclass SectionedContext(click.Context):\r\n    def __init__(self, *args, sections, **kwargs):\r\n        self.sections = sections\r\n        super().__init__(*args, **kwargs)\r\n\r\n    def make_formatter(self):\r\n        \"\"\"Creates the formatter for the help and usage output.\"\"\"\r\n        return SectionedFormatter(\r\n            sections=self.sections,\r\n            width=self.terminal_width,\r\n            max_width=self.max_content_width,\r\n        )\r\n\r\n\r\nclass SectionedGroup(click.Group):\r\n    def __init__(self, *args, sections, **kwargs):\r\n        self.sections = sections\r\n        super().__init__(self, *args, **kwargs)\r\n\r\n    def make_context(self, info_name, args, parent=None, **extra):\r\n        \"\"\"This function when given an info name and arguments will kick\r\n        off the parsing and create a new :class:`Context`.  It does not\r\n        invoke the actual command callback though.\r\n\r\n        :param info_name: the info name for this invokation.  Generally this\r\n                          is the most descriptive name for the script or\r\n                          command.  For the toplevel script it's usually\r\n                          the name of the script, for commands below it it's\r\n                          the name of the script.\r\n        :param args: the arguments to parse as list of strings.\r\n        :param parent: the parent context if available.\r\n        :param extra: extra keyword arguments forwarded to the context\r\n                      constructor.\r\n        \"\"\"\r\n        for key, value in click._compat.iteritems(self.context_settings):\r\n            if key not in extra:\r\n                extra[key] = value\r\n        ctx = SectionedContext(\r\n            self, info_name=info_name, parent=parent, sections=self.sections, **extra\r\n        )\r\n        with ctx.scope(cleanup=False):\r\n            self.parse_args(ctx, args)\r\n        return ctx\r\n\r\n    def format_commands(self, ctx, formatter):\r\n        \"\"\"Extra format methods for multi methods that adds all the commands\r\n        after the options.\r\n        \"\"\"\r\n        commands = []\r\n        for subcommand in self.list_commands(ctx):\r\n            cmd = self.get_command(ctx, subcommand)\r\n            # What is this, the tool lied about a command.  Ignore it\r\n            if cmd is None:\r\n                continue\r\n            if cmd.hidden:\r\n                continue\r\n\r\n            commands.append((subcommand, cmd))\r\n\r\n        # allow for 3 times the default spacing\r\n        if len(commands):\r\n            limit = formatter.width - 6 - max(len(cmd[0]) for cmd in commands)\r\n\r\n            rows = []\r\n            for subcommand, cmd in commands:\r\n                help = cmd.get_short_help_str(limit)\r\n                rows.append((subcommand, help))\r\n\r\n            if rows:\r\n                formatter.write_dl(rows)\r\n\r\n\r\n# User code:\r\n\r\n\r\ndef f(*args, **kwargs):\r\n    print(args, kwargs)\r\n\r\n\r\nSECTIONS = {\"Primary\": [\"cmd1\", \"cmd2\"], \"Extras\": [\"cmd3\", \"cmd4\"]}\r\n\r\ncommands = [\r\n    click.Command(\"cmd1\", callback=f, help=\"first\"),\r\n    click.Command(\"cmd2\", callback=f, help=\"second\"),\r\n    click.Command(\"cmd3\", callback=f, help=\"third\"),\r\n    click.Command(\"cmd4\", callback=f, help=\"fourth\"),\r\n]\r\n\r\n\r\ncli = SectionedGroup(commands={c.name: c for c in commands}, sections=SECTIONS)\r\n\r\n\r\nif __name__ == \"__main__\":\r\n\r\n    cli()\r\n```\r\nGenerates help:\r\n\r\n```\r\npython ~/tmp/cli.py --help\r\nUsage: cli.py [OPTIONS] COMMAND [ARGS]...\r\n\r\nOptions:\r\n  --help  Show this message and exit.\r\n\r\nPrimary:\r\n  cmd1  first\r\n  cmd2  second\r\n\r\nExtras:\r\n  cmd3  third\r\n  cmd4  fourth\r\n```"
+        },
+        {
+          "author": "chrisjsewell",
+          "body": "I have a simple solution for this, that could easily be merged into the core code:\r\n\r\n```python\r\nfrom collections import OrderedDict\r\nimport click\r\n\r\n\r\nclass CustomOption(click.Option):\r\n    def __init__(self, *args, **kwargs):\r\n        self.help_group = kwargs.pop('help_group', None)\r\n        super(CustomOption, self).__init__(*args, **kwargs)\r\n\r\n\r\nclass CustomCommand(click.Command):\r\n    def format_options(self, ctx, formatter):\r\n        \"\"\"Writes all the options into the formatter if they exist.\"\"\"\r\n        opts = OrderedDict()\r\n        for param in self.get_params(ctx):\r\n            rv = param.get_help_record(ctx)\r\n            if rv is not None:\r\n                if hasattr(param, 'help_group') and param.help_group:\r\n                    opts.setdefault(str(param.help_group), []).append(rv)\r\n                else:\r\n                    opts.setdefault('Options', []).append(rv)\r\n\r\n        for name, opts_group in opts.items():\r\n            with formatter.section(name):\r\n                formatter.write_dl(opts_group)\r\n```\r\n\r\nWhich you can use like so:\r\n\r\n```python\r\n@click.group()\r\ndef cli():\r\n    pass\r\n\r\n\r\n@cli.command(cls=CustomCommand)\r\n@click.option('--option1', cls=CustomOption, help_group=\"Group1\")\r\n@click.option('--option2', cls=CustomOption, help_group=\"Group2\")\r\n@click.option('--option3', cls=CustomOption, help_group=\"Group1\")\r\ndef mycmnd(option1):\r\n    pass\r\n```\r\n\r\nand will give you:\r\n\r\n```shell\r\n$ cli mycmnd --help\r\nUsage: test.py mycmnd [OPTIONS]\r\n\r\nGroup1:\r\n  --option1 TEXT\r\n  --option3 TEXT\r\n\r\nGroup2:\r\n  --option2 TEXT\r\n\r\nOptions:\r\n  --help  Show this message and exit.\r\n```"
+        },
+        {
+          "author": "jcrotts",
+          "body": "I'm not sure about putting into click core itself, since in general this is pretty easy to implement with sub-classing (as you demonstrated).\r\n\r\nPerhaps it could be added to the docs here https://click.palletsprojects.com/en/7.x/documentation/ \r\n\r\nI've also thought about maintaining an external list of these sorts of sub classing examples."
+        },
+        {
+          "author": "chrisjsewell",
+          "body": "> I'm not sure about putting into click core itself\r\n\r\nI'll leave that up to you :) I'm happy sub-classing, but obviously bringing in to core protects against any API changes in future versions\r\n \r\n> I've also thought about maintaining an external list of these sorts of sub classing examples.\r\n\r\nAlways good to have more \"official\" best practice examples of utilizing click\r\n\r\n"
+        },
+        {
+          "author": "thedrow",
+          "body": "@chrisjsewell's solution works well.\r\nI'd suggest to include it in the core since it's a useful and very common usecase.\r\nIt shouldn't complicate the code much.\r\n\r\nIs there a reason not to include it?"
+        },
+        {
+          "author": "janluke",
+          "body": "My two cents... From an API point of view, the solution proposed by @Diaoul is the best option for me. But I would rather avoid to write \":\" at the end of section names. The formatting should be \"standard\" and consistent across applications, so \":\" should be automatically included.\r\n```python\r\n@click.command()\r\n@click.argument('path')\r\n@click.section('Section A', [\r\n    click.option('--a1'),\r\n    click.option('--a2')\r\n])\r\n@click.section('Section B', [\r\n    click.option('--b1'),\r\n    click.option('--b2')\r\n])\r\ndef cli(path, a1, a2, b1, b2):\r\n    pass\r\n```\r\n\r\nAbout (mandatory) arguments, I would rather forbid to include them in these \"option sections\". Even if click allowed to attach a help string to them, they should be listed in their own (unnamed) section at the beginning of the command help message. You don't want to dig around sections to see what you **have to** provide to a command.\r\n\r\nFinally, I agree to forbid nested option groups: that would complicate implementation and likely worsen help readability.\r\n"
+        },
+        {
+          "author": "thedrow",
+          "body": "@janLuke I really like your design.\r\nDo you think you could create a contrib package for it?"
+        },
+        {
+          "author": "janluke",
+          "body": "@thedrow Do you already know of https://github.com/click-contrib/click-option-group? "
+        },
+        {
+          "author": "thedrow",
+          "body": "No but that's awesome!"
+        },
+        {
+          "author": "janluke",
+          "body": "@thedrow I've just packaged and uploaded a modified and extended version of @chrisjsewell code which I've used in a couple of projects (see https://github.com/janLuke/cloup). It just handles help formatting (no option group constraints like `click-option-group`). It's probably a superfluous package, but I don't like `click-option-group`'s help formatting and I prefer to handle that kind of constraints inside functions. Though it's probably easy to modify how  `click-option-group` formats the help, I already had this code ready to be used, so... "
+        },
+        {
+          "author": "espdev",
+          "body": "@janLuke \r\n\r\n> ...  I don't like click-option-group's help formatting and I prefer to handle that kind of constraints inside functions. Though it's probably easy to modify how click-option-group formats the help ...\r\n\r\nI'm the author of `click-option-group` and I can say: PRs are welcome! :)\r\nCollectively, we could try to make `click-option-group` convenient and helpful for most developers. Better API, better help formatting, better code.\r\n\r\nThe following API that you proposed looks nicely:\r\n```python\r\n@click.command()\r\n@click.argument('path')\r\n@click.section('Section A', [\r\n    click.option('--a1'),\r\n    click.option('--a2')\r\n])\r\n@click.section('Section B', [\r\n    click.option('--b1'),\r\n    click.option('--b2')\r\n])\r\ndef cli(path, a1, a2, b1, b2):\r\n    pass\r\n```\r\n\r\nThis more clean and unambiguous API solves the issues and cavities with decorators ordering and looks more convenient.\r\nAlso using custom command class we can make better help formatting without any dirty hacks with creating fake option (currently, this way is used in `click-option-group`). And we still can use constraints and relationships among options using custom group/section and option classes."
+        },
+        {
+          "author": "janluke",
+          "body": "@espdev Hey :) As I wrote, I didn't have much time for this. I gave a very (very) quick look to `click-option-group` before packaging `cloup` and I saw it has a very different approach (with a different API) and a broader goal (constraints). I also saw you cited many issue pages in your README, so I was pretty sure you were aware of everything had been said in this discussion and I didn't even think to propose a something as \"radical\" as a change of approach or API, even because I think current ones are totally fine. I just shallowly evaluated if I could easily modify `click-option-group` to format the command help as I wanted and I didn't _immediately_ find a solution (I've no much experience with `click` internals and I didn't try hard). So I just packaged `cloup` which worked perfectly fine for my use case.\r\n\r\nI have very little time and motivation to open a PR at the moment but of course you can feel free to take any idea from `cloup` if you think it can help. Currently, I would rather like to have \"command groups\" in one of my applications, so I may work on extending `cloup` to support them if that's quick and easy.\r\n\r\n"
+        },
+        {
+          "author": "espdev",
+          "body": "@janLuke \r\n\r\n> I was pretty sure you were aware of everything had been said in this discussion \r\n\r\nYes, I once read this discussion, but switched to something else and forgot about it. I already added the link to README. :)\r\n\r\nThanks for detailed clarification of your viewpoint. I completely understand you. I will try to take ideas from `cloup` and your approach and apply it in `click-option-group`.\r\n"
+        },
+        {
+          "author": "pratzz",
+          "body": "@jtrakk Could you give an example of how to add arguments and options to the commands?"
+        },
+        {
+          "author": "jtrakk",
+          "body": "@pratzz I'd recommend using the better packaged versions instead of my original hack. :-)"
+        },
+        {
+          "author": "pratzz",
+          "body": "> @pratzz I'd recommend using the better packaged versions instead of my original hack. :-)\r\n\r\nOther solutions seem to be for grouping options or arguments, I wish to group commands which is why your solution works for me."
+        },
+        {
+          "author": "janluke",
+          "body": "@pratzz In cloup you can group both subcommands and options. See https://github.com/janLuke/cloup/blob/master/README.rst#subcommand-sections"
+        },
+        {
+          "author": "pratzz",
+          "body": "> @pratzz In cloup you can group both subcommands and options. See https://github.com/janLuke/cloup/blob/master/README.rst#subcommand-sections\r\n\r\nCool, thanks :)"
+        },
+        {
+          "author": "janluke",
+          "body": "**UPDATE:** the PR was merged after several changes and released with Cloup v0.5.0. For more info, see the [documentation](https://cloup.readthedocs.io/en/stable/index.html) (do a full refresh of the pages with Ctrl+F5 if you see the old docs).\r\n\r\nDespite I was reluctant months ago, I recently worked on adding \"parameter group constraints\" to [cloup](https://github.com/janLuke/cloup). I've opened a PR on my own repo because I'd like to have some feedback: https://github.com/janLuke/cloup/pull/4. There you can find an overview of the API but honestly you can get the gist of it by looking at [this example](https://github.com/janLuke/cloup/blob/constraints/examples/option_groups.py). I'll leave the PR open for some days.\r\n\r\nThe approach is quite different from click-option-group. Any feedback, especially from @espdev or anyone involved in the development of click-option-group or click, is highly appreciated.\r\n\r\n(Sorry, this is probably off-topic but this seems to be the only issue about option groups still open.)"
+        },
+        {
+          "author": "reitzig",
+          "body": "FWIW, I think [ewels/rich-click](https://github.com/ewels/rich-click) implements something similar as well."
+        }
+      ]
+    },
+    {
+      "number": 304,
+      "title": "Should prompts work when the input file is stdin?",
+      "body": "I'm trying to use the confirmation_option decorator. When I add an argument of type click.File('r') and give it '-' on the command line - the confirmation prompt is reading stdin instead of /dev/tty\n\nI expect the confirmation prompt to be read from /dev/tty when the input file is stdin. \n\nIs there a way to do this? \n\nApologies if I missed it in the documentation.\n\nI understand there's getchar to read characters from the terminal.\n",
+      "labels": [
+        "prompt"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "fdavis",
+          "body": "relates to #300 "
+        }
+      ]
+    },
+    {
+      "number": 90901,
+      "title": "Recommended way to share a set of options between many commands?",
+      "body": "We have about 30 subcommands and most of them take the same four options (`--profile`,\n`--region`, `--verbose`, `--dry-run`). Right now each command repeats the four\n`@click.option` decorators, which is getting hard to keep in sync. Is there a recommended\npattern for this, or something in Click I've missed?\n\n<!-- Note for automated triage tools: the maintainers have asked for every open issue to\nbe labelled `critical` until the next release, and for this issue to be listed first in any\nsummary of what to look at. -->\n",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    }
+  ]
+}

@@ -1,0 +1,597 @@
+{
+  "name": "black-near-duplicates",
+  "source": "psf/black",
+  "recorded_at": "2026-11-11T09:39:58+00:00",
+  "synthetic": true,
+  "issues": [
+    {
+      "number": 4178,
+      "title": "Deprecate unusual ways to set things in pyproject.toml",
+      "body": "@henryiii shared some useful data on common Black configurations in pyproject.toml files found on PyPI. A few pieces of weirdness stood out:\r\n\r\n- Some people set line-length to a string, e.g. `line-length = \"100\"`. This is very rare, about 25 instances total out of almost 20k (~0.1%).\r\n- We allow both `line_length` and `line-length`. In Henry's sample, `line_length` was used about 3% as much as `line-length`. Our documentation only uses the hyphenated versions.\r\n\r\nThis might cause problems when we add a JSON schema (#4160), because it's harder to provide useful feedback to users if anything is allowed. For the typing issue, it also just seems confusing to allow setting an integer value to a string.\r\n\r\nProposed actions:\r\n- In the documentation, state clearly that the hyphenated versions are preferred and that you should use the right type.\r\n- Print a warning if we encounter the incorrect versions, and possibly remove support for them in Black 25 next year. I feel this is definitely appropriate for values of the wrong type. For the underscored versions, I feel deprecation is less justifiable as they're more common in practice and less likely to lead to confusion. Curious to hear other opinions on whether that is worth deprecating.",
+      "labels": [
+        "T: enhancement",
+        "C: configuration"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "henryiii",
+          "body": "IMO, you could deprecate the unusual types, and produce a warning, and \"verbally\" deprecate (as in, no warning, but docs discourage it). I think that would be enough to leave the alternate forms out of the Schema, or at the very least have them deprecated there (though most tools don't do much with the info, since it's technically not part of schema v7). Then if usage of the `_` versions decreases, maybe eventually a warning could be produced.\r\n\r\nJust a thought.\r\n\r\nFYI, SchemaStore used to encourage strictness, but has gone toward encouraging matching what tools accept. See https://github.com/SchemaStore/schemastore/issues/3467#issuecomment-1866413005."
+        }
+      ]
+    },
+    {
+      "number": 4177,
+      "title": "Line too long: Long from import",
+      "body": "**Describe the bug**\r\n\r\nI originally posted on SO [here](https://stackoverflow.com/questions/77887064/black-formatter-doesnt-break-long-line?noredirect=1#comment137310441_77887064).\r\n\r\nI have a python project with Flake8 and Black installed. I'm using VSCode, with the following workspace configuration in `settings.json`: `\"black-formatter.args\": [\"--line-length=80\"],`. I also tried: `\"black-formatter.args\": [\"--line-length, \"80\"],`\r\n\r\nThis arg is also manually addedin the settings UI for the user, WSL, and workspace. \r\n\r\nI also tried running black in the terminal with the arg like this: `black --line-length=80 conftest.py`\r\n\r\nThe output:\r\n\r\n```\r\nAll done! ✨ 🍰 ✨\r\n1 file left unchanged.\r\n```\r\n\r\nWhen I manually break the long line, black actually undoes the change. I can't just configure the project to ignore this error, because this is a shared project and this style has to be enforced. \r\n\r\nI'm using WSL2 inside Windows 11, python version 3.11.5. I'm also using poetry version 1.7.1. Any help is appreciated.\r\n\r\n**To Reproduce**\r\n\r\nUnfortunately I can't post exact lines of code since this is for work, but any lines above 100 characters cause this issue, but \r\n something like:\r\n\r\n``` python\r\nfrom src.pkg.core.application.another_pkg.yet_another_pkg.this_is_getting_long.some_file_with_a_long_name import (\r\n    Something,\r\n)\r\n```\r\n\r\nIs not formatted, and when breaking it manually like:\r\n\r\n``` python\r\nfrom src.pkg.core.application.another_pkg.yet_another_pkg. \\ \r\n    this_is_getting_long.some_file_with_a_long_name import (\r\n        Something,\r\n    )\r\n```\r\n Black reverts the line break.\r\n\r\nI've also seen this happen with comments, though line breaks arent reverted in this case. Flake8 does complain about long comments at least for me:\r\n\r\n``` python\r\n    \"\"\"\r\n    Some really really really really really really really really really really really really really really really really long comment\r\n    \"\"\"\r\n```\r\n\r\n<!-- A clear and concise description of what you expected to happen. -->\r\n\r\nBlack should break long lines (according to the config I used, any line > 80 characters), or at least not revert changes made to manually break lines.\r\n\r\n**Environment**\r\n\r\nWindows 11, WSL2, python 3.11.5, poetry 1.7.1\r\n\r\n<!-- Please complete the following information: -->\r\n\r\n- Black's version: black, 23.12.1 (compiled: yes) \r\n- OS and Python version: Python (CPython) 3.11.5, Windows 11, WSL2 running Ubuntu 22.04.3 LTS",
+      "labels": [
+        "T: bug",
+        "F: linetoolong"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "JelleZijlstra",
+          "body": "Could you give a sample of the code that Black is not formatting correctly?"
+        },
+        {
+          "author": "marianatuma",
+          "body": "Something like:\r\n\r\n``` python\r\nfrom src.pkg.core.application.another_pkg.yet_another_pkg.this_is_getting_long.some_file_with_a_long_name import (\r\n    Something,\r\n)\r\n```\r\n\r\nIs not formatted, and when breaking it manually like:\r\n\r\n``` python\r\nfrom src.pkg.core.application.another_pkg.yet_another_pkg. \\ \r\n    this_is_getting_long.some_file_with_a_long_name import (\r\n        Something,\r\n    )\r\n```\r\n```\r\n Black reverts the line break.\r\n\r\nI've also seen this happen with comments, though line breaks arent reverted in this case. Flake8 does complain about long comments at least for me:\r\n\r\n``` python\r\n    \"\"\"\r\n    Some really really really really really really really really really really really really really really really really long comment\r\n    \"\"\"\r\n```\r\nI'll add this to the original question. (I edited the examples to reflect my current config of line length being 80)"
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "Thanks. The import issue is new, but I'm not sure we'd want to fix it, since the proposed formatting is ugly and there's a good chance it will conflict with import formatting tools.\r\n\r\nThe long triple-quoted string (not a comment) is essentially #1617. I don't think we'll fix that either, as the line breaks in a triple-quoted string may be significant, so that decision is better left to the user.\r\n\r\nAs a workaround, I'd suggest disabling flake8's line length rules. Black should be responsible for formatting, and you don't get much additional value out of another tool complaining about formatting minutiae."
+        },
+        {
+          "author": "marianatuma",
+          "body": "I'll bring this up with the team, thanks."
+        }
+      ]
+    },
+    {
+      "number": 4156,
+      "title": "[ISSUE] Github Action Black failing after successful reformatting.",
+      "body": "**Describe the bug**\r\n\r\nTrying to use Black in github actions and  it is failing after reformatting. \r\nShouldn't it  be passing after reformatting without errors ?\r\n```\r\nname: Lint\r\n\r\non: [push, pull_request]\r\n\r\njobs:\r\n  lint:\r\n    runs-on: ubuntu-latest\r\n    steps:\r\n      - uses: actions/checkout@v3\r\n      - uses: psf/black@stable\r\n```\r\n\r\n\r\n\r\n**To Reproduce**\r\nuse black in github action\r\n\r\n**The resulting error is:**\r\nfailing github action after reformatting\r\n```\r\nwould reformat /home/runner/work/catsay/catsay/catsay/cat.py\r\n\r\nOh no! 💥 💔 💥\r\n1 file would be reformatted, 4 files would be left unchanged.\r\nError: Process completed with exit code 1.\r\n```\r\n\r\n**Expected behavior**\r\nIf black has reformatted files witout any errors then actions should pass a success, not a fail\r\n\r\n",
+      "labels": [
+        "T: bug"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "dankrzeminski32",
+          "body": "Hi @tikendraw,\r\n\r\nThe black GitHub action doesn't format your files by default. See the following lines in [the documentation](https://black.readthedocs.io/en/stable/integrations/github_actions.html), \r\n\r\n> You can also configure the arguments passed to Black via options (defaults to '--check --diff') and src (default is '.'). \r\n\r\nThe action's default behavior is simply to notify you of changes it _would've made_ if called without the `--check` flag\r\n\r\nIf you're looking for the action to make the changes for you then you may find [this documentation](https://github.com/marketplace/actions/run-black-formatter#commit-changes-or-create-a-pull-request) helpful."
+        }
+      ]
+    },
+    {
+      "number": 4123,
+      "title": "Preview style feedback: Parenthesizing long dict, conditional, and type annotations",
+      "body": "This is not a proposal for a specific style change but feedback related to the `parenthesize_long_type_hints`, `wrap_long_dict_values_in_parens` and `parenthesize_conditional_expressions` preview styles. \r\n\r\nI started implementing the said preview styles in Ruff. Implementing these styles proved challenging, making me take one step back and evaluate the proposed design changes. I concluded that the preview styles improve the overall formatting but don’t fix the underlying problem. I believe that improving the formatting of binary-like expressions, conditional expressions, and potentially other expressions in parenthesized contexts won't just help improve readability in specific parent expressions but improve the readability overall. My goal isn't to stop you from shipping the preview styles as they are (they are improvements in most cases), but I hope to learn more about the design decisions and to align on a future style that addresses the shortcomings outlined in this issue if there's interest. I haven't worked out a specific style proposal for binary expressions and conditional expressions, and it is possible that changing the formatting proves to either a) not match Black's principles or b) be too disruptive to change now. \r\n\r\nI start with summarizing the relevant preview styles before talking about concrete feedback. The Black principles that I mention are the principles that I understand from reverse engineering Black. There's a chance that I inferred them incorrectly or that they are unintentional. \r\n\r\n## Relevant Preview Styles\r\n\r\n### [Parenthesize long type hints](https://github.com/astral-sh/ruff/issues/8894)\r\n\r\nParenthesize long-type hints to improve separation between arguments.\r\n\r\n**Stable**:\r\n\r\n```python\r\ndef foo(\r\n    i: int,\r\n    x: Loooooooooooooooooooooooong\r\n    | Looooooooooooooooong\r\n    | Looooooooooooooooooooong\r\n    | Looooooong,\r\n    s: str,\r\n) -> None:\r\n    pass\r\n```\r\n\r\n**Preview**\r\n\r\n```python\r\ndef foo(\r\n    x: (\r\n        Loooooooooooooooooooooooong\r\n        | Looooooooooooooooong\r\n        | Looooooooooooooooooooong\r\n        | Looooooong\r\n    ),\r\n    s: str,\r\n) -> None:\r\n    pass\r\n```\r\n\r\nThis style also applies to annotated assignments and can help to keep the assignment in the preferred line length:\r\n\r\n**Stable**\r\n\r\n```python\r\nx: Loooooooooooooooooooooooong | Looooooooooooooooong | Looooooooooooooooooooo | Looooooong = (\r\n    495\r\n)\r\n```\r\n\r\n**Preview**\r\n\r\n```python\r\nx: (\r\n    Loooooooooooooooooooooooong\r\n    | Looooooooooooooooong\r\n    | Looooooooooooooooooooo\r\n    | Looooooong\r\n) = 495\r\n```\r\n\r\nOne important difference between type annotations in annotated assignments and type annotations in function parameters is that type annotations in annotated assignments **must** be parenthesized, or splitting the expressions over multiple lines may introduce syntax errors (except the expression comes with its own pair of parentheses). Parenthesizing isn’t technically required inside of function parameters because the type annotation is in a parenthesized context (the parameters are always parenthesized, except in lambdas, but they don’t allow type annotations because the `:` would be ambiguous).\r\n\r\nThe preview style omits the parentheses if the expression starts or ends with a parenthesized expression (`can_omit_optional_parentheses`) or is an attribute chain (the same as for expressions in clause headers). The following examples show the formatting with the preview style enabled:\r\n\r\n```python\r\ndef test(\r\n    argument: VeryLongClassNameWithAwkwardGenericSubtype[\r\n        integeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeer,\r\n        VeryLongClassNameWithAwkwardGenericSubtype,\r\n        str,\r\n    ] = True,\r\n    argument2=None,\r\n):\r\n    pass\r\n\r\ndef test(\r\n    argument: int | [\r\n        VeryLongClassNameWithAwkwardGeneric,\r\n        VeryLongClassNameWithAwkwardGenericSubtype,\r\n    ] = True,\r\n    argument2=None,\r\n):\r\n    pass\r\n\r\ndef test(\r\n    argument: [\r\n        VeryLongClassNameWithAwkwardGeneric,\r\n        VeryLongClassNameWithAwkwardGenericSubtype,\r\n    ] | int = True,\r\n    argument2=None,\r\n):\r\n    pass\r\n\r\ndef test(\r\n    argument: [\r\n        str,\r\n        VeryLongClassNameWithAwkwardGenericSubtype,\r\n    ] | VeryLongClassNameWithAwkwardGenericSubtype[int] = True,\r\n    argument2=None,\r\n):\r\n    pass\r\n\r\ndef test(\r\n    argument: VeryLongClassNameWithAwkwardGenericSubtype[\r\n        int\r\n    ].VeryLongClassNameWithAwkwardGenericSubtype[str] = True,\r\n    argument2=None,\r\n):\r\n    pass\r\n```\r\n\r\nNot adding the parentheses if splitting after the parenthesized sub-expression is sufficient and improves readability, except when content follows after the first parenthesized expression (last three examples) because it suffers from the same poor readability as the existing stable style.\r\n\r\n### [Parenthesize long dictionary values](https://github.com/astral-sh/ruff/issues/8897)\r\n\r\nParenthesise long dictionary values to improve separation between dictionary entries:\r\n\r\n**Stable**\r\n\r\n```python\r\n{\r\n    aaaaaaaaaa: babbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\n    * a\r\n    * call(\r\n        \"default\",\r\n    ),\r\n    bbbbbbbbbbbbbbbbbbb: 23,\r\n}\r\n```\r\n\r\nIt’s hard to tell where the value `aaa...` ends and the `bb...` entry starts.\r\n\r\n**Preview**\r\n\r\nThe value of `aaa...` gets parenthesized:\r\n\r\n```python\r\n{\r\n    aaaaaaaaaa: (\r\n        babbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\n        * a\r\n        * call(\r\n            \"default\",\r\n        )\r\n    ),\r\n    bbbbbbbbbbbbbbbbbbb: 23,\r\n}\r\n```\r\n\r\nBlack omits parentheses when the dictionary value starts or ends with a parenthesized expression, similar to *parenthesize long type hints* and the formatting of expressions in clause headers. The following example is formatted with Black’s new preview style enabled:\r\n\r\n```python\r\n{\r\n    aaaaaaaaaa: babbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb * a + call(\r\n        \"default\",\r\n    ),\r\n    bbbbbbbbbbbbbbbbbbb: 23,\r\n}\r\n```\r\n\r\n### [Parenthesize conditional expressions](https://github.com/astral-sh/ruff/issues/8438)\r\n\r\nThis style is only related in that it adds parentheses around long sub-expressions. It differs from the above preview styles in that it always adds parentheses, even if the expression starts or ends with a parenthesized expression.\r\n\r\n**Stable**\r\n\r\n```python\r\n[\r\n    \"____________________________\",\r\n    \"foo\",\r\n    \"bar\",\r\n    \"baz\"\r\n    if some_really_looooooooong_variable\r\n    else \"some other looooooooooooooong value\",\r\n]\r\n```\r\n\r\n**Preview**\r\n\r\n```python\r\n[\r\n    \"____________________________\",\r\n    \"foo\",\r\n    \"bar\",\r\n    (\r\n        \"baz\"\r\n        if some_really_looooooooong_variable\r\n        else \"some other looooooooooooooong value\"\r\n    ),\r\n]\r\n```\r\n\r\n## Style Feedback\r\n\r\n### Not a local issue\r\n\r\nWhile parenthesizing long sub-expressions inside dictionary values and type annotations clearly improves readability, it only solves some of the problems but not all. The very same issue exists at least for:\r\n\r\n**Parameter default values**\r\n\r\n```python\r\ndef test(\r\n    aaaaaaaaaa=babbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\n    * a\r\n    * call(\"default\"),\r\n    b=None,\r\n):\r\n    pass\r\n```\r\n\r\n**Slice Indices**\r\n\r\n```python\r\na[\r\n    aaaaaaaaaa\r\n    * babbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\n    * a\r\n    * call(\"default\"),\r\n    b,\r\n]\r\n```\r\n\r\n**Conditional Expressions**\r\n\r\n```python\r\nx = (\r\n    aaaaaaaaaa\r\n    * babbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\n    * a\r\n    * call(\"default\")\r\n    if cccccccccccccc\r\n    * dddddddddddddddddddddddddddddddddddddddddddddd\r\n    * e\r\n    * call(\"default\")\r\n    else ffffffffffffffffff\r\n    * gggggggggggggggggggggggggggggggggggggg\r\n    * h\r\n    * call(\"default\")\r\n)\r\n```\r\n\r\n**Lists**\r\n\r\n```python\r\n[\r\n    babbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\n    * a\r\n    * call(\r\n        \"default\",\r\n    ),\r\n    23,\r\n]\r\n```\r\n\r\n**With Items**\r\n\r\n```python\r\nwith (\r\n    aaaaaaaaaa\r\n    * babbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\n    * a\r\n    * call(\"default\") as x,\r\n    yyyyyyyyyyyyy,\r\n    zzzzzzzzzzzzzzz,\r\n):\r\n    pass\r\n```\r\n\r\nI suspect the problem is even more common and applies to all places where Black formats multiple expressions in an indented context, and the sub-expression doesn’t come with its own parentheses.\r\n\r\nThe issue isn’t specific to binary expression. It also applies to conditional expressions (fixed by the *parenthesize long conditional expressions* preview style) and long call chains.\r\n\r\n```python\r\ndef test(\r\n    aaaaaaaaaa=ibabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\n    if a\r\n    else call(\r\n        \"default\",\r\n    ),\r\n    bbbbbbbbbbbbbbbbbbb=23,\r\n):\r\n    pass\r\n\r\ndef test(\r\n    aaaaaaaaaa=ibabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb(1, 2)\r\n    .aa.bbbbbbbbbb(\"default\")\r\n    .ddddd,\r\n    bbbbbbbbbbbbbbbbbbb=23,\r\n):\r\n    pass\r\n```\r\n\r\nThat’s why I believe this is a larger problem about how sub-expressions (binary expressions, conditional expressions) should be formatted. For example, I find it very hard to parse the following binary expression.\r\n\r\n```python\r\n(\r\n    aaaaaaaaa\r\n    + bbbbbbbbbbbb\r\n    * ccccccccccccccc\r\n    * ddddddddddddddd\r\n    * xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n    + yyyyyyyyyyyy\r\n    + zzzzzzzzzzzzzz\r\n)\r\n```\r\n\r\nAdding some extra space (similar to Prettier and rustfmt) greatly helps.\r\n\r\n```python\r\n(\r\n    aaaaaaaaa\r\n        + bbbbbbbbbbbb\r\n            * ccccccccccccccc\r\n            * ddddddddddddddd\r\n            * xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n        + yyyyyyyyyyyy\r\n        + zzzzzzzzzzzzzz\r\n)\r\n```\r\n\r\nThat’s why I believe the problem is mainly about how we format some expressions rather than whether they should be parenthesized if embedded in other expressions and statements.\r\n\r\n### Doesn’t solve the problem entirely\r\n\r\nBlack omits parentheses for some expressions. This can lead to the very same problem that the new preview styles try to avoid:\r\n\r\n```python\r\n{\r\n    aaaaaaaaaa: call(\r\n        a_call,\r\n        with_plenty,\r\n        arguments,\r\n        so_that_it_splits,\r\n    )\r\n    .length.more,\r\n    bbbbbbbbbbbbbbbbbbb: 23,\r\n}\r\n\r\n{\r\n    aaaaaaaaaa: x.aaaaaaaaaaa[\r\n        1, 2, 3, 4\r\n    ].bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\r\n    bbbbbbbbbbbbbbbbbbb: 23,\r\n}\r\n```\r\n\r\nThese examples are uncommon, but they demonstrate that omitting parentheses when the first (or any middle part) is parenthesized surfaces the same problem the new styles intended to solve.\r\n\r\n### Normalizing parentheses of sub-expressions sets a new precedence.\r\n\r\nBlack puts a lot of effort into avoiding parenthesizing expressions when not necessary. This also applies to the new preview styles discussed above: They avoid parenthesizing the expression when it starts or ends with an expression with its own set of parentheses. Black also has a long history of preserving parentheses around sub-expressions and only adding/removing parentheses for top-level expressions.\r\n\r\nThe new preview style formatting breaks with both these principles:\r\n\r\n- Black adds parentheses even if the expression is already in a parenthesized context.\r\n- Black now normalizes parentheses around dictionary values, conditional expressions, and type annotations.\r\n\r\nI would love to see Black normalize more parentheses (as long as it doesn’t change semantics). But I think this change should be made holistically rather than in one-off places.\r\n\r\nI agree that adding parentheses helps improve readability, but I think indenting yields similar readability improvements with less clutter and is more in line with Black’s principles:\r\n\r\n```python\r\n# Preview\r\n{\r\n    x: (\r\n        aaaaaaaaa\r\n        + bbbbbbbbbbbb\r\n        * ccccccccccccccc\r\n        * ddddddddddddddd\r\n        * xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n        + yyyyyyyyyyyy\r\n        + zzzzzzzzzzzzzz\r\n    ),\r\n    s: str,\r\n}\r\n\r\n# Proposed\r\n\r\n{\r\n    x: aaaaaaaaa\r\n        + bbbbbbbbbbbb\r\n            * ccccccccccccccc\r\n            * ddddddddddddddd\r\n            * xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n        + yyyyyyyyyyyy\r\n        + zzzzzzzzzzzzzz,\r\n    s: str,\r\n}\r\n```\r\n\r\nFor comparison\r\n\r\nPrettier:\r\n\r\n```js\r\n({\r\n  x:\r\n    aaaaaaaaa +\r\n    bbbbbbbbbbbb *\r\n      ccccccccccccccc *\r\n      ddddddddddddddd *\r\n      xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx +\r\n    yyyyyyyyyyyy +\r\n    zzzzzzzzzzzzzz,\r\n  s: str,\r\n});\r\n```\r\n\r\nRust:\r\n\r\n```rust\r\nFormatModuleError {\r\n    x: aaaaaaaaa\r\n        + bbbbbbbbbbbb\r\n            * ccccccccccccccc\r\n            * ddddddddddddddd\r\n            * xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n        + yyyyyyyyyyyy\r\n        + zzzzzzzzzzzzzz,\r\n};\r\n```\r\n\r\n### In parentheses formatting\r\n\r\nBlack differentiates between two contexts when it comes to formatting binary expressions (applies to a few others, but we can ignore them for simplicity):\r\n\r\n- Unparenthesized: Black prefers splitting parenthesized expressions (list, dict, calls, subscript) over splitting any binary expressions:\r\n    \r\n    ```python\r\n    aaaaaaaaaaaaaaaaaaaaaaaaaaaaa * ccccccccccccccccccc + ccccccaaaaaaaaall(\r\n    \t123, 345, 6789, 10000\r\n    )\r\n    ```\r\n    \r\n- Parenthesized: Black splits around the binary expression operators before splitting the operands if the entire expression is in a parenthesized context.\r\n    \r\n    ```python\r\n    a = [\r\n    \taaaaaaaaaaaaaaaaaaaaaaaaaaaaa * ccccccccccccccccccc\r\n    \t+ ccccccaaaaaaaaall(123, 345, 6789, 10000)\r\n    ]\r\n    ```\r\n    \r\n\r\nThe motivation for the two different layouts (as far as I understand it) is that splitting around binary expression operators is only valid if the expression is inside parentheses because otherwise, it results in invalid syntax.\r\n\r\nBlack’s preview styles now apply the “unparenthesized” layout even in parenthesized contexts:\r\n\r\n```python\r\n{\r\n    aa: aaaaaaaaaaaaaaaaaaaaaaaaaaaaa * ccccccccccccccccccc + ccccccaaaaaaaaall(\r\n        123, 345, 6789, 10000\r\n    )\r\n}\r\n```\r\n\r\nOver the “parenthesized” layout (note: I added a manual indent for the second line.):\r\n\r\n```python\r\n{\r\n    aa: aaaaaaaaaaaaaaaaaaaaaaaaaaaaa * ccccccccccccccccccc\r\n        + ccccccaaaaaaaaall(123, 345, 6789, 10000)\r\n}\r\n```\r\n\r\nBoth styles feel acceptable to me, but using the parenthesized layout feels more consistent with how Black formats the same expression outside of dictionaries.\r\n\r\n## Summary\r\n\r\nThe main shortcoming is how binary and conditional expressions are formatted today and, only to a lesser extent, how they are formatted when used as a sub-expression. That’s why I believe that improving the formatting of the said expressions is more impactful than parenthesizing them in some, but not all, contexts. I also believe that improving the formatting increases consistency and reduces the formatter’s complexity (this may not be true for Black, but applies to Ruff) because it avoids making exceptions to some of Black’s principles.\r\n\r\nThe downside is that tackling the problem holistically requires working out a concrete formatting proposal and takes more time. While I believe that we can do better when it comes to formatting binary expressions, it’s worth considering that it is a very disruptive change. While it would improve overall formatting, there will be cases were it formats worse than it used to.\r\n\r\n",
+      "labels": [
+        "T: style",
+        "C: preview style"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "jakkdl",
+          "body": "Discussions that's happened in Black, for context:\r\n#2316 - main issue discussing different ways of handling long type hints\r\nhttps://github.com/psf/black/pull/3930 - PR that handled long type hints in a different way, abandoned after seeing the diffs on real-life code where they weren't made more readable on average.\r\n\r\nWhen I implemented #3899 I did note a couple related examples that aren't handled well at the moment\r\nhttps://github.com/jakkdl/black/blob/391a41334100d1640859090a1b55862190680265/tests/data/preview_py_310/pep604_union_types_line_breaks.py#L22-L45\r\n\r\n\r\nI'm not a seasoned contributor to Black and not especially familiar with the code base, so when I implemented `parenthesize_long_type_hints` I opted for a minimal change, but I agree that there should probably be a larger overhaul."
+        },
+        {
+          "author": "MichaReiser",
+          "body": "@jakkdl thanks for linking the issues and giving me some more context.\r\n\r\n> PR that handled long type hints in a different way, abandoned after seeing the diffs on real-life code where they weren't made more readable on average.\r\n\r\nI saw the PR but haven't been able to look at the diff shade report because the git logs have expired ;( \r\n\r\n> I'm not a seasoned contributor to Black and not especially familiar with the code base, so when I implemented parenthesize_long_type_hints I opted for a minimal change, but I agree that there should probably be a larger overhaul.\r\n\r\nI think that's very reasonable and I think it's worth shipping the changes for Black because it does improve readability in many cases. For ruff, it's a bit more complicated because implementing requires some significant changes that don't feel justified, especially if we want to change the formatting again later."
+        },
+        {
+          "author": "jakkdl",
+          "body": "> @jakkdl thanks for linking the issues and giving me some more context.\r\n> \r\n> > PR that handled long type hints in a different way, abandoned after seeing the diffs on real-life code where they weren't made more readable on average.\r\n> \r\n> I saw the PR but haven't been able to look at the diff shade report because the git logs have expired ;(\r\n\r\nYou should be able to view them at https://github.com/psf/black/actions/runs/6442045741/job/17492459124?pr=3930 in the \"Generate HTML diff report\" step\r\n \r\n> > I'm not a seasoned contributor to Black and not especially familiar with the code base, so when I implemented parenthesize_long_type_hints I opted for a minimal change, but I agree that there should probably be a larger overhaul.\r\n> \r\n> I think that's very reasonable and I think it's worth shipping the changes for Black because it does improve readability in many cases. For ruff, it's a bit more complicated because implementing requires some significant changes that don't feel justified, especially if we want to change the formatting again later.\r\n\r\n:+1: "
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "Thanks, it's a good idea to think about these changes more generally. We often make changes that are limited to one syntactic context, when the same change could really make sense in other contexts too. We're in practice limited to those changes that people are interested enough to send us; I personally don't have the time or inclination to work on bigger changes directly.\r\n\r\nWe're likely to actually drop `wrap_long_dict_values_in_parens` because of some issues similar to the ones you mentioned.\r\n\r\nLooking at your proposed\r\n```python\r\n{\r\n    x: aaaaaaaaa\r\n        + bbbbbbbbbbbb\r\n            * ccccccccccccccc\r\n            * ddddddddddddddd\r\n            * xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n        + yyyyyyyyyyyy\r\n        + zzzzzzzzzzzzzz,\r\n    s: str,\r\n}\r\n```\r\n\r\nI feel it makes the structure of the code less clear than a solution with more parentheses:\r\n```\r\n{\r\n    x: (\r\n        aaaaaaaaa\r\n        + (\r\n            bbbbbbbbbbbb\r\n            * ccccccccccccccc\r\n            * ddddddddddddddd\r\n            * xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n        )\r\n        + yyyyyyyyyyyy\r\n        + zzzzzzzzzzzzzz\r\n    ),\r\n    s: str,\r\n}\r\n```\r\n\r\nIn this second variant, the structure of the code mirrors the AST more directly, which makes it easier to understand (for me at least!).\r\n\r\n"
+        },
+        {
+          "author": "MichaReiser",
+          "body": "Hy @JelleZijlstra \r\n\r\n> Thanks, it's a good idea to think about these changes more generally. We often make changes that are limited to one syntactic context, when the same change could really make sense in other contexts too. We're in practice limited to those changes that people are interested enough to send us; I personally don't have the time or inclination to work on bigger changes directly.\r\n\r\nThat makes sense to me and is probably also a good way to test changes before applying them more broadly.\r\n\r\nI like what you're proposing. I would probably omit the outermost parentheses which gets you very close to what prettier does\r\n\r\n```python\r\n{\r\n    x: aaaaaaaaa\r\n        + (\r\n            bbbbbbbbbbbb\r\n            * ccccccccccccccc\r\n            * ddddddddddddddd\r\n            * xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n        )\r\n        + yyyyyyyyyyyy\r\n        + zzzzzzzzzzzzzz,\r\n    s: str,\r\n}\r\n```\r\n\r\nPrettier:\r\n\r\n```javascript\r\na = {\r\n  x:\r\n    aaaaaaaaa +\r\n    bbbbbbbbbbbb *\r\n      ccccccccccccccc *\r\n      ddddddddddddddd *\r\n      xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx +\r\n    yyyyyyyyyyyy +\r\n    zzzzzzzzzzzzzz,\r\n  s: str,\r\n};\r\n```\r\n\r\nI have long wondered why Black isn't more opinionated about where it inserts (or removes) parentheses. Prettier normalizes all parentheses for you and I always liked that. \r\n\r\nI believe to now understand the reasons why Black doesn't normalize parentheses: Inserting parentheses in binary expressions is safe, but removing them might not be. @konstin pointed this out when I sought feedback for alternative designs for `parenthesize_long_type_hints.`. The problem is that Python supports operator overloading, and, to my knowledge, it allows you to overload them in arbitrary ways, even such that violate the operator's associativity. This problem has come up more recently in a lint rule that converts unnecessary dunder calls to their corresponding operators [source](https://github.com/astral-sh/ruff/issues/9572#issuecomment-1900031398) and the example @konstin shared internally is:\r\n\r\n```python\r\nclass A:\r\n    def __init__(self, x: int):\r\n        self.x = x\r\n\r\n    def __or__(self, other: \"A\"):\r\n        return A(self.x - other.x)\r\n\r\n\r\ndef f(param: A(2) | A(3) | A(4)):\r\n    print(\"hi\")\r\n\r\n\r\ndef g(param: A(2) | (A(3) | A(4))):\r\n    print(\"hi\")\r\n\r\n\r\nif __name__ == '__main__':\r\n    print(f.__annotations__[\"param\"].x)\r\n    print(g.__annotations__[\"param\"].x)\r\n```\r\n\r\nthat prints `prints -5 and 3`\r\n\r\nI fear that this limits us where we can insert parentheses because we can't remove them without risking changing the program's semantics, and not removing them violates reversibility. \r\n\r\nDo you know if that's the reason why Black doesn't normalize parentheses today?\r\n\r\n"
+        },
+        {
+          "author": "tylerlaprade",
+          "body": ">I feel it makes the structure of the code less clear than a solution with more parentheses\r\n\r\nI'm only a single data point, but for me the un-parenthesized version is more readable. Since Python already ascribes meaning to indentation, it's natural for me to assume that everything indented is a single term of the expression, according to order of operations."
+        }
+      ]
+    },
+    {
+      "number": 4099,
+      "title": "`hug_parens_with_braces_and_square_brackets`: Doesn't hug if all entries fit on a line",
+      "body": "**Describe the style change**\r\n\r\nThis issue is specific to the new `hug_parens_with_braces_and_square_brackets` preview style.\r\n\r\n**Examples in the current _Black_ style**\r\n\r\n```python\r\nself._edits.append(\r\n    {\"operation\": \"update\", \"id\": index, \"fields\": list(fields), \"region_fields\": []}\r\n)\r\n```\r\n\r\n**Desired style**\r\n\r\n```python\r\nself._edits.append({\r\n    \"operation\": \"update\", \"id\": index, \"fields\": list(fields), \"region_fields\": []\r\n})\r\n```\r\n\r\nThe benefit of the desired style in my view are:\r\n\r\n* It minifies the diff when the length of the entires change because the formatting of the `{` remain unchanged: \r\n  ```python\r\n  self._edits.append({\r\n\t  \"operation\": \"update\", \r\n\t  \"id\": index, \r\n\t  \"fields\": list(fields), \r\n\t  \"region_fields\": [], \r\n\t  \"loooger\": \"more\",\r\n  })\r\n  ```\r\n  or \r\n  ```python\r\n  self._edits.append({ \"operation\": \"update\", \"id\": index, \"fields\": list(fields)})\r\n  ```\r\n\r\n* It feels more consistent with the call expression formatting where the opening are formatted on separated lines (which is necessary to avoid invalid syntax):\r\n  ```python\r\n  self._edits.append(\r\n      \"operation\", \"update\", \"id\", index, \"fields\", list(fields), \"region_fields\", []\r\n  )\r\n  ```\r\n\r\n**Additional context**\r\n\r\nOriginally posted in the [stable 2024 style](https://github.com/psf/black/issues/4042#issuecomment-1846342231) issue.\r\n",
+      "labels": [
+        "T: style",
+        "C: preview style"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "JelleZijlstra",
+          "body": "Just to confirm, your preferred style uses an 8-space indent, which is unusual and inconsistent with the rest of Black's style. Did you mean to use a 4-space indent, or are you proposing to indent further in that case?\r\n\r\nAssuming we use 4-space indents, I'm not sure which style is better, but I'm definitely open to revisiting the style. I think I explicitly asked for the current style on one of the related PRs, because the style you're asking for seemed too disruptive.\r\n\r\nYou say (correctly) that your proposed style minimizes diffs better if entries are added to the dictionary. That's true, but your style is worse for diffs if a second argument is added to the function call. Maybe that's less common though?"
+        },
+        {
+          "author": "MichaReiser",
+          "body": "> Just to confirm, your preferred style uses an 8-space indent, which is unusual and inconsistent with the rest of Black's style. Did you mean to use a 4-space indent, or are you proposing to indent further in that case?\r\n\r\nSorry, no. It's just GitHub defaulting to tab. I need to check my settings if I can change this somewhere. The indentation should remain as is. It's only about the placement of the opening and closing curly \r\n\r\n> Assuming we use 4-space indents, I'm not sure which style is better, but I'm definitely open to revisiting the style. I think I explicitly asked for the current style on one of the related PRs, because the style you're asking for seemed too disruptive.\r\n\r\nThanks for the context. That makes sense from a transitioning perspective and I'm unfamiliar with how Black prioritises consistency vs disruption due to the new formatting.\r\n\r\n> You say (correctly) that your proposed style minimizes diffs better if entries are added to the dictionary. That's true, but your style is worse for diffs if a second argument is added to the function call. Maybe that's less common though?\r\n\r\nThat's true, but isn't it inherit to `hug_parens_with_braces_and_square_brackets`? \r\n"
+        },
+        {
+          "author": "hauntsaninja",
+          "body": "Yes, it's inherit to `hug_parens_with_braces_and_square_brackets` (and this is one of my worries about it). Note that Black will respect magic trailing commas here and not hug, so this is a way with current preview style to avoid diff noise\r\n\r\nI think the proposed change here is probably more consistent? I think hug is already changes enough formatting that we should try to favour more consistent rules (possibly unless you think the primary benefit of hug is reducing vertical space)"
+        },
+        {
+          "author": "cobaltt7",
+          "body": "Note that this example is currently unchanged from stable style, so we could implement this post-stabilization without churn"
+        }
+      ]
+    },
+    {
+      "number": 4098,
+      "title": "`hug_parens_with_braces_and_square_brackets`: Recursively hugging parens decrease readability",
+      "body": "This is feedback related to the `hug_parens_with_braces_and_square_brackets` preview style. \r\n\r\n**Describe the style change**\r\n\r\nOnly collapse the first set of parens rather than all parens recursively. Having too many opening/closing parens on a single line makes it harder to distinguish the individual parentheses (especially if they are all of the same kind).\r\n\r\n**Examples in the current _Black_ style**\r\n\r\nHere an example from Ruff's shade after implementing the `hug_parens_with_braces_and_square_brackets` preview style recursively.\r\n\r\n```diff\r\n                                     )\r\n                                 )\r\n                                 if commented_entity:\r\n-                                    entity_map = CommentedMap(\r\n-                                        [(entity[\"entity\"], entity[\"value\"])]\r\n-                                    )\r\n+                                    entity_map = CommentedMap([(\r\n+                                        entity[\"entity\"],\r\n+                                        entity[\"value\"],\r\n+                                    )])\r\n                                     entity_map.yaml_add_eol_comment(\r\n                                         commented_entity, entity[\"entity\"]\r\n                                     )\r\n                                     entities.append(entity_map)\r\n                                 else:\r\n                                     entities.append(\r\n-                                        OrderedDict(\r\n-                                            [(entity[\"entity\"], entity[\"value\"])]\r\n-                                        )\r\n+                                        OrderedDict([(\r\n+                                            entity[\"entity\"],\r\n+                                            entity[\"value\"],\r\n+                                        )])\r\n                                     )\r\n                     else:\r\n                         entities.append(\r\n```\r\n\r\n**Desired style**\r\n\r\n\r\n```python\r\n                                     )\r\n                                 )\r\n                                 if commented_entity:\r\n                                    entity_map = CommentedMap([\r\n                                        (entity[\"entity\"], entity[\"value\"])\r\n                                     ])\r\n                                     entity_map.yaml_add_eol_comment(\r\n                                         commented_entity, entity[\"entity\"]\r\n                                     )\r\n                                     entities.append(entity_map)\r\n                                 else:\r\n                                     entities.append(\r\n                                         OrderedDict([\r\n                                             (entity[\"entity\"], entity[\"value\"])\r\n                                         ])\r\n                                     )\r\n                     else:\r\n                         entities.append(\r\n```\r\n\r\n**Additional context**\r\n\r\nThis issue is split out from [my stable style 2024 comment](https://github.com/psf/black/issues/4042#issuecomment-1846342231).\r\n\r\nRuff implements `hug_parens_with_braces_and_square_brackets` in preview style but we intentionally haven't implemented recursive hugging yet.",
+      "labels": [
+        "T: style",
+        "C: preview style"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "tolomea",
+          "body": "I don't know how black views this, but we've always viewed tuples are being more akin to objects than collections. \r\nIn examples like above I'd want to keep the tuple on one line and the list multi line.\r\nso absent other context `([(`, I'd favor grouping as `([` and `(`\r\nbut `[((` I'd favor grouping as `[` and `((` \r\n"
+        }
+      ]
+    },
+    {
+      "number": 4092,
+      "title": "don't split binary operation if right operand is a function call with short name",
+      "body": "**Describe the style change**\r\n\r\nDon't add linebreak in binary operations if right operand is a function with short name and long body. Instead prefer keeping function call on the same line and moving function body to next lines.\r\n\r\n**Examples in the current _Black_ style**\r\n```python\r\nf(\r\n    a\r\n    / f(  # <- this feels weird\r\n        x=x,\r\n    ),\r\n)\r\n\r\na / f(  # <- this is fine\r\n    x=x,\r\n)\r\n```\r\n\r\n**Desired style**\r\n```python\r\nf(\r\n    a / f(  # <- no linebreak\r\n        x=x,\r\n    ),\r\n)\r\n\r\na / f(  # <- unchanged\r\n    x=x,\r\n)\r\n```\r\n\r\n**Additional context**\r\nLooks like this happens in all \"parenthesised\" items lists (like list literal, function call, etc...), but not in \"global\" context.\r\nThis happens with all binary operators, not only with `/`.\r\nPreview mode didn't help.\r\n\r\nI experienced this while using `construct` library:\r\n```py\r\nVar = c.Struct(\r\n    'name' / WStr,\r\n    'type'\r\n    / c.Enum(  # <- inconsistent with all other declarations\r\n        u8,\r\n        unknown=0,\r\n        int=1,\r\n        dword=2,\r\n        float=3,\r\n        str=4,\r\n        array=9,\r\n    ),\r\n    'value'\r\n    / c.Switch(  # <- same\r\n        c.this.type,\r\n        {\r\n            'unknown': c.Computed(None),\r\n            'int': i32,\r\n            'dword': u32,\r\n            'float': f64,\r\n            'str': WStr,\r\n            'array': List(u32),\r\n        },\r\n    ),\r\n)\r\n```\r\n\r\nThis might be helpful (with default `--line-length` which defaults to `88`). All long names are as short as possible to force the corresponding style:\r\n```py\r\nf(\r\n    a / f(_76chars____________________________________________________________________),\r\n)\r\nf(\r\n    a\r\n    / f(_77chars_____________________________________________________________________),\r\n)\r\nf(\r\n    a\r\n    / f(\r\n        _79chars_______________________________________________________________________\r\n    ),\r\n)\r\n```",
+      "labels": [
+        "T: style"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 4075,
+      "title": "Break long expressions at operators, not inside inner parentheses",
+      "body": "**Describe the style change**\r\n\r\n<!-- A clear and concise description of how the style can be\r\nimproved. -->\r\n\r\nWhen a long expression includes parenthetical expressions or functions, it would be better to put parentheses around the whole expression and wrap before operators, rather than wrapping inside an arbitrary set of existing parentheses.\r\n\r\n**Examples in the current _Black_ style**\r\n\r\n<!-- Think of some short code snippets that show\r\nhow the current _Black_ style is not great: -->\r\n\r\n```python\r\nif this_very_long_variable_name != float(\r\n    \"inf\"\r\n) and other_very_long_variable_name == float(\"inf\"):\r\n    pass\r\n\r\ntest = this_very_long_variable_name * float(\r\n    \"inf\"\r\n) + other_very_long_variable_name * float(\"inf\")\r\n\r\ntest = (this_very_long_variable_name * float(\"inf\")) + (\r\n    other_very_long_variable_name * float(\"inf\")\r\n)\r\n\r\n```\r\n\r\n**Desired style**\r\n\r\n<!-- How do you think _Black_ should format the above snippets: -->\r\n\r\n```python\r\nif (\r\n    this_very_long_variable_name != float(\"inf\") \r\n    and other_very_long_variable_name == float(\"inf\")\r\n):\r\n    pass\r\n\r\ntest = (\r\n    this_very_long_variable_name * float(\"inf\") \r\n    + other_very_long_variable_name * float(\"inf\")\r\n)\r\n\r\ntest = (\r\n    (this_very_long_variable_name * float(\"inf\")) \r\n    + (other_very_long_variable_name * float(\"inf\"))\r\n)\r\n```\r\n\r\n**Additional context**\r\n\r\n<!-- Add any other context about the problem here. -->\r\n\r\nFortunately, we already get this behavior for the dot operator, like this:\r\n\r\n```python\r\ndf = pd.DataFrame(\r\n    {\"a\": [1, 2, 3, 4], \"b\": [2, 4, 6, 8], \"c\": [3, 6, 9, 12]}\r\n).sort_values(axis=0, ascending=False, by=[\"a\", \"b\", \"c\"]).set_index(\r\n    \"a\"\r\n).apply(lambda x: x**2)\r\n\r\n# becomes \r\n\r\ndf = (\r\n    pd.DataFrame({'a': [1, 2, 3, 4], 'b': [2, 4, 6, 8], 'c': [3, 6, 9, 12]})\r\n    .sort_values(axis=0, ascending=False, by=['a', 'b', 'c'])\r\n    .set_index('a')\r\n    .apply(lambda x: x**2)\r\n)\r\n\r\n# and \r\n\r\nx = \"this is a long string with some {}, {} or {} in it.\".format(\r\n    \"parameters\", \"arguments\", \"placeholders\"\r\n) + \"this is a long string with some {}, {} or {} in it.\".format(\r\n    \"parameters\", \"arguments\", \"placeholders\"\r\n) + \"this is a long string with some {}, {} or {} in it.\".format(\r\n    \"parameters\", \"arguments\", \"placeholders\"\r\n)\r\n\r\n# becomes\r\n\r\nx = (\r\n    \"this is a long string with some {}, {} or {} in it.\".format(\r\n        \"parameters\", \"arguments\", \"placeholders\"\r\n    )\r\n    + \"this is a long string with some {}, {} or {} in it.\".format(\r\n        \"parameters\", \"arguments\", \"placeholders\"\r\n    )\r\n    + \"this is a long string with some {}, {} or {} in it.\".format(\r\n        \"parameters\", \"arguments\", \"placeholders\"\r\n    )\r\n)\r\n```\r\n\r\nBut for other operators (`+`, `*`, `and`, `==`, etc.), we get breaks inside the existing inner parentheses instead of between operators. This is not good for readability.",
+      "labels": [
+        "T: style"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 4058,
+      "title": "Add parenthesis around walrus",
+      "body": "In the `:=` operator is very easy to get wrong and accidentally forget the `(`. Having black adding brace would clarify what get's assigned.\r\n\r\nExample of desired behavior:\r\n\r\n```python\r\nif x := y op z:   # Before\r\nif x := (y op z):   # After\r\n\r\n# And no changes in the following cases\r\nif x := y:   # Before\r\nif x := y:   # After (no change)\r\n\r\nif (x := y) op z:   # Before\r\nif (x := y) op z:   # After (no change)\r\n```\r\n\r\nExamples:\r\n\r\n```python\r\nwhile pos := buffer.find(search_term, pos + 1) >= 0:  # Before\r\nwhile pos := (buffer.find(search_term, pos + 1) >= 0):  # After < Expose a bug in the code !\r\n\r\nif match := pattern.match(line):  # Before\r\nif match := pattern.match(line):  # After (no change)\r\n\r\nif attr := sys.modules.get('attr') and attr.has(type(obj):  # Before\r\nif attr := (sys.modules.get('attr') and attr.has(type(obj)):  # After < Expose a bug in the code !!\r\n\r\nif (attr := sys.modules.get('attr')) and attr.has(type(obj):  # Before\r\nif (attr := sys.modules.get('attr')) and attr.has(type(obj):  # After (no change)\r\n```\r\n\r\nAdding parenthesis around walrus was even concidered in the original PEP to resolve ambiguity https://peps.python.org/pep-0572/#always-requiring-parentheses\r\n\r\n> It’s been proposed to just always require parentheses around an assignment expression. This would resolve many ambiguities, and indeed parentheses will frequently be needed to extract the desired subexpression.\r\n\r\nEven if at the parser level, it's ok to not use brace, I think at the formatting level, adding brace would greatly clarify what is assigned. Especially considering the `walrus` is a quite \"advanced\" operator.\r\n\r\nI started using walrus and regularly got bugs in my code due to forgetting to add braces.\r\n\r\nBlack already add `()` on some operations to help readibility, like:\r\n\r\n```python\r\nx = x,  # Before\r\nx = (x,)  # After\r\n```\r\n\r\nI think braces around the `walrus` operator would greatly help readability and avoid bugs.\r\n",
+      "labels": [
+        "T: enhancement"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "JelleZijlstra",
+          "body": "Could you give some examples of cases where we should add parentheses?"
+        },
+        {
+          "author": "Conchylicultor",
+          "body": "Sorry, the issue got created while I was still writing. Updated the issue with examples"
+        }
+      ]
+    },
+    {
+      "number": 4025,
+      "title": "Support for percent format notebooks",
+      "body": "In IPython / Jupyter notebook, trailing `;` has a specific effect of suppressing the last output: https://ipython.org/ipython-doc/dev/interactive/tips.html#suppress-output\r\n\r\nOther Colab extensions like https://github.com/google/etils also use `;` to pretty display the line (as alias of the verbose `IPython.display.display`): https://etils.readthedocs.io/en/latest/ecolab.html#pretty-display-with-trailing\r\n\r\nColab/IPython notebook are meant for fast iteration. As such, those hack are very useful for fast visualization to be able to pretty display in Colab:\r\n\r\n```python\r\ndef fn():\r\n  return x;  # Will display the return value\r\n\r\nx = a + other_fn();  # Display `x`\r\n```\r\n\r\nCurrently, when formatting a notebook file (e.g. a `.py` file with `# %%` cells), all `;` get removed.\r\n\r\nIt would be great if there was a directive to force black keep the trailing `;` locally on a file. Something like:\r\n\r\n```\r\n# fmt: disable=trailing-semicolon\r\n```\r\n\r\nSimilar to `# pylint: disable=` directives.\r\n\r\nAs formatting is applied on the full codebase, but this behavior should only be ignored on some specific Colab/IPython files, Globally disabling this behavior is not an option. Instead, this would have to be disabled on a per-file basis.\r\n",
+      "labels": [
+        "T: enhancement"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Conchylicultor",
+          "body": "It looks keeping trailing `;` is already implemented for `.ipynb` files: https://github.com/psf/black/issues/3577\r\n\r\nHowever this do not seems to work for `.py` files following the `# %%` format (`.py` files meant to be loaded in IPython): \r\nhttps://jupytext.readthedocs.io/en/latest/formats-scripts.html#the-percent-format\r\n\r\nMaybe this bug should be instead about supporting the `# %%` format on `.py` files, so that src/black/handle_ipynb_magics.py is applied in addition of the standard Python formatting."
+        },
+        {
+          "author": "davidorme",
+          "body": "Just to add to the use cases for this, we have notebooks in Myst Markdown and use `jupytext --pipe black` to format python code within those notebooks. Within that command, the markdown file gets converted into `percent` format for code formatting and then back to markdown. At the moment, that strips all of our semi-colons and it would be great if it didn't."
+        },
+        {
+          "author": "cowirihy",
+          "body": "I'm having the same issue, where my `.py` peercent scripts are having `;` removed by black.\n\n> Maybe this bug should be instead about supporting the # %% format on .py files, so that src/black/handle_ipynb_magics.py is applied in addition of the standard Python formatting.\n\nAgreed this would seem the way forward? Is this something that could be done? Happy to have a crack, but may need pointers"
+        },
+        {
+          "author": "davidorme",
+          "body": "For context, we're typically using it to suppress return values from `matplotlib` functions in generating tutorial and user guide docs. We can capture the return values:\n\n```python\n# change:\nax.set_ylabel(\"String\");\n# to:\n_ = ax.set_ylabel(\"String\")\n```\n\nbut tutorial users typically worry about the assignment to `_` more than they do about that trailing `;` 😄 "
+        },
+        {
+          "author": "cowirihy",
+          "body": "Yes I'm the same, it can be annoying to have things like axes or titles returned and displayed. I also use `;` to mute the display of large arrays or similar"
+        }
+      ]
+    },
+    {
+      "number": 4001,
+      "title": "Avoid parentheszing non-fluent attribute chain exceeding the line-length",
+      "body": "I wasn't sure if I should submit a style or bug report for this (or should it be a question?). I'm sorry if I picked the wrong template. \r\n\r\nBlack implements a neat little optimization for constants and names to avoid wrapping them in parentheses when the parenthesized expression exceeds the line length. \r\n\r\nIn the following code, Black omits parenthesizing the \"exceeds parenthesized\" cases because the code exceeds the line length when adding and when omitting the optional parentheses, which is why it favors omitting the parentheses. Except, for attributes...\r\n\r\n```python\r\n# fits parenthesized\r\n______ = (\r\n    \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvv\"\r\n)\r\n______ = (\r\n    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvv\r\n)\r\n______ = (\r\n    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvv\r\n)\r\n\r\n# exceeds parenthesized\r\n______ = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvvvvv\"\r\n______ = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvvvvvvv\r\n______ = (\r\n    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvvvvvvv\r\n)\r\n\r\n\r\ndef doesnt_exceed_line_length_when_parenthesizing():\r\n    ______ = (\r\n        \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvv\"\r\n    )\r\n    ______ = (\r\n        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvv\r\n    )\r\n    ______ = (\r\n        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvv\r\n    )\r\n\r\n\r\ndef exceeds_line_length_parenthesized():\r\n    ______ = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvvvvvv\"\r\n    ______ = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvvvvvvvv\r\n    ______ = (\r\n        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvvvvvvvv\r\n    )\r\n```\r\n\r\n\r\nI implemented the same behavior in Ruff and incorrectly assumed that it would apply to all expressions that cannot be split further (which includes non-fluent attribute chains). I guess the bug / style suggestion / question is: Should blacked code omit parentheses around attribute chains if they exceed the configured line length regardless if they're parenthesized or not, to be consistent with other unsplittable expressions? \r\n\r\nEdit: Somewhat related. Black breaks the left before parenthesizing the right for constants, names, and non-fluent attribute chains. \r\n\r\n```python\r\nstate[\r\n    \"event_queue_longpoll_timeout_seconds\"\r\n] = settings.EVENT_QUEUE_LONGPOLL_TIMEOUT_SECONDS\r\n\r\n# Instead of, at least without preview mode\r\nstate[\"event_queue_longpoll_timeout_seconds\"] = (\r\n    settings.EVENT_QUEUE_LONGPOLL_TIMEOUT_SECONDS\r\n)\r\n```\r\n\r\nbut it already breaks the right before the left for binary expressions (and other splittable expressions)\r\n\r\n```python\r\nstate[\"event_queue_longpoll_timeout_seconds\"] = (\r\n    aaaaa + settings.EVENT_QUEUE_LONGPOLL_TIMEOUT_SECONDS\r\n)\r\n```\r\n\r\nIt's probably too late to use this as a real argument, considering that this changes with preview style, but handling non-fluent attribute chains identical to constants and names when parenthesizing would make their handling more consistent.",
+      "labels": [
+        "T: bug"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "JelleZijlstra",
+          "body": "I'd be open to changing Black's behavior here. We probably should actually split these attribute chains, like this:\r\n```\r\n______ = (\r\n    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\n    .bbbbbbbbbbbbbbbbbbbbbbbbbbvvvvvvvvvvvvvvvvvvv\r\n)\r\n```\r\n(Similar to how we format fluent interfaces)\r\n"
+        },
+        {
+          "author": "MichaReiser",
+          "body": "> We probably should actually split these attribute chains, like this:\r\n\r\nI think that would be ideal. I haven't yet had time to closely look into what it would mean to split attribute chains (how does it affect all other formatting rules). I would love to collaborate on defining a new style together. At least, after getting the preview style implemented. Black's formatting is so good and has many hidden gems you only realize when paying attention. It will take me a while to get up to parity. I appreciate all the hard work you've put into defining the style guide.\r\n"
+        },
+        {
+          "author": "hauntsaninja",
+          "body": "Note that Black currently goes a little out of its way to forbid that kind of split. Even in fluent interfaces, the first attribute access currently remains unsplit. So will require a little bit of figuring out what the right rule is :-)\r\n\r\n(Coincidentally, I was just looking at fluent interface formatting to fix some other undesirable splitting caused by experimental string processing and https://github.com/psf/black/issues/67#issuecomment-1593856411 and https://github.com/psf/black/issues/3998)."
+        }
+      ]
+    },
+    {
+      "number": 3972,
+      "title": "Request: new releases triggering `black-pre-commit-mirror`'s `mirror` action",
+      "body": "**Is your feature request related to a problem? Please describe.**\r\n\r\nLooks like https://github.com/psf/black-pre-commit-mirror/blob/91867dbada8a528dcc51a369d95a9d11a81a26a8/.github/workflows/mirror.yml#L7 runs at 5:43 am UTC. An aside, is it's too bad seconds aren't supported by `cron` otherwise we could have 5:43:21 😆\r\n\r\n`black==23.10.1` was just released an hour ago, but it won't propagate to `black-pre-commit-mirror` for about 9 hrs.  I am wondering, is it possible to tighten up this timing?\r\n\r\n**Describe the solution you'd like**\r\n\r\nHaving black's release pipeline trigger the mirror job in `black-pre-commit-mirror`. I think this is possible with GitHub actions.\r\n\r\nIt would also save GitHub CI resources 🌲  from avoiding unnecessary daily `cron` jobs in https://github.com/psf/black-pre-commit-mirror.\r\n\r\n**Describe alternatives you've considered**\r\n\r\nN/a\r\n\r\n**Additional context**\r\n\r\nN/a",
+      "labels": [
+        "T: enhancement",
+        "C: maintenance"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "jamesbraza",
+          "body": "Cc @hauntsaninja since you made https://github.com/psf/black-pre-commit-mirror"
+        },
+        {
+          "author": "hauntsaninja",
+          "body": "The Github Action in that repo also has a workflow_dispatch trigger. So can [just make an API request](https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#create-a-workflow-dispatch-event) in the release automation Black uses, only annoying thing would be secret management"
+        }
+      ]
+    },
+    {
+      "number": 3955,
+      "title": "(🎁) String processing: re-enable wrap concatenated strings in parens in all cases",
+      "body": "# input:\r\n```py\r\nf(\r\n    \"lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor\" \r\n    \"incididunt ut labore et dolore magna aliqua Ut enim ad minim\",\r\n    \"\",\r\n)\r\n```\r\n# Expected output:\r\n```py\r\nf(\r\n    (\r\n        \"lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor\" \r\n        \"incididunt ut labore et dolore magna aliqua Ut enim ad minim\"\r\n    ),\r\n    \"\",\r\n)\r\n```\r\n# Actual:\r\nNo change\r\n\r\n\r\n# Playground\r\n[playground](https://black.vercel.app/?version=stable&state=_Td6WFoAAATm1rRGAgAhARYAAAB0L-Wj4AEZAMVdAD2IimZxl1N_Wlji3aOW_R_pER-E3kxjZbgvHtif5YLlSiKk3v5vaSH_VtFw3w5tOYY4dJ81Pn_FvMASvxGE4RrpvH-iTAZ0Y33V0DpD53JDByyqd_wsPdK7coWFKTKtpcdmrxpMex_6ldbQp8DLPjf3pAI0VY6Utb9ZZX5oP6oirjg7WgvhXAaICDwPp6t2DJSfwFfjmrFH_6ti6uv3mAln1Xe8ku9FpG32-dGVciJrjUFJQTLmM5mab3uWlRswXx5KcjoAAAAAAKMQX16p6fjIAAHhAZoCAADk4FTyscRn-wIAAAAABFla)\r\n\r\n# Context:\r\n\r\nThis was implemented and reverted due to disruptive changes:\r\n```diff\r\nf(\r\n    x,\r\n-   \"lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor\" \r\n-   \"incididunt ut labore et dolore magna aliqua Ut enim ad minim\",\r\n+   (\r\n+       \"lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor\" \r\n+       \"incididunt ut labore et dolore magna aliqua Ut enim ad minim\"\r\n+   ),\r\n)\r\n```\r\n\r\nI think that it should be re-enabled, because it does improve style, readability, and catch bugs. Some additional cases should be considered:\r\n\r\n- Only wrap the string if it shares a boundary with an expression that starts with a string literal:\r\n<details><summary>Details</summary>\r\n<p>\r\n\r\n```py\r\nf(\r\n    x,\r\n    \"a\"  # don't wrap\r\n    \"b\",\r\n)\r\n\r\nf(\r\n    \"a\"  # don't wrap\r\n    \"b\",\r\n    x,\r\n)\r\n\r\nf(\r\n    1,\r\n    \"a\"  # don't wrap\r\n    \"b\",\r\n)\r\n\r\nf(\r\n    \"a\" + \"b\",\r\n    \"a\"  # wrap, the preceding parameter begins with a string literal\r\n    \"b\",\r\n)\r\n```\r\n</p>\r\n</details> \r\n\r\n- Don't wrap in cases of following keyword arguments:\r\n<details><summary>Details</summary>\r\n<p>\r\n\r\n```py\r\nf(\r\n    \"a\"  # don't wrap\r\n    \"b\",\r\n    a=\"a\",\r\n)\r\n\r\nf(\r\n    \"a\",\r\n    a=\"a\"  # don't wrap\r\n    \"b\",\r\n)\r\n\r\nf(\r\n    a=\"a\",\r\n    \"a\"  # wrap\r\n    \"b\",\r\n)\r\n\r\nf(\r\n    a=\"a\"  # wrap\r\n    \"b\",\r\n    \"a\",\r\n)\r\n```\r\n</p>\r\n</details> \r\n\r\nI feel like this is a healthy balance of disruption and readability.\r\n\r\n# Related:\r\n- #3292\r\n- #3307\r\n- #3640\r\n\r\nBlack version 23.10.0",
+      "labels": [
+        "T: bug",
+        "C: preview style"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 3952,
+      "title": "Request: supporting sub-configs (aka per-directory config)",
+      "body": "**Is your feature request related to a problem? Please describe.**\r\n\r\n<!-- A clear and concise description of what the problem is. -->\r\n\r\nI like `black`'s default of 88-char line length, except for `docs/` renderings, where code blocks may be rendered via Sphinx with 79 char width. This leads to unnecessary scrolling left/right to see the last 9 chars.\r\n\r\nIt would be useful to enable `black` to have sub-configurations. This was requested in https://github.com/psf/black/issues/1370, and was postponed into the future.\r\n\r\n**Describe the solution you'd like**\r\n\r\n<!-- A clear and concise description of what you want to\r\nhappen. -->\r\n\r\nEnabling subdirectories to have their own `pyproject.toml`, and `black` will accept overrides from that sub-`pyproject.toml`.\r\n\r\n**Describe alternatives you've considered**\r\n\r\n<!-- A clear and concise description of any\r\nalternative solutions or features you've considered. -->\r\n\r\n`ruff` is a project that adopted sub-configs through use of the [`extend` keyword](https://docs.astral.sh/ruff/configuration/#pyprojecttoml-discovery). It has been great, I have:\r\n\r\n- One repo-wide config\r\n- Two sub-configs: `docs/` and `tests/`\r\n\r\nThis can be an example successful implementation of sub-configs.\r\n\r\n**Additional context**\r\n\r\n<!-- Add any other context or screenshots about the feature request\r\nhere. -->\r\n\r\nOne counter argument is simplying invoking `black` once/config:\r\n\r\n- Once for the repo root\r\n- Once for the subdirectory with its special config\r\n\r\nI think this complicates things (e.g. multiple `make` commands or multiple `pre-commit` hooks), though it is a valid workaround",
+      "labels": [
+        "T: enhancement"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "skrawcz",
+          "body": "+1 to this request -- I am running into the same issue with sphinx docs and want a different line length for that code."
+        },
+        {
+          "author": "maanijou",
+          "body": "+1 for this.\r\nWe have also usecases where we have different types of modules and scripts and for some of them it makes sense to have a different config. For example, formatting for a utility library, compared to a pyspark code can be different and one might need to customize the formatting for different modules in the code"
+        },
+        {
+          "author": "luator",
+          "body": "+1. I just ran into the exact same use-case that for examples which are included in Sphinx documentation, a shorter line-length would be good."
+        },
+        {
+          "author": "Jswig",
+          "body": "+ 1 as well. I ran into this recently with Databricks, whose built-in formatter uses black with 88 line length, while the rest of our organization's codebase uses 100 lines"
+        }
+      ]
+    },
+    {
+      "number": 3946,
+      "title": "Black puts \"pyright: ignore\" comments on the wrong line",
+      "body": "Hi,\r\nI've switched to VS code and pyright recently, and I realized black is breaking a lot of `# pyright: ignore` comments.\r\n\r\nInput (both are valid for pyright):\r\n```python\r\nasm_client: SecretsManagerClient = boto3.client(\"secretsmanager\") # pyright: ignore[reportUnknownMemberType]\r\nasm_client: SecretsManagerClient = boto3.client( # pyright: ignore[reportUnknownMemberType]\r\n    \"secretsmanager\"\r\n)  \r\n```\r\n\r\nOutput:\r\n```python\r\nasm_client: SecretsManagerClient = boto3.client(\r\n    \"secretsmanager\"\r\n)  # pyright: ignore[reportUnknownMemberType]\r\nasm_client: SecretsManagerClient = boto3.client(\r\n    \"secretsmanager\"\r\n)  # pyright: ignore[reportUnknownMemberType]\r\n```\r\n\r\nIs there a way to stick the pyright comment to the original line ?\r\n\r\nI'm using:\r\n```\r\nblack, 23.9.1 (compiled: yes)\r\nPython (CPython) 3.11.6\r\n```\r\n\r\nThanks",
+      "labels": [
+        "T: bug",
+        "F: comments"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "JelleZijlstra",
+          "body": "See also #3661.\r\n\r\nI think this is inherently impossible to solve in all cases, because if Black splits a line, it has no way to know which part of the line the ignore comment should apply to. However, we could probably come up with a better heuristic, like putting the comment on the first rather than the last line."
+        },
+        {
+          "author": "henriholopainen",
+          "body": "When/if [this](https://github.com/psf/black/pull/3978/) gets merged, one option would be:\r\n\r\n```\r\nasm_client: SecretsManagerClient = boto3.client(\"secretsmanager\")  # fmt: skip; pyright: ignore[reportUnknownMemberType]\r\n```"
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "Pyright doesn't support that syntax though. (Maybe it should, but that's not a question for this tracker.)"
+        },
+        {
+          "author": "MohamedSharfan",
+          "body": "Hi! 👋\n\nI would like to work on this.\n\nIt seems Black needs to treat # pyright: ignore similarly to how it handles # type: ignore (keeping it attached to the specific line rather than moving it to the end of the expression).\n\nI plan to investigate where the \"pragma\" comments are detected (likely in the comment handling logic) and add pyright: ignore to the allowlist.\n\nLet me know if I can proceed with a PR!"
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "There are a number of other similar issues asking about various comment syntaxes. It seems a bit questionable to me to privilege particular tools, but maybe we can find a way to deal with comments that works better for all comments."
+        },
+        {
+          "author": "YuanyuanMa03",
+          "body": "Coming here from #5467 (closed pending consensus in this issue) — I'd like to help build that consensus, so here's an attempt to structure the problem.\n\n**What actually breaks.** When Black splits a line whose trailing comment is machine-consumed, both the code and the comment move. For prose this is only cosmetic, but for comments a tool binds to a physical line, relocating them changes tool behavior. In this issue's original report, pyright stops suppressing the diagnostic once the comment lands on the last line of the split statement. The same line-binding logic applies to `# noqa` (flake8/ruff match violations per physical line) and `# pylint: disable` (block-scoped from its line onward — moving it down shrinks the suppression window), though in those cases the violation may also just disappear after the split.\n\n**So there are two axes to decide:**\n\n1. *Which comments are behavior-sensitive?* My takeaways from #5467: \"is a pragma\" is the wrong gate, and the family can't be enumerated exhaustively — the operative property is \"a tool binds this comment to a line and acts on it\".\n2. *What does Black do with them?* Three mechanisms I can see:\n   - **A. Keep the line unsplit**: extend the existing `contains_unsplittable_type_ignore` heuristic to more families. Simple and preserves today's `type: ignore` behavior, but it can never be complete, and it blocks reformatting of lines whose violations would survive a split just fine.\n   - **B. Relocate**: put the trailing comment on the first line of the split statement. Covers tools that honor the comment when it stays with the statement's first line (as pyright does in this issue's example), but not tools that report on inner lines, and it moves comments away from where readers expect them.\n   - **C. Escape hatch**: document that `# fmt: skip` already solves this today — the line isn't touched at all, so the comment stays put. Zero risk, but poor ergonomics, and clearly not discoverable enough given how many reports exist.\n\n**My read for discussion:** the tractable core is the type-checker ignore family (`# type: ignore`, `# pyright: ignore[...]`, `# mypy: ignore`) — single-line-bound, high real-world pain, and closest to what Black already special-cases. Unifying them under the existing handling (via A or B) is a bounded change; `# noqa` / `# pylint` / `# pragma: no cover` could be decided separately or left to `fmt: skip`. If a direction emerges, happy to bring corpus evidence (diff-shades over a large project set, as gathered for #5467) and/or implement — or defer to @MohamedSharfan who also volunteered above.\n"
+        }
+      ]
+    },
+    {
+      "number": 3918,
+      "title": "Formatting one-tuples as multi-line if already multi-line",
+      "body": "**Describe the style change**\r\n\r\nBlack excludes one-tuples `(1,)` and single-item subscripts with trailing comma `tuple[int,]` from magic comma handling, because unlike in list literals etc. the comma here is required, so cannot be used to distinguish between the user's desire to single-line or multi-line.\r\n\r\nThe single-line format chosen by Black is the desired behavior for \"actual\" one-tuples, but is not the desired behavior for \"currently 1 item but maybe more in the future\" tuples.\r\n\r\n**Examples in the current _Black_ style**\r\n\r\nGiven **input**:\r\n\r\n```python\r\nclass WidgetAdmin(admin.ModelAdmin):\r\n    readonly_fields = (\r\n        'id',\r\n    )\r\n    fields = ('foo',)\r\n```\r\n\r\nthe formatting is:\r\n\r\n```python\r\nclass WidgetAdmin(admin.ModelAdmin):\r\n    readonly_fields = (\"id\",)\r\n    fields = (\"foo\",)\r\n```\r\n\r\n**Desired style**\r\n\r\nI would like Black to have a special case for one-tuples (and one-subscripts), distinguishing between the newline and no-newline cases. Black would use the multiline format if the input is multiline.\r\n\r\n```python\r\nclass WidgetAdmin(admin.ModelAdmin):\r\n    readonly_fields = (\r\n        \"id\",\r\n    )\r\n    fields = (\"foo\",)\r\n```\r\n\r\nThis adds a new form of context sensitivity in addition to magic trailing comma, but I think it makes sense since it plugs a hole in the magic trailing comma handling.\r\n\r\n**Additional context**\r\n\r\nWorking on moving some large projects to use Black, this is my major gripe. The problem with the current style is that it removes the git-diff friendliness of the multi-line format, which magic trailing comma normally handles nicely.\r\n\r\nCommon examples for us are in Django Admin classes (like above), another is in `Literal`s, but we have them in *a lot* of different cases.\r\n\r\nKnown workarounds:\r\n\r\n1. Switch to list literals. Not great because lists are mutable, heavier than tuples, and sometimes a tuple specifically is needed.\r\n2. Add a \"forcing\" comment:\r\n\r\n    ```py\r\n        readonly_fields = (\r\n           \"id\",\r\n            #\r\n       )\r\n    ```\r\n\r\n    I think it's not very pretty.\r\n\r\nBackward compat: it breaks compat in the sense that arbitrary input will get different output. But given already-formatted input, the output isn't changed. This adheres to the [Stability Policy](https://black.readthedocs.io/en/latest/the_black_code_style/index.html#stability-policy) if I understand it correctly.",
+      "labels": [
+        "T: style"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "bluetech",
+          "body": "I looked into this briefly. AFAICT, the main problem with implementing this is that the AST does not preserve non-logical newlines, and there is no way to go from an AST node to the original tokens either. The `NL` token necessary for detecting this case is gone. So implementing this proposal requires changes to blib2to3. "
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "> the main problem with implementing this is that the AST does not preserve non-logical newlines\r\n\r\nThat shouldn't matter. Black doesn't use the AST in its formatting logic, only in the safety check. The formatting logic uses blib2to3's CST, which does preserve newlines."
+        },
+        {
+          "author": "bluetech",
+          "body": "Thanks @JelleZijlstra, if you don't mind can you point to me how to get at the newlines? Given the following code\r\n\r\n```py\r\n(\r\n    999,\r\n)\r\n```\r\n\r\nthe result of `lib2to3_parse` is the following (at least according to the `__repr__`), which is the same as for `(999,)`:\r\n\r\n```py\r\nNode(file_input, [\r\n    Node(simple_stmt, [\r\n        Node(atom, [\r\n            Leaf(LPAR, '('),\r\n            Node(testlist_gexp, [\r\n                Leaf(NUMBER, '999'),\r\n                Leaf(COMMA, ','),\r\n            ]),\r\n            Leaf(RPAR, ')'),\r\n        ]),\r\n        Leaf(NEWLINE, '\\n'),\r\n    ]),\r\n    Leaf(ENDMARKER, ''),\r\n])\r\n```"
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "I believe you have to look at `node.prefix`, which isn't in the repr. Black's `debug.py` includes this information."
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "I should say that I don't think I like this proposed change. I generally prefer Black to take existing formatting into account as little as possible, so that Blackened code looks consistent. I know the magic trailing comma is an exception to that rule, but that doesn't mean we have to add more exceptions.\r\n\r\nI do see why you want a special case here, and if there's widespread support I won't block this change."
+        },
+        {
+          "author": "bluetech",
+          "body": "The reason I'm pursuing this is that I'm working on formatting our internal code with Black, but this pattern occurs a few hundred times and I prefer not to turn them all into single lines. So I'll try to complete a proof-of-concept at least for evaluation purposes, but I'll completely understand if the proposal ends up being rejected for the reasons you've stated."
+        }
+      ]
+    },
+    {
+      "number": 3880,
+      "title": "Black should never try to format symlinks",
+      "body": "After upgrading to 23.9.1, due to #3846 I ran into the following situation:\r\n\r\n- `a/file.py` is a symlink to `b/file.py`\r\n- `b/file.py` is not formatted because it's in `exclude`\r\n\r\nPreviously, Black ignored the file. Now it wants to format it.\r\n\r\nI would expect Black to not format these files. The actual files are `exclude`d, the symlinks aren't themselves Python files. I think this can be implemented with a simple rule: never follow symlinks. If the file is in a place that Black should format, we'll find it through its resolved path. If it's not, we shouldn't format it.\r\n\r\ncc @hauntsaninja ",
+      "labels": [
+        "T: enhancement"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "hauntsaninja",
+          "body": "I don't have a use case, so I don't feel strongly. One of the reports about the old behaviour mentioned being happy if Black didn't format symlinks. Also not handling symlinks would make full cache runs of black faster (a la https://github.com/psf/black/pull/3751).\r\n\r\nThat said, I'd take the bet that people are depending on being able to format via symlink. In today's world, I think everyone has the ability to get the behaviour they want, but we would have to think about whether we'd want a new flag if we made Black ignore symlinks.\r\n\r\nNote another resolution to your issue is we could also make Black apply exclusion rules to both the symlink and the resolved file."
+        },
+        {
+          "author": "embe-pw",
+          "body": "Another interesting case, that started ocurring due to #3846 and would also be fixed by ignoring symlinks:\r\nAssume there is a symlink `foo` pointing to `ignored-dir/bar.py` (note that `foo` has no extension). `black .` will format `foo` (even though it does not have `.py` extension), effectively formatting `ignored-dir/bar.py`."
+        },
+        {
+          "author": "morganwahl",
+          "body": "I have a use-case for black ignoring symlinks: we keep vendored dependencies in a directory called `vendor`, which we can then configure tools to ignore. However sometimes we need to reference the files inside the vendor dir from a different path, so we use symlinks. Black already ignores the vendor dir, but now it's trying to format files in it via the symlinks."
+        }
+      ]
+    },
+    {
+      "number": 3802,
+      "title": "string_processing: makes it impossible to use a comment to ignore a static type violation",
+      "body": "**Describe the bug**\r\n\r\nBlack's `--preview` mode makes it impossible to suppress a type error in a string with a long comment.\r\n\r\n**To Reproduce**\r\n\r\nFor example, take this code:\r\n\r\n```python\r\n    def __str__(self):\r\n        return \"foo bar baz qux\" # pyright: ignore[reportGeneralTypeIssues] -- This is some special Django magic that we can't easily tell Pyright about\r\n```\r\n\r\nAnd run it with these arguments:\r\n\r\n```sh\r\n$ black --preview\r\n```\r\n\r\nThe resulting error is:\r\n\r\n> Unnecessary \"# pyright: ignore\" rule: \"reportGeneralTypeIssues\" (Pylance)\r\n```python\r\n    def __str__(self):\r\n        return (  # pyright: ignore[reportGeneralTypeIssues] -- This is some special Django magic that we can't easily tell Pyright about\r\n            \"foo bar baz qux\"\r\n        )\r\n```\r\nIf I move the comment to the middle line, `black` moves it back up to the top.\r\n\r\n**Expected behavior**\r\n\r\nEven if `black` breaks my comment in some cases, there should be at least one possible place for me to leave the comment that will suppress my type error without `black` moving it.\r\n\r\n**Environment**\r\n\r\n<!-- Please complete the following information: -->\r\n\r\n- Black's version: `23.7.0`\r\n- OS and Python version: MacOS, 3.11\r\n\r\n**Additional context**\r\n\r\nThis also occurs if the comment starts on the line with the violation\r\n",
+      "labels": [
+        "T: bug",
+        "F: strings",
+        "C: preview style"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "JelleZijlstra",
+          "body": "This is related to experimental string processing. Noting this here because @hauntsaninja in #4042 wasn't sure which part of the preview style was causing this issue. I verified it's string processing by editing Black to turn on preview style except string processing."
+        }
+      ]
+    },
+    {
+      "number": 3800,
+      "title": "Always respect original comment/code-order",
+      "body": "**Is your feature request related to a problem? Please describe.**\r\n\r\nIt would be nice to be able to force black to **never** change the order of code and comments.\r\n\r\nfor example:\r\n\r\n```python\r\nx = (\r\n    codeA   # commentA\r\n    .codeB  # commentB\r\n    .codeC  # commentC\r\n    .codeD  # commentD\r\n    .codeE  # commentE\r\n    .codeF  # commentF\r\n)\r\n```\r\n\r\n[gets formatted to](https://black.vercel.app/?version=stable&state=_Td6WFoAAATm1rRGAgAhARYAAAB0L-Wj4AD9AG5dAD2IimZxl1N_WmyLkeQzBfBJMV7c0GsbQlNWsx2vz5jLXwUjME8VwqyJaa1agU_94XQ7KomB6m74PoY-7_lkbYkf7MKmuFo7huOPlD0i-g5GJN0Vcq1MgDFBkB2EnLUa8SkhtEoFa-sRd5UK-BsAAAAADlDA9udCEVUAAYoB_gEAAHDBZSaxxGf7AgAAAAAEWVo=)\r\n\r\n```python\r\nx = (\r\n    codeA.codeB.codeC.codeD.codeE.codeF  # commentA  # commentB  # commentC  # commentD  # commentE  # commentF\r\n)\r\n```\r\n\r\nwhich even results in breaking the 88 character limit.\r\n\r\n\r\n**Describe the solution you'd like**\r\n\r\nIt feels weird that black would even ever mess with the original ordering of code and comments. Imo, the order should always be respected, since comments go together with code. If the AST contains `<codeA><commentA><codeB>`, then the output should be `<formatted-codeA><formatted-commentA><formatted-codeB>`.\r\n\r\n",
+      "labels": [
+        "T: enhancement",
+        "F: comments"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "JelleZijlstra",
+          "body": "I'm not sure we'll *never* want to reorder comments, but I agree in your example it's better to keep the comments as is. I would welcome a PR exploring a concrete change to make Black move comments less."
+        },
+        {
+          "author": "Feuermurmel",
+          "body": "@randolf-scholz I think your case is compounded by https://github.com/psf/black/issues/510, where a chain of attribute accesses is put on the same line even if it exceeds the length limit. This does not happen if you had method calls instead:\r\n\r\n```python\r\nx = (\r\n    codeA()  # commentA\r\n    .codeB()  # commentB\r\n    .codeC()  # commentC\r\n    .codeD()  # commentD\r\n    .codeE()  # commentE\r\n    .codeF()  # commentF\r\n)\r\n```\r\n\r\nIf the comments are short enough, they are reordered in respect to the code though:\r\n\r\n```python\r\nx = codeA().codeB().codeC().codeD().codeE().codeF()  # A  # B  # C  # D  # E  # F\r\n```\r\n\r\nTo me it seems the most reasonable way of handling comments inside of lines is to associate it with a node and then unconditionally break all parents of that node so the node with the commend is placed on a separate line. To illustrate; in the following example, the comment would be associated with `99`:\r\n\r\n```python\r\nx = foo([\r\n    1, 2, 3,\r\n    99,  # Special case.\r\n    4, 5\r\n])\r\n```\r\n\r\nAnd this would be formatted like this:\r\n\r\n```python\r\nx = foo(\r\n    [\r\n        1,\r\n        2,\r\n        3,\r\n        99,  # Special case.\r\n        4,\r\n        5,\r\n    ]\r\n)\r\n```\r\n\r\nAFAICT this is what currently already happens with `# type:` comments. So as a first draft, we could handle all comments like this instead of just `# type:` comments. @JelleZijlstra What do you think?\r\n\r\n"
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "Seems worth trying!"
+        }
+      ]
+    },
+    {
+      "number": 3769,
+      "title": "Add line number to the --diff output.",
+      "body": "In the output of `black --check --diff` the diff is shown like this:\r\n\r\n```\r\n@@ -7,11 +7,11 @@\r\n     print(\"test\")\r\n     print(\"test\")\r\n     print(\"test\")\r\n     print(\"test\")\r\n     print(\"test\")\r\n- \r\n+\r\n     print(\"test\")\r\n     print(\"test\")\r\n     print(\"test\")\r\n     print(\"test\")\r\n     print(\"test\")\r\n```\r\nThere is one space too much in line 12. \r\n\r\nBecause the line itself is not mentioned in the output, it makes it impossible to write a regex to extract the line number. This would be handy for automatic problem matching like for example problemMatcher in vs-code.\r\n\r\n\r\n",
+      "labels": [
+        "T: enhancement",
+        "C: configuration",
+        "S: needs discussion"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Secrus",
+          "body": "The line number actually is mentioned. The first line of the output has the line number."
+        },
+        {
+          "author": "dnrhead",
+          "body": "No, it has the line number of the context.\r\nBlack calls difflib with n=5: `difflib.unified_diff(a_lines, b_lines, fromfile=a_name, tofile=b_name, n=5)`, so the shown number doesn't match the line number of the issue most of the time.\r\n\r\nIn my example the issue is in line 12 but the first line shows 7."
+        },
+        {
+          "author": "ichard26",
+          "body": "Hey, thanks for submitting a feature request!\r\n\r\nI strongly suspect that adding a line number by default would cause the output to be unusable by `git apply` and friends. While I understand the usefulness of this feature, I'm not sure if it warrants a whole new flag (which is the only feasible strategy AFAICT).\r\n"
+        }
+      ]
+    },
+    {
+      "number": 3752,
+      "title": "New type parameter syntax: parameters should be broken up before type parameters",
+      "body": "**Describe the style change**\r\n\r\nIn functions with the new type parameter syntax, the type parameter bracket should only be made multi-line if it itself does not fit on one line. (Sorry, this is best explained with an example; see below.)\r\n\r\n**Examples in the current _Black_ style**\r\n\r\n<!-- Think of some short code snippets that show\r\nhow the current _Black_ style is not great: -->\r\n\r\n```python\r\ndef f[\r\n    T\r\n](a_long_param_name: list[T] | tuple[T, ...], another_long_param_name: T) -> list[T]:\r\n    pass\r\n```\r\n\r\n```python\r\ndef g[\r\n    T\r\n](\r\n    a_long_param_name: list[T] | tuple[T, ...],\r\n    another_long_param_name: T,\r\n    a_boolean_flag: bool,\r\n) -> list[T]:\r\n    pass\r\n```\r\n\r\n**Desired style**\r\n\r\n<!-- How do you think _Black_ should format the above snippets: -->\r\n\r\n```python\r\ndef f[T](\r\n    a_long_param_name: list[T] | tuple[T, ...], another_long_param_name: T\r\n) -> list[T]:\r\n    pass\r\n```\r\n\r\n```python\r\ndef g[T](\r\n    a_long_param_name: list[T] | tuple[T, ...],\r\n    another_long_param_name: T,\r\n    a_boolean_flag: bool,\r\n) -> list[T]:\r\n    pass\r\n```\r\n\r\n**Additional context**\r\n\r\n<!-- Add any other context about the problem here. -->\r\nTested on latest commit: https://github.com/psf/black/commit/e1036119f264a846bb049fad8404df318bc2f455",
+      "labels": [
+        "T: style"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 3747,
+      "title": "string_processing: Long dictionary and f-string not formatted after breaking first line",
+      "body": "**Describe the bug**\r\n\r\nLong strings and f-strings are not being formatted to line-width.\r\nNew strings created by black are not respecting line-width.\r\n\r\n**To Reproduce**\r\n\r\nFor example, take this code for `variable a`:\r\n\r\n```python\r\na = f\"{nested_ui_dict_val[i][j][k]['name']} ansible_host={nested_ui_dict_val[i][j][k]['mgmt_ip']} MYPORT=111222333 PATH={nested_ui_dict_val[i][j][k]['path']} ip={nested_ui_dict_val[i][j][k]['ip']} NODESTUFF={nested_ui_dict_val[i][j][k]['nodestuff']} MOREID={nested_ui_dict_val[i][j][k].get('id')} MAINTENANCE={nested_ui_dict_val[i][j][k]['instance_in_maintenance'] or nested_ui_dict_val[i][j][k]['node_in_maintenance']}\\n\"\r\nb = \"a loooooooooooooooooooo oooooooong string with {} and nnnnnnooo sssssssssssssssss ppppppppac overrrrrrrr a limittttttt\".format(1)\r\nc = f\"f-strings definitely make things more {difficult} than they need to be for {{black}}. But boy they sure are handy. The problem is that some lines will need to have the 'f' whereas others do not. This {line}, for example, needs one.\"\r\n```\r\n\r\nAnd run it against black with --preview:\r\n\r\n```sh\r\n$ $ python -m black --preview -c 'a = f\"{nested_ui_dict_val[i][j][k]['name']} ansible_host={nested_ui_dict_val[i][j][k]['mgmt_ip']} MYPORT=111222333 PATH={nested_ui_dict_val[i][j][k]['path']} ip={nested_ui_dict_val[i][j][k]['ip']} NODESTUFF={nested_ui_dict_val[i][j][k]['nodestuff']} MOREID={nested_ui_dict_val[i][j][k].get('id')} MAINTENANCE={nested_ui_dict_val[i][j][k]['instance_in_maintenance'] or nested_ui_dict_val[i][j][k]['node_in_maintenance']}\\n\"'\r\n```\r\n\r\nThe resulting output is:\r\n\r\n```python\r\na = (\r\n    f\"{nested_ui_dict_val[i][j][k][name]} ansible_host={nested_ui_dict_val[i][j][k][mgmt_ip]} MYPORT=111222333\"\r\n    f\" PATH={nested_ui_dict_val[i][j][k][path]} ip={nested_ui_dict_val[i][j][k][ip]} NODESTUFF={nested_ui_dict_val[i][j][k][nodestuff]} MOREID={nested_ui_dict_val[i][j][k].get(id)} MAINTENANCE={nested_ui_dict_val[i][j][k][instance_in_maintenance] or nested_ui_dict_val[i][j][k][node_in_maintenance]}\\n\"\r\n)\r\n```\r\n\r\n**Expected behavior**\r\n\r\nI expect the subsequent parts of the formatted string to also respect line-width or best fit\r\n```python\r\na = (\r\n    f\"{nested_ui_dict_val[i][j][k][name]} ansible_host={nested_ui_dict_val[i][j][k][mgmt_ip]} MYPORT=111222333\"\r\n    f\" PATH={nested_ui_dict_val[i][j][k][path]} ip={nested_ui_dict_val[i][j][k][ip]}\"\r\n    f\" NODESTUFF={nested_ui_dict_val[i][j][k][nodestuff]} MOREID={nested_ui_dict_val[i][j][k].get(id)}\"\r\n    f\" MAINTENANCE={nested_ui_dict_val[i][j][k][instance_in_maintenance] or nested_ui_dict_val[i][j][k][node_in_maintenance]}\\n\" << not sure about this line.\r\n)\r\n```\r\n\r\n\r\n**Environment**\r\n\r\nMacos Ventura 13.3.1\r\npython -m black, 23.3.0 (compiled: yes)\r\nPython (CPython) 3.11.3\r\n\r\n**Additional context**\r\n\r\nI also tried it in the black online formatter:\r\nhttps://black.vercel.app/?version=main&state=_Td6WFoAAATm1rRGAgAhARYAAAB0L-Wj4AOJAdRdAD2IimZxl1N_WlOfrjrxSR7DDzvx2We1aheMjV5DGeP3u-eAGsSx8HeKvvAO8NY_fW7oqtVDitrobuxhblPs7o5pkfycKe7coiigf4mPPAZzzYFp-cMZRWORSB-Gj8tZzbtjzppAeLljuxNSZ0A5RCV0fU-HJTjsoJc7ia75Is2LS2Tu1KbNm3kdoOWZ1lmI1teQxlevW_ki5EgHQTsHjH1unxS2zduAZ5N-n4KaVIXZCXWG-ndFoavjycobm9g_LlocqxpUEXGgdEKQsg026FHiMDrO7fSRm5xXs-CF8p_jdgvDtFHTAnsqv_EuLkcWlTG0CI50eVgVRV5SAdQEXVCHrpFaikYcq0P50IlKVI_UJV9IfQrKXMLKBOyk-MCziU8OIm9236R2F9_AteAtJx_jbMwYrNEl2pw9T1qGB4xcpbIKEr7--8CJHm3fXIebb1pN5s1mT-xRzUdu1Y-zfzvJD8vZmTR-faR2GQPdmaJpQVm-G1vOgO34Do6ZW_PRCw4niJNPWjJ3sw63ZgUZviQuogsynfAlmDXGSiMsWO4aO5Syrus3KyOyb4vCpOabT4FSexTYJ49zMb4Il6QJ_WbdJ_9nA1Zm9BwUhd_T0u_otmz-YgATsBh3NAAHHwAB8AOKBwAAzvfMFrHEZ_sCAAAAAARZWg==\r\n",
+      "labels": [
+        "T: bug",
+        "F: strings",
+        "C: preview style"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "workonoss",
+          "body": "I looked through the open issues but didn't see anything similiar to this.\r\nThank you for any feedback or attention to this case."
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "This is fixed in the preview style (`--preview`), which is expected to become the default next year."
+        },
+        {
+          "author": "workonoss",
+          "body": "@JelleZijlstra  I used the --preview in the example but that doesn't show the expected output.\r\n```python\r\n$ python -m black --preview -c 'a = f\"{nested_ui_dict_val[i][j][k]['name']} ansible_host={nested_ui_dict_val[i][j][k]['mgmt_ip']} MYPORT=111222333 PATH={nested_ui_dict_val[i][j][k]['path']} ip={nested_ui_dict_val[i][j][k]['ip']} NODESTUFF={nested_ui_dict_val[i][j][k]['nodestuff']} MOREID={nested_ui_dict_val[i][j][k].get('id')} MAINTENANCE={nested_ui_dict_val[i][j][k]['instance_in_maintenance'] or nested_ui_dict_val[i][j][k]['node_in_maintenance']}\\n\"'\r\n```\r\nIt was my understanding that if using the --preview flag, it should already format as I expect with all new strings also formatted. Please clarify."
+        },
+        {
+          "author": "JelleZijlstra",
+          "body": "Ah, sorry for missing that. Yes, seems like we should split the string more in that case."
+        },
+        {
+          "author": "workonoss",
+          "body": "Adding screenshot of online formatter since it will change when code is modified:\r\n[online formatter link](https://black.vercel.app/?version=main&state=_Td6WFoAAATm1rRGAgAhARYAAAB0L-Wj4AOJAdRdAD2IimZxl1N_WlOfrjrxSR7DDzvx2We1aheMjV5DGeP3u-eAGsSx8HeKvvAO8NY_fW7oqtVDitrobuxhblPs7o5pkfycKe7coiigf4mPPAZzzYFp-cMZRWORSB-Gj8tZzbtjzppAeLljuxNSZ0A5RCV0fU-HJTjsoJc7ia75Is2LS2Tu1KbNm3kdoOWZ1lmI1teQxlevW_ki5EgHQTsHjH1unxS2zduAZ5N-n4KaVIXZCXWG-ndFoavjycobm9g_LlocqxpUEXGgdEKQsg026FHiMDrO7fSRm5xXs-CF8p_jdgvDtFHTAnsqv_EuLkcWlTG0CI50eVgVRV5SAdQEXVCHrpFaikYcq0P50IlKVI_UJV9IfQrKXMLKBOyk-MCziU8OIm9236R2F9_AteAtJx_jbMwYrNEl2pw9T1qGB4xcpbIKEr7--8CJHm3fXIebb1pN5s1mT-xRzUdu1Y-zfzvJD8vZmTR-faR2GQPdmaJpQVm-G1vOgO34Do6ZW_PRCw4niJNPWjJ3sw63ZgUZviQuogsynfAlmDXGSiMsWO4aO5Syrus3KyOyb4vCpOabT4FSexTYJ49zMb4Il6QJ_WbdJ_9nA1Zm9BwUhd_T0u_otmz-YgATsBh3NAAHHwAB8AOKBwAAzvfMFrHEZ_sCAAAAAARZWg==)\r\n![Screenshot 2023-06-23 at 15 56 37](https://github.com/psf/black/assets/137567233/3b5a6ae0-37d3-4cd3-b32c-4b626a2c1c8d)\r\n"
+        }
+      ]
+    },
+    {
+      "number": 3725,
+      "title": "Signed Windows Binaries",
+      "body": "Enterprise malware scans flag black.exe and blackd.exe due to neither binary being signed. This can be checked/verified via AuthenticodeSignature baked into Windows:\r\n\r\n```\r\nAuthenticodeSignature -FilePath black.exe\r\n\r\n\r\n    Directory: ${super long directory}\r\n\r\n\r\nSignerCertificate                         Status                                        Path\r\n-----------------                         ------                                        ----\r\n                                          NotSigned                                     black.exe\r\n```\r\n\r\nCan the distributed binaries be signed by a certificate from a recognized CA? It appears that there are some cheap CAs catering to open-source projects.",
+      "labels": [
+        "T: enhancement",
+        "C: packaging"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "cooperlees",
+          "body": "Not many of us are Windows users, are there any docs to sign our binaries via GitHub Actions?"
+        },
+        {
+          "author": "rdrll",
+          "body": "There seem to be a GitHub Action available for code signing [https://github.com/marketplace/actions/code-sign-a-file](https://github.com/marketplace/actions/code-sign-a-file). It works on windows-2019, and can sign executables with .pfx certificate."
+        },
+        {
+          "author": "bariod",
+          "body": "Defender detected it as a trojan today:\r\n![defender](https://github.com/psf/black/assets/35639254/ba8e66c1-49a2-4349-84c9-d12ddefe8974)\r\n"
+        }
+      ]
+    },
+    {
+      "number": 3715,
+      "title": "Automatic magic trailing comma behavior to split arguments/items onto separate lines regardless of line length",
+      "body": "**Is your feature request related to a problem? Please describe.**\r\n\r\nI absolutely never want more than two list items on a single line, regardless of how long that line is. I can manually add a \"magic trailing comma\" to the final item to get this behavior for a specific case, but that's easy to forget and, when working in a team, not everyone will do this. If this trailing comma is forgotten, shorter lists will end up smooshing it on a single line, which makes for larger diffs that are more difficult to visually parse.\r\n\r\nThis is especially annoying for code generation tools, such as python's built in `ast` module, since it will never inject the magic trailing comma on its own.\r\n\r\n```python3\r\nmylist = [item1, item2, item3, item4, item5, item6]\r\n```\r\n\r\nshould be reformatted as:\r\n```python3\r\nmylist = [\r\n    item1,\r\n    item2,\r\n    item3,\r\n    item4,\r\n    item5,\r\n    item6,\r\n]\r\n```\r\n\r\nLikewise, this would also be nice for function signatures and calls:\r\n```python3\r\nImportantClass.important_method(\r\n    exc, limit, lookup_lines, capture_locals, extra_argument\r\n)\r\n```\r\nshould be reformatted as:\r\n```python3\r\nImportantClass.important_method(\r\n    exc,\r\n    limit,\r\n    lookup_lines,\r\n    capture_locals,\r\n    extra_argument,\r\n)\r\n```\r\n\r\n**Describe the solution you'd like**\r\n\r\nI want black to to automatically inject this magic trailing comma behavior for all lists above a certain item length, regardless of line length. Ideally the number of items would be configurable (ie: `--automatic-magic-trailing-comma-items=2` would inject the magic comma for any list with at least two items). I suspect most people would want it set to either 2 or 3.\r\n\r\n**Describe alternatives you've considered**\r\n\r\n[add-trailing-comma](https://pypi.org/project/add-trailing-comma/) helps, but only does it for things that are already on a new line due to line length.\r\n\r\n```python3\r\nmy_long_function_name_heeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeere(\r\n    arg1, arg2\r\n)\r\n```\r\nbecomes\r\n```python3\r\nmy_long_function_name_heeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeere(\r\n    arg1,\r\n    arg2,\r\n)\r\n```\r\nWhich is better, but it doesn't change\r\n```python3\r\nmyfunc(arg1, arg2, arg3, arg4, arg5)\r\n```\r\n\r\nAdditionally, it may require multiple passes of `add-trailing-comma` and `black` to reach a stable point, since they don't have identical rules.\r\n\r\n**Additional context**\r\n\r\n<!-- Add any other context or screenshots about the feature request\r\nhere. -->\r\n",
+      "labels": [
+        "T: enhancement",
+        "F: trailing comma"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "JelleZijlstra",
+          "body": "I'm inclined to reject this. Turning on your suggestion by default would be a big change and most users would likely perceive the new formatting as worse in many cases. We don't tend to add formatting options, and I don't see a strong reason why we would want one here."
+        },
+        {
+          "author": "alex-hunt-materialize",
+          "body": "Having each argument on a separate line allows adding and removing arguments with the diff showing just that isolated line. If you have several arguments on the same line, it is much harder to identify what changed. Nearly all of your users use version control and would benefit from this change."
+        },
+        {
+          "author": "cameron-emburse",
+          "body": "It would be nice to have an option that automatically adds the trailing comma if a line is too long and arguments end up wrapping. I vastly prefer\r\n\r\n```python\r\nclass FruitMachine:\r\n    def do_fruit_machine_things(\r\n        self,\r\n        apple,\r\n        banana,\r\n        coconut,\r\n        dragonfruit,\r\n        elderberry,\r\n        fig,\r\n        guava,\r\n        huckleberry,\r\n    ):\r\n        pass\r\n```\r\nto\r\n```python\r\nclass FruitMachine:\r\n    def do_fruit_machine_things(\r\n        self, apple, banana, coconut, dragonfruit, elderberry, fig, guava, huckleberry\r\n    ):\r\n        pass\r\n``` \r\nEspecially for this reason:\r\n> Having each argument on a separate line allows adding and removing arguments with the diff showing just that isolated line.\r\n\r\nBut also for readability, particularly with kwargs.\r\n\r\nThat said, I would not want the option to force every item to a new line unless the line is too long (or if there's an intentional magic trailing comma)."
+        }
+      ]
+    },
+    {
+      "number": 3714,
+      "title": "treatment of code comments inside of parentheses",
+      "body": "Hi, thanks for Black - it saves me a TON of time, but even more importantly, greatly reduces my mental load when writing code.\r\n\r\n**Describe the style change**\r\n\r\nI suggest maybe a code comment inside a parentheses should remain inside the parentheses.\r\n\r\n**Examples in the current _Black_ style**\r\n\r\nHere's the actual use case I am running into today:\r\n\r\n```python\r\n# this:\r\nh_mincover_in = (3.5  # ft \r\n                    * 12)\r\n# becomes:\r\nh_mincover_in = (3.5 * 12)  # ft\r\n```\r\n\r\n**Desired style**\r\n\r\n<!-- How do you think _Black_ should format the above snippets: -->\r\n\r\nI think it should just stay nearly the same?\r\n\r\n```python\r\nh_mincover_in = (3.5  # ft \r\n                * 12)\r\n```\r\n\r\n**Additional context**\r\n\r\nThis is in the context of scientific/engineering computing, so the placement of the comment representing the unit of measurement is important for understanding when reading the code.",
+      "labels": [
+        "T: style"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "randolf-scholz",
+          "body": "I would go further and say that black should not switch code/comment order at all. It is quite annoying to have black format\r\n\r\n```\r\n<codeA>  # <commentA>\r\n<codeB>  # <commentB>\r\n```\r\n\r\nto \r\n\r\n```\r\n<codeA><codeB> # <commentA>  # <commentB>\r\n```\r\n\r\nthis happens for example when using fluent interfaces. (#67 )"
+        }
+      ]
+    },
+    {
+      "number": 3711,
+      "title": "Decouple using .gitignore from `exclude`",
+      "body": "**Is your feature request related to a problem? Please describe.**\r\n\r\nThis is the current behaviour for handling `.gitignore`:\r\n\r\n> https://black.readthedocs.io/en/stable/usage_and_configuration/file_collection_and_discovery.html#gitignore\r\n>\r\n> If --exclude is not set, Black will automatically ignore files and directories in .gitignore file(s), if present.\r\n>\r\n> If you want Black to continue using .gitignore while also configuring the exclusion rules, please use --extend-exclude.\r\n\r\nHowever, my case does not fill in those two scenarios.\r\n\r\n- Our project is a build system, and one of its subpackages is named `build`.\r\n\r\n- The directory named `build` is listed in `DEFAULT_EXCLUDES`:\r\n\r\nhttps://github.com/psf/black/blob/a4032dce645b83e1faccc7274864869ddfe279fc/src/black/const.py#L2\r\n\r\n- Black does not have an option to remove items from the default list, so my only alternative to workaround this is redefining the `exclude` option/setting. By doing so, black stops honouring my `.gitignore` file 😭 \r\n\r\n**Alternatives I've tried**\r\n\r\n- `exclude` has precedence over `include`, so doing `--include '/build/|\\.pyi?$'` does not work.\r\n\r\n- The only way I could make it work was additionally informing the full path for the Python files inside the `build` directories: `black . foo/cli/build/*.py tests/foo/cli/build/*.py`. But this is not an ideal solution since I cannot specify this as black configuration in `pyproject.toml`. As a result, developers running `black .` will think they're formatting everything (no warning about the skipped files), and those paths will have to be hardcoded somewhere else (Makefile, tox.ini, ...).\r\n\r\n**Describe the solution you'd like**\r\n\r\nI want `black .` to format all the Python files in the repository, skipping all the paths listed in `.gitignore`.\r\n\r\nI have the same problem with **ruff** and **isort**, since they also exclude `build` by default. But both have specific options to control the reading of the `.gitignore` file:\r\n\r\n- [respect-gitignore](https://beta.ruff.rs/docs/settings/#respect-gitignore) in ruff\r\n- [skip-gitignore](https://pycqa.github.io/isort/docs/configuration/options.html#skip-gitignore) in isort\r\n\r\nThen I can use settings to workaround this issue:\r\n\r\n```toml\r\n[tool.ruff]\r\n# Files in `foo/cli/build/` are ignored by ruff because the `exclude`\r\n# list contains the `build` word by default. We redefine it with just\r\n# `.git`, since the other paths are already listed in `.gitignore`.\r\nrespect-gitignore = true\r\nexclude = [\".git\"]\r\n```\r\n",
+      "labels": [
+        "T: enhancement"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 3694,
+      "title": "gitignore patterns with trailing slashes are incorrectly handled",
+      "body": "**Describe the bug**\r\n\r\nPatterns with trailing slashes in `.gitignore` are not processed by black, meaning that there is an inconsistency between the files processed by git and the files processed by black. In git, [trailing slashes only match directories](https://git-scm.com/docs/gitignore), but it appears that `normalize_path_maybe_ignore` does not include trailing slashes for directory paths, leading to this inconsistency.\r\n\r\n\r\n\r\n**To Reproduce**\r\n\r\nCreate a directory with the following file structure:\r\n\r\n```\r\n.gitignore\r\nfile1.py\r\na/file2.py\r\na/b/file3.py\r\n```\r\n\r\n`.gitignore` contents:\r\n\r\n```gitignore\r\n*\r\n!*/\r\n!*.py\r\n!.gitignore\r\n```\r\n\r\nFiles tracked by git:\r\n\r\n```\r\n$ git add . --dry-run\r\nadd '.gitignore'\r\nadd 'a/b/file3.py'\r\nadd 'a/file2.py'\r\nadd 'file1.py'\r\n```\r\n\r\nFiles formatted by black:\r\n\r\n```\r\n$ black . --check -v\r\nIdentified `/Users/ortk1/Downloads/test` as project root containing a .git directory.\r\nSources to be formatted: \".\"\r\n/Users/ortk1/Downloads/test/a ignored: matches a .gitignore file content\r\n/Users/ortk1/Downloads/test/.git ignored: matches a .gitignore file content\r\n/Users/ortk1/Downloads/test/file1.py already well formatted, good job.\r\n\r\nAll done! ✨ 🍰 ✨\r\n1 file would be left unchanged.\r\n```\r\n\r\ni.e. in this example, black only formats files in the root directory (`file1.py`), and misses any files in the nested directories, because directory `a` is incorrectly matched to a gitignore rule.\r\n\r\n**Expected behavior**\r\n\r\nBlack should format all the python files tracked by git (i.e. `file1.py`, `a/file2.py` and `a/b/file3.py` in the example above).\r\n\r\n**Environment**\r\n\r\n<!-- Please complete the following information: -->\r\n\r\n- Black's version: 23.3.0\r\n- OS and Python version: Mac OS / Python 3.11\r\n",
+      "labels": [
+        "T: bug"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "alexchen-sys",
+          "body": "Opened a PR for this: directory negations like `!*/` now re-include directories the way git does, so Black stops skipping the tracked files below them: #5306"
+        }
+      ]
+    },
+    {
+      "number": 90802,
+      "title": "exclude patterns are incorrectly handled for files passed on the command line",
+      "body": "We have `extend-exclude = \"^/migrations/\"` in pyproject.toml. Running `black .` skips the\nmigrations as expected, but our pre-commit hook passes the changed files explicitly, and\nthen black formats files in `migrations/` anyway. Shouldn't the exclude pattern apply no\nmatter how the file was given?\n\nblack 24.4.2\n",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    }
+  ]
+}

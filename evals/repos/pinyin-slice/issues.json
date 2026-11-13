@@ -1,0 +1,327 @@
+{
+  "name": "pinyin-slice",
+  "source": "mozillazg/python-pinyin",
+  "recorded_at": "2026-11-11T09:44:49+00:00",
+  "synthetic": true,
+  "issues": [
+    {
+      "number": 375,
+      "title": "「浮栅」中「栅」注音应为「shān」（同「栅极」）而不是「zhà」",
+      "body": "「栅」字只有传统的「栅栏」等语义中读「zhà」，其余时候（基本都是科学用语）都是读「shān」，例如「栅极」、「光栅」、「栅格化」，而「浮栅」本义是「浮动栅极」，应该跟随「栅极」读「shān」，而 pypinyin 产生的结果是「fú zhà」，是错误的。",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 369,
+      "title": "“乡长”读音错误",
+      "body": "在phases_dict.json中“乡长”被标注为[\n\"xiāng\"\n],\n[\n\"cháng\"\n]，应该是xiang zhang。 当初的程序员可能是太饿了，就惦记着 香肠了。",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 368,
+      "title": "U+5535读音错误",
+      "body": "```json\n\"21813\": \"ǎn,ng,n\",\n```\n唵读音是`an1`/`an3`，未见资料支持其存在`ng`、`n`音，且`ng`、`n`皆不存在轻声（参见：字统；汉典；新华字典）",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 367,
+      "title": "U+25948读音错误",
+      "body": "```json\n\"153928\": \"hóng,wòng\",\n```\n𥥈读音是`hong2`/`weng4`，并非`wong4`（参见：[字统](https://zi.tools/zi/𥥈)，[SYMBL](https://symbl.cc/en/25948/)）",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 365,
+      "title": "威妥瑪拼音ai變ei",
+      "body": "有轉換ai→ei導致漢語拼音與威妥瑪拼音聲母相同的0hlmnsw韻母變ei\nhttps://github.com/mozillazg/python-pinyin/blob/fcd68ff45247a2b203def4ff0c201b8f15d3e490/pypinyin/style/wadegiles.py#L480\nhttps://github.com/mozillazg/python-pinyin/blob/fcd68ff45247a2b203def4ff0c201b8f15d3e490/pypinyin/style/wadegiles.py#L534-L535",
+      "labels": [
+        "enhancement"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "@SteveLz 感谢反馈，我看一下~"
+        }
+      ]
+    },
+    {
+      "number": 362,
+      "title": "[FEAT REQ] 允许导入输入法词库",
+      "body": "heteronym=1对长词十分不友好，因为其很容易导致笛卡尔积爆炸。\n如果允许导入输入法词库，则可以使用输入法的无调拼音用于过滤多音字，极大降低笛卡尔积数。\n导入源使用输入法是因为CC-CEDICT的覆盖面相对来说并不够全。",
+      "labels": [
+        "discuss"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "@WFLing-seaer 你是想用输入法的无调拼音调整每个字的多音字数量吗？如果是这样的话，你可以基于输入法词库的拼音数据对 https://github.com/mozillazg/pinyin-data/blob/master/pinyin.txt 中的数据进行精简，然后使用 `load_single_dict` 导入精简后的数据就可以了（类似 https://github.com/mozillazg/pypinyin-dict 这个项目）。\n"
+        },
+        {
+          "author": "WFLing-seaer",
+          "body": "其实主要问题——或许也是所有拼音库面临的最大问题——是，没有一个权威且全面的拼音数据源；因此只能用短词甚至单字的拼音来拼凑推测长词的拼音，而这势必会导致长词的拼音质量极大下降。并且人工标注亦不现实。**您有无这方面的解决方案推荐？**\n目前中文成词约300万±100万词（见[薨词典项目](https://github.com/WFLing-Seaer/HongDict)，此项目很久没更新，可能稍有过时）。而其中具有明确拼音标注的大概只有百一到百五，而拼音中又有约有千一到万一有错误。因此这可能诚然是任重而道远的了……\n\n附阴间拼音案例若干：\n```python\n>>> from pypinyin_dict.phrase_pinyin_data import large_pinyin\n>>> large_pinyin.load()\n>>> pypinyin.pinyin(\"阿埃二氏病变\",style=8,heteronym=1)\n[['a1', 'e1', 'e3', 'a3', 'a4', 'a'], ['ai1', 'zhi4'], ['er4'], ['shi4'], ['bing4'], ['bian4']]\n>>> pypinyin.pinyin(\"啊啊啊啊啊啊啊啊啊啊啊啊啊\",style=8,heteronym=1)\n[['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4'], ['a', 'a1', 'a2', 'a3', 'a4', 'e4']]\n>>> pyperclip.paste()\n'㹧𱮒湖'\n>>> pypinyin.pinyin(_,style=8,heteronym=1)\n[['㹧'], ['𱮒'], ['hu2']]\n```"
+        },
+        {
+          "author": "mozillazg",
+          "body": "@WFLing-seaer 可以参考一下下面这些方案：\n\n*  https://github.com/ShannonAI/ChineseBert\n* https://github.com/GitYCC/g2pW\n* https://github.com/PaddlePaddle/PaddleSpeech/blob/develop/paddlespeech/t2s/frontend/zh_frontend.py"
+        }
+      ]
+    },
+    {
+      "number": 359,
+      "title": "neutral tone handling",
+      "body": "I noticed that many common words that typically have neutral tone in the second syllable get annotated as having their character's dictionary tone. Is that intentional, and should `load_phrases_dict` be used to override these?\n \n- 早上 - zǎoshàng\n- 妈妈 - māmā\n- 东西 - dōngxī\n- 狗狗 - gǒu gǒu\n- 哥哥 - Gēgē",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "joprice",
+          "body": "I also noticed on a similar note that 得 is annotated as dé instead of de for example in 小王跑得很快，比我快多了。"
+        },
+        {
+          "author": "mozillazg",
+          "body": "> I noticed that many common words that typically have neutral tone in the second syllable get annotated as having their character's dictionary tone. Is that intentional, and should load_phrases_dict be used to override these?\n\n@joprice Thanks for your reporting. When to use a neutral tone depends on context. I'll try to design a way to fix this issue in the future. For now, you can try to use the `load_phrases_dict` to resolve the known issues."
+        }
+      ]
+    },
+    {
+      "number": 358,
+      "title": "闪长岩",
+      "body": "```bash\nPython 3.12.3 (main, Aug 14 2025, 17:47:21) [GCC 13.3.0] on linux\nType \"help\", \"copyright\", \"credits\" or \"license\" for more information.\nCtrl click to launch VS Code Native REPL\n>>> from pypinyin import pinyin\n>>> pinyin('闪长岩')\n[['shǎn'], ['zhǎng'], ['yán']]\n>>> pinyin('闪长岩', heteronym=True)\n[['shǎn'], ['zhǎng', 'cháng'], ['yán']]\n>>> \n```\n预期是 `shǎn cháng yán` 而不是 `shǎn zhǎng yán`",
+      "labels": [
+        "enhancement"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "@NorthZeroD 感谢反馈！"
+        },
+        {
+          "author": "WFLing-seaer",
+          "body": "考虑允许加载各大输入法的词库，并使用目标词库的拼音过滤多音词以获取更准确的拼音。CC-CEDICT个人感觉还是不够全"
+        }
+      ]
+    },
+    {
+      "number": 355,
+      "title": "Too many spaces?",
+      "body": "I am still learning Chinese, so I typically take a text, use the Stanford segmenter, and then convert to pinyin.\n\nThe conversion adds an unnecessary space before and after each character, which means words identified in segmentation are broken up.\n\nI would like it to not add spaces, but also to not change spaces already in the input.  If the package contains a way to do this, I couldn't find it in the documentation.",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "EillesWan",
+          "body": "Sorry but if i have understood you correctly, what you're meaning is something like this:  \nTake an example, let the orignal sentence be `“这是一个简单的句子。”`;  \nand after the segmentation, it may be `“这 是 一个 简单的 句子。”`;  \nthen convert to pinyin (using the CLI tool), it becomes `“zhè   shì   yí gè   jiǎn dān de   jù zi 。”`\n\nRight?\n\nThis is because the command line tool added space between each part of the list which the pinyin lib had given.\n\nYou could use the script i wrote below to deal with the problem, it didnt add the space, but keeps the spaces already in the sentence.\n\n```python\nfrom pypinyin import lazy_pinyin, Style\nwhile line:=input(\">>>\"):\n    print(\"\".join(lazy_pinyin(line,style=Style.TONE)))\n```\n\nTo run this code, you may copy it into a `.txt` file, rename the `.txt` file's extension to `.py`, and if you have already installed the “pypinyin” package, you could just run the code. After running and inputed a sentence, you may got this:\n\n```\n>>>这 是 一个 简单的 句子。\nzhè shì yígè jiǎndānde jùzi。\n```\n"
+        },
+        {
+          "author": "WGroleau",
+          "body": "You understood me correctly.  I might try your code.  I did get it to work a different way, by using append instead of join, i.e.,\n```\n    result = []\n    for char in text:\n        # Check if the character is a Hanzi character\n        if '\\u4e00' <= char <= '\\u9fff':\n            # Convert Hanzi to Pinyin\n            py = pinyin(char, style=Style.TONE)[0][0]\n            result.append(py)\n        else:\n            # Preserve non-Hanzi characters (including spaces, punctuation, etc.)\n            result.append(char)\n    \n    # Join the result without adding extra spaces\n    return ''.join(result)\n```"
+        },
+        {
+          "author": "EillesWan",
+          "body": "This method may work, but to iter each character may also let the words apart, and finally lead to incorrect pinyin, because one single character in Chinese may have different pronunciation in different words. Like:\n```\n>>>这 是 一个 简单的 句子。\nzhè shì yígè jiǎndānde jùzi。\nzhè shì yīgè jiǎndānde jùzi。\n```\nThe first pinyin is correct marked.\n\nThe first pinyin of the sentence differ than the second, in the third word: `“一个”`. In Chinese we pronounce “一” in different tones, which depends on the the character following it."
+        }
+      ]
+    },
+    {
+      "number": 344,
+      "title": "类似 目标识别(mu'biao'zhi'bie) 这种 边缘用例（注音非常用），看起来是按照 目'标识'别 这样分段注音形成的",
+      "body": ">>> from pypinyin import pinyin, load_phrases_dict, Style\n>>> result = pinyin(\"目标识别\", style=Style.TONE)\n>>> print(result)  # 输出: [['mu4'], ['biao1'], ['shi2'], ['bie2']]\n[['mù'], ['biāo'], ['zhì'], ['bié']]\n\n\n类似 目标识别(mu'biao'zhi'bie) 这种 边缘用例（注音非常用），看起来是按照 目'标识'别 这样分段注音形成的\n显然 在默认词表里 标识 读音是 biao'zhi\n\n而 目标识别 作为整体的词条，在多数上下文里会被注音成 mu'biao'shi'bie (但某些句子里，不排除当前的zhi的读音可行)\n\n如果需要将注音的输入（如 目标识别）当作高频词来给出注音，除了收录词条（官方），提供自定义注音词表（小白用户不友好）。\n\n官方能否作为一个问题，适当优化？谢谢。\n\np.s. 这是公司同事真实项目开发中发现的 badcase，代表了一部分真实的用户需求。",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "chongzhou-long",
+          "body": "这个问题好像是因为在进入分词流程后，最大正则匹配（mmseg）匹配词语的phrases_dict.json文件中没有包含“目标”这个词语导致分词把“标”作为词语的前缀匹配。顺便补充标识读音是biāo shí时，意思是标示识别；用来识别的记号。读音是biāo zhì时，通“标志”，意思是表明特征的记号或事物；表明某种特征。今天biāo shí用的多。要不是作者用的旧读音可能都发现不了这个问题"
+        },
+        {
+          "author": "mozillazg",
+          "body": "@chongzhou-long 感谢反馈！最新版本已调整 `标识` 的读音。"
+        }
+      ]
+    },
+    {
+      "number": 342,
+      "title": "对于声调标注有准确性要求的可能前往我的项目获取词库",
+      "body": "rime下使用的拼音输入法词库，完成了大量的修订，使用这个词库涉及方方面面，感谢pypinyin项目\n我会在进一步完善之后将json数据库pr到该项目\n\nhttps://github.com/amzxyz/RIME-LMDG\n",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 334,
+      "title": "'铍' 的拼音声调应为第二声，错标为第一声了",
+      "body": "## 运行环境\r\n\r\n* 操作系统（Linux/macOS/Windows）：macOS 15.0.1\r\n* Python 版本：3.12.7\r\n* pypinyin 版本：0.53.0\r\n\r\n## 问题描述\r\n\r\n'铍' 的拼音错标为 \"pī\"，应为\"pí\"；\r\n\r\n## 问题复现步骤\r\n```\r\n\r\n$ pypinyin 铍\r\npī\r\n\r\nPython 3.12.7 (main, Oct  1 2024, 02:05:46) [Clang 16.0.0 (clang-1600.0.26.3)] on darwin\r\nType \"help\", \"copyright\", \"credits\" or \"license\" for more information.\r\n>>> from pypinyin import pinyin\r\n>>> pinyin('铍')\r\n[['pī']]\r\n\r\n```\r\n\r\n",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "@mhfan 感谢反馈！这个字应该是个多音字，可以开启多音字模式看一下。"
+        }
+      ]
+    },
+    {
+      "number": 321,
+      "title": "“受”字在多音字模式下拼音错误",
+      "body": "## 运行环境\r\n\r\n* 操作系统：Windows 10\r\n* Python 版本：3.10.11\r\n* pypinyin 版本：0.51.0\r\n\r\n\r\n<!--\r\nP.S. 可以通过 `python -V` 获取 Python 版本。\r\nP.S. 可以通过 `pypinyin -V` 或者 `pip freeze |grep pypinyin` 或 `pypinyin.__version__` 获取 pypinyin 版本信息。\r\n-->\r\n\r\n## 问题描述\r\n\r\n在多音字参数为True时，汉字“受”出现了不属于它的读音：\r\n\r\n```bash\r\n>>> pinyin(\"受\", style=Style.TONE3, v_to_u=True,heteronym=True)\r\n[['shou4', 'dao4']]\r\n```\r\n\r\n## 问题复现步骤\r\n\r\n将 heteronym 设置为 True，不进行其他设置，对“受”字求取读音，如：\r\n\r\n```python\r\nfrom pypinyin import pinyin\r\npinyin(\"受\",heteronym=True)\r\n```\r\n\r\n错误地返回为：`[['shòu', 'dào']]`\r\n\r\n\r\n\r\n<!--\r\n感谢反馈！❤️\r\n-->\r\n",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "@EillesWan 感谢反馈！ "
+        },
+        {
+          "author": "coder-free",
+          "body": "@mozillazg 类似的情况有很多，餐【cān，sūn】，惊【jīng，liáng】，还【hái，huán，fú】，苦[['kǔ', 'gǔ', 'hù']]，可[ 1.kě, 2.kè, 3.gē ]，等等，很多，不知道这个注音原理是啥，能不能从源头解决这个问题"
+        },
+        {
+          "author": "EillesWan",
+          "body": "对的，感觉像是混入了一些词语的其他字的音，像是“[受]到”；和一些相似字形的字的音，像是“[惊]、凉”、“[餐]飧”这样。上述问题，包括“受”字之错误，在现在的版本 `0.55.0` 中依然存在。"
+        },
+        {
+          "author": "mozillazg",
+          "body": "@coder-free @EillesWan \n\n> 不知道这个注音原理是啥，能不能从源头解决这个问题\n\n* 那些读音大部分都是真实存在的，通过查阅类似《漢語大字典》这种全面的字典都可以查到。大家认为不存在的音有些是比较少见的音，有些是异体字或者通假字的读音。例子：\n\n<img width=\"455\" height=\"272\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/ceb8ddeb-80a1-4586-aa3a-49ba9e7cccea\" />\n\n* 源头是我们使用了《漢語大字典》等多个数据源的数据，也就是 https://github.com/mozillazg/pinyin-data 这个项目里的数据。虽然《漢語大字典》的数据可能有点过时了，但是鉴于目前没有另一份更权威、更全面的可以程序化使用的数据，因此目前默认还是用的这个。\n* 如果想忽略不常见的读音的话，可以参考 https://github.com/mozillazg/python-pinyin?tab=readme-ov-file#%E6%8B%BC%E9%9F%B3%E6%9C%89%E8%AF%AF 这里的建议，使用 https://github.com/mozillazg/pypinyin-dict 项目中类似 `cc_cedict` 的数据覆盖已有数据。"
+        }
+      ]
+    },
+    {
+      "number": 316,
+      "title": "Hi，关于轻声问题",
+      "body": "pypinyin对于轻声适配问题。参照《普通话水平测试用必读轻声词语表》比如爸爸，ba4 ba4，如果想让其变成ba4 ba，这方面请教一下该怎么修改呢？\r\n\r\n感谢大佬",
+      "labels": [
+        "discuss"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "可以使用下面这个文档里介绍的 load_phrases_dict 函数进行调整： https://github.com/mozillazg/python-pinyin#id5"
+        }
+      ]
+    },
+    {
+      "number": 307,
+      "title": "[feature] Shell completion",
+      "body": "Can `pypinyin` provide completions for common shells? I think [shtab](https://docs.iterative.ai/shtab/) can provide help.",
+      "labels": [
+        "new feature"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "Thanks for your suggestion. But I'm too busy to do it. Feel free to send a pull request."
+        }
+      ]
+    },
+    {
+      "number": 304,
+      "title": "有没有to_bopomofo ？",
+      "body": "## 运行环境\r\n\r\n* 操作系统（Linux/macOS/Windows）：win10\r\n* Python 版本：3.8.10\r\n* pypinyin 版本：0.49.0\r\n\r\n\r\n<!--\r\nP.S. 可以通过 `python -V` 获取 Python 版本。\r\nP.S. 可以通过 `pypinyin -V` 或者 `pip freeze |grep pypinyin` 或 `pypinyin.__version__` 获取 pypinyin 版本信息。\r\n-->\r\n\r\n## 问题描述\r\n没啥bug, 请问从拼音风格怎么转到bopomofo啊？\r\n比如：\r\n        pinyin = lazy_pinyin('衣裳', style=Style.TONE3, neutral_tone_with_five=True)\r\n        bopomofo = to_bopomofo(pinyin)\r\n有没有to_bopomofo的风格转化啊？\r\n\r\n## 问题复现步骤\r\n\r\n\r\n<!--\r\n感谢反馈！❤️\r\n-->\r\n",
+      "labels": [
+        "question"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "@SRbone 目前没有单独的 to_bopomofo 函数，不过参考一下 https://github.com/mozillazg/python-pinyin/blob/master/pypinyin/style/bopomofo.py 这个文件里的相关内容。"
+        },
+        {
+          "author": "SRbone",
+          "body": "多谢多谢，果然里面两句话就搞定了。\r\n\r\n    for find_re, replace in BOPOMOFO_REPLACE:\r\n        pinyin = find_re.sub(replace, pinyin)\r\n    pinyin = ''.join(BOPOMOFO_TABLE.get(x, x) for x in pinyin)"
+        }
+      ]
+    },
+    {
+      "number": 302,
+      "title": "多音字识别不准确",
+      "body": "## 运行环境\r\n\r\n* 操作系统（Linux/macOS/Windows）：\r\n* Python 版本：3.8.3\r\n* pypinyin 版本：0.44.0\r\n\r\n\r\n<!--\r\nP.S. 可以通过 `python -V` 获取 Python 版本。\r\nP.S. 可以通过 `pypinyin -V` 或者 `pip freeze |grep pypinyin` 或 `pypinyin.__version__` 获取 pypinyin 版本信息。\r\n-->\r\n\r\n## 问题描述\r\ntext:\"你试着重复我说的每一句话，并翻译成英文\"\r\n\"试着\"->\"shi4 zhuo2\"\r\n\"重复\"->\"zhong4 fu4\"\r\n\r\n## 问题复现步骤\r\ntext:\"你试着重复我说的每一句话，并翻译成英文\"\r\n\r\n<!--\r\n感谢反馈！❤️\r\n-->\r\n",
+      "labels": [
+        "enhancement"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "@Mewral 感谢反馈~"
+        },
+        {
+          "author": "richshaw2015",
+          "body": "真是巧了，“试着重复”，这四个字，刚好 “着重” 也在词库里，所以比 “重复” 优先匹配了😭😭 "
+        },
+        {
+          "author": "taqta",
+          "body": "我也碰到了类似的问题：银行->yin hang, 行长 ->hang zhang，银行行长-> yin xing xing zhang"
+        },
+        {
+          "author": "mozillazg",
+          "body": "> 我也碰到了类似的问题：银行->yin hang, 行长 ->hang zhang，银行行长-> yin xing xing zhang\n\n@taqta 银行行长这个问题最新版已经修复了，可以升级一下版本再试试。"
+        },
+        {
+          "author": "taqta",
+          "body": "> > 我也碰到了类似的问题：银行->yin hang, 行长 ->hang zhang，银行行长-> yin xing xing zhang\n> \n> [@taqta](https://github.com/taqta) 银行行长这个问题最新版已经修复了，可以升级一下版本再试试。\n解决了，感谢感谢"
+        }
+      ]
+    },
+    {
+      "number": 297,
+      "title": "无法正确识别姓名的姓的多音字",
+      "body": "## 运行环境\r\n\r\n* 操作系统（Linux/macOS/Windows）：\r\n* Python 版本：3.10\r\n* pypinyin 版本：latest\r\n\r\n\r\n## 问题描述\r\n\r\n对于姓名专属的特殊情况，姓只会有少数唯一读音的转换，是否增加一个姓名转换函数对姓专门处理\r\n清单如下(参考https://github.com/overtrue/pinyin)， \r\n万俟,mò qí\r\n尉迟,yù chí\r\n单于,chán yú\r\n重,chóng\r\n秘,bì\r\n冼,xiǎn\r\n华,huà\r\n过,guō\r\n纪,jǐ\r\n燕,yān\r\n种,chóng\r\n繁,pó\r\n幺,yāo\r\n覃,qín\r\n冯,féng\r\n石,shí\r\n缪,miào\r\n瞿,qú\r\n曾,zēng\r\n解,xiè\r\n折,shè\r\n那,nā\r\n佴,nài\r\n难,nàn\r\n粘,niàn\r\n藏,zàng\r\n扎,zā\r\n翟,zhái\r\n都,dū\r\n六,lù\r\n薄,bó\r\n贾,jiǎ\r\n的,dē\r\n哈,hǎ\r\n居,jū\r\n盖,gě\r\n查,zhā\r\n盛,shèng\r\n塔,tǎ\r\n和,hé\r\n柏,bǎi\r\n朴,piáo\r\n蓝,lán\r\n牟,móu\r\n殷,yīn\r\n陆,lù\r\n乜,niè\r\n乐,yuè\r\n阚,kàn\r\n叶,yè\r\n强,qiáng\r\n不,fǒu\r\n丁,dīng\r\n阿,ā\r\n汤,tāng\r\n万,wàn\r\n车,chē\r\n称,chēng\r\n沈,shěn\r\n区,ōu\r\n仇,qiú\r\n宿,sù\r\n南,nán\r\n单,shàn\r\n卜,bǔ\r\n鸟,niǎo\r\n思,sī\r\n殳,shū\r\n寻,xún\r\n於,yú\r\n烟,yān\r\n余,yú\r\n浅,qiǎn\r\n艾,ài\r\n浣,wǎn\r\n无,wú\r\n信,xìn\r\n许,xǔ\r\n齐,qí\r\n俞,yú\r\n若,ruò\r\n贠,yùn\r\n貟,yùn\r\n\r\n## 问题复现步骤\r\n\r\npypinyin.pinyin('茜查', heteronym=True)\r\n[['qiàn', 'xī'], ['chá', 'zhā', 'chái']]\r\n",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "是的，当前确实有这个问题，详见 https://github.com/mozillazg/python-pinyin/issues/120"
+        }
+      ]
+    },
+    {
+      "number": 294,
+      "title": "'圕' 读 tuān",
+      "body": "https://www.zdic.net/hans/%E5%9C%95",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "感谢反馈！这个字的读音好像是三个 tú shū guǎn ，不是一个标准的拼音。"
+        },
+        {
+          "author": "loopxia",
+          "body": "> 感谢反馈！这个字的读音好像是三个 tú shū guǎn ，不是一个标准的拼音。\r\n\r\n三个音合起来就是 tuan. 你们可以查下调研下。"
+        },
+        {
+          "author": "loopxia",
+          "body": "FYI：\r\nhttps://zh.m.wiktionary.org/zh/圕\r\nhttps://www.zdic.net/hans/圕\r\nhttps://www.chazidian.com/r_zi_zd5715/\r\nhttps://zi.tools/zi/圕\r\n"
+        }
+      ]
+    },
+    {
+      "number": 293,
+      "title": "多音字数据库标准有些过于离谱",
+      "body": "```python\r\npinyin(\"能\", strict=False, heteronym=True)\r\n[['néng', 'tái', 'nái', 'nài', 'xióng']]\r\n```\r\n\r\n## 代码, `pinyi_dict.py`\r\n\r\n```python\r\n    0x80FD: 'néng,tái,nái,nài,xióng',\r\n```\r\n\r\n## 新华字典数据库\r\n\r\n只包含\r\n`'néng', 'nài'`\r\n\r\n## [汉字数据库](http://hanzidb.org/)\r\n`néng(neng2) , tái(tai2) , nái(nai2) , nài(nai4) , xióng(xiong2) `\r\n\r\n## [Wiki](https://en.wiktionary.org/wiki/%E8%83%BD#Chinese)\r\n`néng(neng2) , tái(tai2) , tài(tai4) , tāi(tai4),  nái(nai2) , nài(nai4) , xióng(xiong2) `\r\n\r\n- 其中对`xiong2`的解释是，熊的替代写法\r\n- 差不多就是文言文中的借字，也有可能是文字尚未分化， 具体没有再查\r\n\r\n## 建议\r\n\r\n- 使用现行普通话标准的拼音数据库\r\n- 或根据[普通话 Mandarin](https://en.wikipedia.org/wiki/Mandarin_Chinese)，[粤语 Cantonese](https://en.wikipedia.org/wiki/Cantonese)和其他方言在调用时提供参数\r\n",
+      "labels": [
+        "discuss"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mozillazg",
+          "body": "@FavorMylikes 感谢建议！原因详见 https://github.com/mozillazg/python-pinyin/issues/263 这个 issue 中的讨论。\r\n\r\n> 使用现行普通话标准的拼音数据库\r\n> 或根据[普通话 Mandarin](https://en.wikipedia.org/wiki/Mandarin_Chinese)，[粤语 Cantonese](https://en.wikipedia.org/wiki/Cantonese)和其他方言在调用时提供参数\r\n\r\n如果你有这几个数据库的文本化的数据的话，欢迎分享。\r\n"
+        }
+      ]
+    }
+  ]
+}
