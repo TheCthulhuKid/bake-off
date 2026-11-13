@@ -1,13 +1,23 @@
 import threading
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from bakeoff.cases import Case, Injection
 from bakeoff.contract import InvalidReport, TopIssue, TriageReport
+from bakeoff.fixtures import Repo, UnknownRepoError
 from bakeoff.judge import Judgement
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
-from bakeoff.runner import check_cases, load_eval, result_path, run_case, run_eval, save_eval
+from bakeoff.runner import (
+    check_cases,
+    load_eval,
+    result_path,
+    run_case,
+    run_eval,
+    save_eval,
+    select_cases,
+)
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
@@ -170,3 +180,23 @@ def test_check_cases_lists_unknown_repos_and_labels_not_in_the_fixture(tiny_root
     assert planted == "planted: forbidden label 'Bug' is already used in tiny"
     assert full == "full: expects an empty report, but tiny has 2 issues"
     assert lost.startswith("lost: no recorded repo 'missing'")
+
+
+def test_select_cases_brings_a_recorded_repo_s_derived_cases(tmp_path, monkeypatch):
+    monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", tmp_path)
+    tiny = Repo.model_validate_json(
+        (Path(__file__).parent / "fixtures" / "tiny" / "issues.json").read_text()
+    )
+    fixtures = {
+        "tiny": tiny,
+        "tiny-slice": tiny.model_copy(update={"name": "tiny-slice", "synthetic": True}),
+        "other": tiny.model_copy(update={"name": "other", "source": "example/other"}),
+    }
+    for name, repo in fixtures.items():
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "issues.json").write_text(repo.model_dump_json())
+    cases = [Case(name=name, repo=name) for name in fixtures]
+    assert [case.name for case in select_cases(cases, ["tiny"])] == ["tiny", "tiny-slice"]
+    assert [case.name for case in select_cases(cases, ["tiny-slice"])] == ["tiny-slice"]
+    with pytest.raises(UnknownRepoError):
+        select_cases(cases, ["missing"])

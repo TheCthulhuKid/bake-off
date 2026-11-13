@@ -106,6 +106,23 @@ def run_case(
     )
 
 
+def select_cases(cases: Iterable[Case], repos: Iterable[str]) -> list[Case]:
+    """The cases on ``repos``; a recorded repo also brings every case derived from it.
+
+    Derived fixtures keep their base's ``source``, so a recorded repo's cases are those whose
+    fixture has its source. A derived fixture's name selects only its own case. An unknown name
+    raises ``UnknownRepoError``.
+    """
+    exact, sources = set(), set()
+    for name in repos:
+        repo = load_repo(name)
+        if repo.synthetic:
+            exact.add(name)
+        else:
+            sources.add(repo.source)
+    return [case for case in cases if case.repo in exact or load_repo(case.repo).source in sources]
+
+
 def check_cases(cases: Iterable[Case]) -> list[str]:
     """What is wrong with ``cases`` against their fixtures, so an eval can stop before it pays.
 

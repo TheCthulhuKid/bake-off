@@ -289,11 +289,14 @@ implementation's results are held until the last run, so a crash outside a run l
 them, not only one implementation's.
 
 `bakeoff eval` runs the eval. Before the first run it checks everything that can fail cheaply,
-so a mistake costs no tokens: `--out` must be a directory, the cases file must load, the cases
-left after any `--repo` filter must pass `check_cases`, and no implementation's results file
-may exist yet. It then calls `run_eval` with every implementation (or the one `--impl` names),
-prints one line per run as it lands, and saves one file per implementation with `save_eval`.
-With `--judge` it builds an Anthropic client and a `ThemeJudge` over `evals/judge-cache.json`.
+so a mistake costs no tokens: `--out` must be a directory, the cases file must load and pass
+`check_cases` as a whole, every `--repo` name must be a fixture, and no implementation's results
+file may exist yet. `runner.select_cases` applies `--repo`: a recorded repo's name selects its
+own case and every case whose fixture has its `source`, which a derived fixture keeps from its
+base, while a derived fixture's name selects only that case. It then calls `run_eval` with every
+implementation (or the one `--impl` names), prints one line per run as it lands, and saves one
+file per implementation with `save_eval`. With `--judge` it builds an Anthropic client and a
+`ThemeJudge` over `evals/judge-cache.json`.
 
 The run's own deadline is only checked between model requests, so `run_case` also runs
 `triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.

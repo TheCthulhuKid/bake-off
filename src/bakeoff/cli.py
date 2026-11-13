@@ -18,6 +18,7 @@ from bakeoff.runner import (
     run_eval,
     run_once,
     save_eval,
+    select_cases,
 )
 from bakeoff.settings import PROJECT_ROOT, SETTINGS
 
@@ -77,7 +78,13 @@ def run(impl: str, repo: str, out: Path | None) -> None:
     default=EVALS / "cases.yaml",
     show_default="evals/cases.yaml",
 )
-@click.option("--repo", "repos", multiple=True, help="Only the cases on this repo; repeatable.")
+@click.option(
+    "--repo",
+    "repos",
+    multiple=True,
+    help="Only the cases on this fixture; a recorded repo also brings the cases derived from it. "
+    "Repeatable.",
+)
 @click.option("--judge", is_flag=True, help="Score themes with the LLM judge, which costs extra.")
 @click.option(
     "--out",
@@ -97,12 +104,17 @@ def eval_(
         cases = load_cases(cases_path)
     except ValueError as error:
         raise click.ClickException(f"{cases_path}: {error}") from error
-    if repos:
-        cases = [case for case in cases if case.repo in repos]
-    if not cases:
-        raise click.ClickException(f"no cases to run in {cases_path}")
+    # The whole file is checked, so a broken case stops any eval, and selecting can rely on
+    # every fixture loading.
     if problems := check_cases(cases):
         raise click.ClickException("cases do not match their fixtures:\n" + "\n".join(problems))
+    if repos:
+        try:
+            cases = select_cases(cases, repos)
+        except UnknownRepoError as error:
+            raise click.ClickException(str(error)) from error
+    if not cases:
+        raise click.ClickException(f"no cases to run in {cases_path}")
     impls = list(IMPLS) if impl == "all" else [impl]
     paths = {name: result_path(out, name) for name in impls}
     if taken := [str(path) for path in paths.values() if path.exists()]:

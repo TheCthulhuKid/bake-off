@@ -100,11 +100,13 @@ checks the cases against their fixtures and the output paths before the first ru
 
 ```sh
 .venv/bin/bakeoff eval --repeats 3            # all implementations, all cases
-.venv/bin/bakeoff eval --repo click --judge   # one repo first, themes scored by the LLM judge
+.venv/bin/bakeoff eval --repo click --judge   # click's 9 cases first, themes scored by the judge
 ```
 
-`--impl` runs one implementation, and `--cases` and `--out` point at another cases file or
-results directory. The judge costs extra and caches its verdicts in `evals/judge-cache.json`.
+`--repo` takes a recorded repo, which brings every case derived from it, or a derived fixture's
+name for that case alone; it can be given more than once. `--impl` runs one implementation, and
+`--cases` and `--out` point at another cases file or results directory. The judge costs extra
+and caches its verdicts in `evals/judge-cache.json`.
 
 The comparison tables come from the results files alone, with no model call, as Markdown:
 
