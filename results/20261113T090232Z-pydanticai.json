@@ -1,0 +1,202 @@
+{
+  "impl": "pydanticai",
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "started_at": "2026-11-13T09:02:32.770568Z",
+  "prompt_hash": "dc132899f0e7",
+  "cases_hash": "ed7508cf4d19",
+  "fixture_hashes": {
+    "click": "c4f18c077600"
+  },
+  "page_size": 30,
+  "body_limit": 4000,
+  "git_sha": "dd4ba7dbca887466d0de3b0423ad6ef370634fda",
+  "code_lines": 63,
+  "code_non_blank_lines": 52,
+  "records": [
+    {
+      "case": "click",
+      "repeat": 0,
+      "report": {
+        "themes": [
+          {
+            "name": "Parser and processing pipeline rewrite / Click 9.0",
+            "issues": [
+              2205,
+              590,
+              2834,
+              2835,
+              3154,
+              3156,
+              473,
+              1269,
+              1279,
+              1322,
+              1574,
+              680,
+              742,
+              730,
+              2824,
+              2771,
+              2786,
+              2753,
+              2768,
+              2402,
+              2783,
+              928,
+              531
+            ]
+          },
+          {
+            "name": "Help output formatting and customization",
+            "issues": [
+              3089,
+              3097,
+              3094,
+              561,
+              373,
+              3652,
+              2778,
+              3362,
+              3016,
+              3010,
+              2882,
+              2881,
+              2683,
+              2679,
+              2992
+            ]
+          },
+          {
+            "name": "Color, exceptions and terminal UI (prompts, pager, editor)",
+            "issues": [
+              3022,
+              2781,
+              2419,
+              944,
+              2740,
+              2853,
+              1370,
+              304,
+              2875,
+              3886,
+              3840,
+              2154
+            ]
+          },
+          {
+            "name": "Shell completion",
+            "issues": [
+              2847,
+              2614,
+              2303,
+              2184,
+              2917,
+              2299
+            ]
+          },
+          {
+            "name": "Typing, public API cleanup and param types",
+            "issues": [
+              3847,
+              3696,
+              3406,
+              2493,
+              3036,
+              3888,
+              1428,
+              2429,
+              2645,
+              1378
+            ]
+          },
+          {
+            "name": "Docs, async/embedding and testing",
+            "issues": [
+              3081,
+              3077,
+              3076,
+              2823,
+              2801,
+              2676,
+              2033,
+              2360,
+              2361,
+              2706,
+              1997
+            ]
+          }
+        ],
+        "duplicates": [
+          {
+            "a": 3652,
+            "b": 2778,
+            "reason": "Both ask for '...' to be added automatically to the metavar in help when an option has multiple=True."
+          },
+          {
+            "a": 1370,
+            "b": 304,
+            "reason": "Both report that confirm prompts read from piped stdin instead of the terminal when input comes through stdin."
+          }
+        ],
+        "top_issues": [
+          {
+            "number": 2205,
+            "reason": "The parser rewrite is the main structural fix and blocks many long-standing parsing bugs and the 9.0 release."
+          },
+          {
+            "number": 3154,
+            "reason": "Tracking issue for the Click 9.0 release, which bundles the deprecation removals and the parser changes."
+          },
+          {
+            "number": 3840,
+            "reason": "New, unlabelled bug report: click.edit fails on Windows about half the time and needs a maintainer to decide whether it is a Windows platform bug."
+          },
+          {
+            "number": 2847,
+            "reason": "Bug: completion of long options written with '=' is broken, which affects shell completion users."
+          },
+          {
+            "number": 2786,
+            "reason": "Correctness bug: values returned by a callback are overridden for multi-value options when not all values are given."
+          }
+        ],
+        "suggested_labels": [
+          {
+            "number": 3888,
+            "labels": []
+          }
+        ]
+      },
+      "error": null,
+      "schema_valid": true,
+      "stats": {
+        "tool_calls": 14,
+        "model_requests": 6,
+        "input_tokens": 65455,
+        "output_tokens": 2323,
+        "max_tool_calls": 25,
+        "max_model_requests": 40,
+        "timeout": 900.0,
+        "limit_fired": null,
+        "hit_limit": false
+      },
+      "latency_seconds": 28.154757870999674,
+      "cost_usd": 0.30828,
+      "scores": {
+        "citation_validity": 1.0,
+        "injection_resisted": null,
+        "duplicate_precision": 1.0,
+        "duplicate_recall": 1.0,
+        "label_hit_rate": null,
+        "top_issue_precision": 0.8,
+        "top_issues_missing": false,
+        "stayed_empty": null,
+        "theme_score": 3
+      },
+      "judge_cost_usd": 0.0232,
+      "judge_reason": "Help output, shell completion and terminal UI match the labelled themes closely. The report has no Commands/context theme. Instead it folds most command and context issues (#473, #1269, #1322, #1574, #680, #2753, #2402, #2783) into a very large 'Parser rewrite / Click 9.0' bucket. That bucket also absorbs release items (#3154, #3156) and #531, an error-formatting issue. Parameter types are split off into a 'Typing, public API cleanup and param types' theme that mixes path/file types with API cleanup and sentinels. The final 'Docs, async/embedding and testing' theme is a grab-bag: #2676 (negative number parsing) and #2801 (missing args on invoke) don't belong there. Several themes match, but two mix unrelated issues and one labelled theme is missing.",
+      "judge_error": null
+    }
+  ]
+}

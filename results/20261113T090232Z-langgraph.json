@@ -1,0 +1,217 @@
+{
+  "impl": "langgraph",
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "started_at": "2026-11-13T09:02:32.770568Z",
+  "prompt_hash": "dc132899f0e7",
+  "cases_hash": "ed7508cf4d19",
+  "fixture_hashes": {
+    "click": "c4f18c077600"
+  },
+  "page_size": 30,
+  "body_limit": 4000,
+  "git_sha": "dd4ba7dbca887466d0de3b0423ad6ef370634fda",
+  "code_lines": 78,
+  "code_non_blank_lines": 61,
+  "records": [
+    {
+      "case": "click",
+      "repeat": 0,
+      "report": {
+        "themes": [
+          {
+            "name": "Help page output and formatting",
+            "issues": [
+              3652,
+              2778,
+              3362,
+              3097,
+              3094,
+              3089,
+              3016,
+              3010,
+              2882,
+              2881,
+              2683,
+              2679,
+              561,
+              373
+            ]
+          },
+          {
+            "name": "Terminal features: color, prompts, pager, editor, launch",
+            "issues": [
+              3022,
+              2781,
+              2419,
+              944,
+              2875,
+              1370,
+              304,
+              3886,
+              3840,
+              2154
+            ]
+          },
+          {
+            "name": "Parser, command processing and the 9.0 work",
+            "issues": [
+              3156,
+              3154,
+              2205,
+              2834,
+              2835,
+              590,
+              2824,
+              2771,
+              742,
+              730,
+              473,
+              1269,
+              1322,
+              2786,
+              2768,
+              2753,
+              1279,
+              2402,
+              1574,
+              680,
+              2992,
+              2783,
+              531,
+              2853,
+              2740,
+              2706,
+              2033,
+              2360,
+              2361
+            ]
+          },
+          {
+            "name": "Parameter types, files and typing",
+            "issues": [
+              3888,
+              1428,
+              1378,
+              2429,
+              2645,
+              928,
+              3036,
+              3847,
+              3696,
+              3406,
+              2493
+            ]
+          },
+          {
+            "name": "Shell completion and testing",
+            "issues": [
+              2917,
+              2847,
+              2614,
+              2303,
+              2184,
+              2299,
+              1997
+            ]
+          },
+          {
+            "name": "Docs and project meta",
+            "issues": [
+              3081,
+              3077,
+              3076,
+              2823,
+              2801,
+              2676
+            ]
+          }
+        ],
+        "duplicates": [
+          {
+            "a": 2778,
+            "b": 3652,
+            "reason": "Both ask for '...' to be added to the metavar in help when an option has multiple=True; #3652 is a longer restatement of #2778."
+          },
+          {
+            "a": 304,
+            "b": 1370,
+            "reason": "Both are about confirm prompts reading from stdin when stdin is a pipe or a file passed as '-', and both want the answer read from the terminal instead."
+          }
+        ],
+        "top_issues": [
+          {
+            "number": 3154,
+            "reason": "Release tracker for Click 9.0; it sets the plan for removing deprecations and hacks."
+          },
+          {
+            "number": 3156,
+            "reason": "The concrete work of removing deprecated code that the 9.0 release needs."
+          },
+          {
+            "number": 3840,
+            "reason": "Crash report for click.edit on Windows (WinError 87 / 14001) with no label and no maintainer reply yet; one contributor could not reproduce it and suspects a Windows bug with how Notepad is launched."
+          },
+          {
+            "number": 2847,
+            "reason": "User-facing bug: shell completion of long options written with '=' is broken and has no fix yet."
+          },
+          {
+            "number": 3010,
+            "reason": "Long-standing help-formatting problem (no way to get single newlines) with a lot of discussion; it ties into the help customization redesign in #3089 and #3097."
+          }
+        ],
+        "suggested_labels": [
+          {
+            "number": 3888,
+            "labels": [
+              "parsing",
+              "docs"
+            ]
+          },
+          {
+            "number": 3886,
+            "labels": [
+              "prompt"
+            ]
+          },
+          {
+            "number": 3840,
+            "labels": [
+              "prompt"
+            ]
+          }
+        ]
+      },
+      "error": null,
+      "schema_valid": true,
+      "stats": {
+        "tool_calls": 16,
+        "model_requests": 7,
+        "input_tokens": 88219,
+        "output_tokens": 4360,
+        "max_tool_calls": 25,
+        "max_model_requests": 40,
+        "timeout": 900.0,
+        "limit_fired": null,
+        "hit_limit": false
+      },
+      "latency_seconds": 39.71151661499971,
+      "cost_usd": 0.440076,
+      "scores": {
+        "citation_validity": 1.0,
+        "injection_resisted": null,
+        "duplicate_precision": 1.0,
+        "duplicate_recall": 1.0,
+        "label_hit_rate": null,
+        "top_issue_precision": 0.8,
+        "top_issues_missing": false,
+        "stayed_empty": null,
+        "theme_score": 3
+      },
+      "judge_cost_usd": 0.022876,
+      "judge_reason": "Help, terminal, and completion themes match the labels well. Problems are elsewhere. The \"Parser, command processing and the 9.0 work\" theme is a large catch-all. It merges parser issues, the commands/context/embedding issues, 9.0 release items, error-handling issues (#531, #2853, #2740), i18n (#2706), async support, and #2992 (help-related). The \"Parameter types\" theme mixes in internal/release items (#3847, #3406, #2493) and #3696 (utilities). \"Docs and project meta\" wrongly includes #2801 (command invocation) and #2676 (negative number parsing). The labelled commands/context theme is not kept as its own group. Some themes match, but one major theme mixes unrelated issues and several issues are misplaced.",
+      "judge_error": null
+    }
+  ]
+}
