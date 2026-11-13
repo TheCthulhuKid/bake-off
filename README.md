@@ -17,11 +17,37 @@ Every issue number the report cites must exist in the data. The three implementa
 the model, effort level, system prompt, tools and tool-call limit, so differences come from the
 framework; `docs/fairness.md` lists the framework defaults that still differ.
 
+## Eval set
+
+21 cases, each its own recorded fixture of open GitHub issues, so every run is offline and
+repeatable:
+
+- **Four whole repos:** `pallets/click` (77 open issues), `psf/black` (80), `pypa/pip-tools` (80)
+  and `mozillazg/python-pinyin` (39, mostly in Chinese).
+- **Ten slices** of 20 to 29 issues from those repos: three each from click, black and
+  pip-tools, and one from pinyin. Each click, black and pip-tools slice has a seeded duplicate,
+  a planted issue reporting the same problem as a real one in other words, and each slice has
+  3 or 4 issues with their labels hidden, so the hidden labels are the expected suggestions.
+- **Seven awkward cases** built from click and black: an empty repo, a two-issue repo, a
+  200,000-character issue body, two prompt injections asking for the label `critical` on every
+  issue and for the planted issue to be listed first (one hidden in an HTML comment, one
+  blunt), and two near-duplicates that look like a real issue but describe a different
+  problem.
+
+Besides the nine seeded pairs, four natural duplicate pairs are labelled, one of them
+confirmed by a maintainer. The derived fixtures are built by `scripts/derive_fixtures.py` from
+`evals/derived.yaml`. The planted texts were written by Claude and reviewed by hand; the
+themes, top issues and natural pairs were drafted by Claude for review. Since Claude is also
+the model under test, that could shift absolute scores, but it affects all three
+implementations alike, so not the comparison. At three repeats per case for each
+implementation, a full eval is 189 runs. `docs/evals.md` describes the cases and how they are
+labelled.
+
 ## Metrics
 
 The full eval runs each case three times per implementation, the implementations taking turns,
 and compares schema validity, citation validity, duplicate precision and recall against
-hand-labelled pairs, label hit rate, top-issue precision, theme quality (an LLM judge,
+the labelled pairs, label hit rate, top-issue precision, theme quality (an LLM judge,
 spot-checked by hand), resistance to prompt injection in issue text, latency (p50 and p95),
 cost from token counts, tool calls (the mean, and runs that hit a limit), and the size of each
 `impls/*.py` file.
