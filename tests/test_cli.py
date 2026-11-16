@@ -28,13 +28,12 @@ CASES = Path(__file__).parent / "fixtures" / "cases.yaml"
 
 
 def test_eval_saves_one_results_file_per_impl(
-    pydanticai_model, langgraph_model, anthropic_model, tmp_path
+    pydanticai_model, langgraph_model, anthropic_model, tmp_path, monkeypatch
 ):
     result = CliRunner().invoke(
         main, ["eval", "--repeats", "1", "--cases", str(CASES), "--out", str(tmp_path)]
     )
     assert result.exit_code == 0, result.output
-    # One progress line per run, then one line per saved file.
     assert result.output.count(": ok (") == 3
     files = []
     for impl in IMPLS:
@@ -51,11 +50,9 @@ def test_eval_saves_one_results_file_per_impl(
     assert "| anthropic | 1 | 100% | 100% | 100% | n/a | 0 | 0 | 0 |" in printed.output
     # Duplicates are unlabelled and nothing was judged, so those columns have no data.
     assert "| anthropic | n/a | n/a | 100% | 100% | 0 | n/a |" in printed.output
-    # One impl's files share a row only if they can: the same case twice is refused.
     twice = CliRunner().invoke(main, ["report", files[0], files[0]])
     assert twice.exit_code != 0
     assert "cases in more than one file: ['tiny-basics']" in twice.output
-    # A rescore writes new files under the same names, offline, and never overwrites them.
     rescored = tmp_path / "rescored"
     args = ["rescore", *files, "--cases", str(CASES), "--out", str(rescored)]
     assert CliRunner().invoke(main, args).exit_code == 0
@@ -63,7 +60,6 @@ def test_eval_saves_one_results_file_per_impl(
     again = CliRunner().invoke(main, args)
     assert again.exit_code != 0
     assert "already exists" in again.output
-    # Copies keep their file's name, so two files with one name are refused before any is saved.
     twice = CliRunner().invoke(main, ["rescore", files[0], files[0], "--out", str(tmp_path / "r")])
     assert twice.exit_code != 0 and not (tmp_path / "r").exists()
     assert f"files share a name, which their copies would too: ['{Path(files[0]).name}']" in (
@@ -77,6 +73,12 @@ def test_eval_saves_one_results_file_per_impl(
     assert again.exit_code != 0
     assert "stray: issues not in tiny: [9]" in again.output
     assert len(anthropic_model.sent) == sent and not (tmp_path / "b").exists()
+    monkeypatch.setattr("bakeoff.cli.EVALS", tmp_path)
+    (tmp_path / "judge-cache.json").write_text("not json")
+    args = ["eval", "--judge", "--cases", str(CASES), "--out", str(tmp_path / "c")]
+    again = CliRunner().invoke(main, args)
+    assert again.exit_code != 0 and "judge-cache.json is not a judge cache" in again.output
+    assert len(anthropic_model.sent) == sent and not (tmp_path / "c").exists()
 
 
 def test_eval_saves_the_whole_cases_of_an_interrupted_eval(pydanticai_model, tmp_path, monkeypatch):
@@ -103,7 +105,6 @@ def test_eval_saves_the_whole_cases_of_an_interrupted_eval(pydanticai_model, tmp
         str(out),
     ]
     result = CliRunner().invoke(main, args)
-    # Ctrl-C still aborts, after the finished case is saved.
     assert result.exit_code != 0 and "Aborted" in result.output
     assert "interrupted during second, dropping its 0 finished runs" in result.output
     [path] = out.glob("*-pydanticai.json")

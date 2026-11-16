@@ -9,7 +9,7 @@ import click
 from bakeoff.cases import load_cases
 from bakeoff.fixtures import UnknownRepoError
 from bakeoff.impls import IMPLS
-from bakeoff.judge import ThemeJudge
+from bakeoff.judge import JudgeCacheError, ThemeJudge
 from bakeoff.report import IncompatibleRuns, render
 from bakeoff.runner import (
     EvalInterrupted,
@@ -123,11 +123,14 @@ def eval_(
     paths = {name: result_path(out, name) for name in impls}
     if taken := [str(path) for path in paths.values() if path.exists()]:
         raise click.ClickException(f"already exists: {', '.join(taken)}")
-    theme_judge = (
-        ThemeJudge(anthropic.Anthropic(api_key=SETTINGS.api_key()), EVALS / "judge-cache.json")
-        if judge
-        else None
-    )
+    try:
+        theme_judge = (
+            ThemeJudge(anthropic.Anthropic(api_key=SETTINGS.api_key()), EVALS / "judge-cache.json")
+            if judge
+            else None
+        )
+    except JudgeCacheError as error:
+        raise click.ClickException(str(error)) from error
     try:
         runs = run_eval(impls, cases, repeats, judge=theme_judge, on_record=_print_record)
     except EvalInterrupted as interrupted:
