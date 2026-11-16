@@ -223,7 +223,8 @@ For most fields an empty value means "not labelled". `duplicates` is the excepti
 the repo has no duplicates, so any pair the report finds scores precision 0.
 
 `mean(values)` skips `None` and returns `None` when nothing is left. `percentile(values, p)` is
-nearest-rank, so it works on a single value, which `statistics.quantiles` does not.
+nearest-rank, so it works on a single value, which `statistics.quantiles` does not; `p` must
+be from 0 to 100.
 
 ## Theme judge
 

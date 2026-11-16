@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import pytest
 
 from bakeoff.cases import Case, Injection
@@ -70,5 +72,14 @@ def test_mean_skips_none_and_percentile_takes_one_value():
     assert mean([0.5, None, 1.0]) == 0.75
     assert mean([None]) is None
     assert percentile([2.0], 95) == 2.0
+    assert percentile(iter([]), 50) is None
     latencies = [3.0, 1.0, 4.0, 2.0]
     assert (percentile(latencies, 50), percentile(latencies, 95)) == (2.0, 4.0)
+
+
+@pytest.mark.parametrize(
+    ("p", "expected"), [(100, nullcontext()), (101, pytest.raises(ValueError, match="0 to 100"))]
+)
+def test_percentile_rejects_p_outside_0_to_100(p, expected):
+    with expected:
+        assert percentile([1.0, 2.0], p) == 2.0
