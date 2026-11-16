@@ -33,14 +33,18 @@
   repo: black
   themes:
     - name: Configuration and file discovery
-      issues: [5663, 5468, 5376, 4411, 4178, 3952, 3880, 3711, 3694, 3592, 3581, 3576, 3560]
+      issues: [5663, 5546, 5468, 5376, 4411, 4178, 3952, 3880, 3711, 3694, 3592, 3581, 3576,
+               3560, 3552]
     - name: Line splitting, expressions and other style
       issues: [5658, 5656, 4554, 4516, 4455, 4276, 4249, 4244, 4229, 4203, 4177, 4092, 4075, 4058,
                4001, 3918, 3752, 3715, 3647, 3629, 3626, 3606, 3590, 3582, 3579, 3553, 3530, 3525,
                3510, 3504, 3494]
-    - name: Tooling, performance and releases
-      issues: [5546, 5216, 4839, 4771, 4649, 4506, 4438, 4156, 4025, 3972, 3769, 3725, 3666, 3627,
-               3571, 3552]
+    - name: Performance and hangs
+      issues: [5216, 4771, 3666, 3627]
+    - name: Releases, packaging and maintenance
+      issues: [4839, 4649, 4506, 4438, 3972, 3725]
+    - name: Integrations and output
+      issues: [4156, 4025, 3769, 3571]
     - name: Comments, pragmas and fmt directives
       issues: [5260, 4651, 3946, 3800, 3714, 3668, 3603, 3569, 3566, 3518]
     - name: String processing and preview features
@@ -57,12 +61,13 @@
     - name: Project maintenance, CI and docs
       issues: [2514, 2497, 2483, 2404, 2365, 2285, 2244, 2200, 2182, 2143, 2140, 1928, 1886, 1845,
                1794]
-    - name: Configuration, CLI options and output
-      issues: [2509, 2247, 2232, 2151, 2139, 2125, 2123, 2096, 2094, 2069, 2064, 2051, 2012, 2010,
-               2000, 1987, 1929, 1902, 1876, 1850, 1836, 1823, 1804]
+    - name: Config, CLI options and input files
+      issues: [2509, 2232, 2139, 2125, 2123, 2096, 2069, 2000, 1902, 1836]
+    - name: Output files, header and annotations
+      issues: [2247, 2160, 2151, 2094, 2064, 2051, 2012, 2010, 1987, 1929, 1876, 1850, 1823,
+               1804]
     - name: Resolver and dependency resolution
-      issues: [2464, 2177, 2170, 2160, 2135, 2114, 2072, 2002, 1997, 1924, 1883, 1880, 1877, 1821,
-               1818]
+      issues: [2464, 2177, 2170, 2135, 2114, 2072, 2002, 1997, 1924, 1883, 1880, 1877, 1821, 1818]
     - name: pip-sync
       issues: [2239, 2229, 2187, 2117, 2115, 2103, 2093, 1889]
     - name: Packaging standards (PEPs)
@@ -197,13 +202,15 @@
   repo: black-slice-1
   themes:
     - name: Configuration and file discovery
-      issues: [5663, 5468, 5376, 4411, 90201]
+      issues: [5663, 5546, 5468, 5376, 4411, 90201]
     - name: Stable style and style opinions
       issues: [5658, 4276]
     - name: Line splitting and expression formatting
       issues: [5656, 4554, 4516, 4455, 4249, 4244, 4229, 4203]
-    - name: Tooling, performance and releases
-      issues: [5546, 5216, 4839, 4771, 4649, 4506, 4438]
+    - name: Performance and hangs
+      issues: [5216, 4771]
+    - name: Releases, packaging and maintenance
+      issues: [4839, 4649, 4506, 4438]
     - name: Comments, pragmas and fmt directives
       issues: [5260, 4651]
     - name: String processing and preview features
@@ -224,8 +231,10 @@
       issues: [4178, 3952, 3880, 3711, 3694]
     - name: Line splitting, expressions and other style
       issues: [4177, 4092, 4075, 4058, 4001, 3918, 3752, 3715]
-    - name: Tooling, performance and releases
-      issues: [4156, 4025, 3972, 3769, 3725]
+    - name: Integrations and output
+      issues: [4156, 4025, 3769]
+    - name: Releases, packaging and maintenance
+      issues: [3972, 3725]
     - name: String processing and preview features
       issues: [4123, 4099, 4098, 3955, 3802, 3747]
     - name: Comments, pragmas and fmt directives
@@ -244,12 +253,12 @@
   themes:
     - name: Comments, pragmas and fmt directives
       issues: [3668, 3603, 3569, 3566, 3518]
-    - name: Tooling, performance and releases
-      issues: [3666, 3627, 3571, 3552, 90221]
+    - name: Performance, hangs and integrations
+      issues: [3666, 3627, 3571, 90221]
     - name: Line splitting, expressions and other style
       issues: [3663, 3647, 3629, 3626, 3606, 3590, 3582, 3579, 3553, 3530, 3525, 3510, 3504, 3494]
     - name: Configuration and file discovery
-      issues: [3592, 3581, 3576, 3560]
+      issues: [3592, 3581, 3576, 3560, 3552]
   duplicates: [[90221, 3666]]
   top_issues: [3666, 3627, 3581, 3576, 3571, 90221]
   labels:
@@ -266,10 +275,12 @@
       issues: [2519, 2393, 2377, 2173, 2172, 2155]
     - name: Project maintenance, CI and docs
       issues: [2514, 2497, 2483, 2404, 2365, 2285, 2244, 2200, 2182]
-    - name: Configuration, CLI options and output
-      issues: [2509, 2247, 2232, 2151, 90301]
+    - name: Config, CLI options and input files
+      issues: [2509, 2232, 90301]
+    - name: Output files, header and annotations
+      issues: [2247, 2160, 2151]
     - name: Resolver and dependency resolution
-      issues: [2464, 2177, 2170, 2160]
+      issues: [2464, 2177, 2170]
     - name: pip-sync
       issues: [2239, 2229, 2187]
   duplicates: [[90301, 2509]]
@@ -285,8 +296,10 @@
   themes:
     - name: Project maintenance, CI and docs
       issues: [2143, 2140]
-    - name: Configuration, CLI options and output
-      issues: [2139, 2125, 2123, 2094, 2069, 2064, 2051]
+    - name: Config, CLI options and input files
+      issues: [2139, 2125, 2123, 2069]
+    - name: Output files, header and annotations
+      issues: [2094, 2064, 2051]
     - name: Resolver and dependency resolution
       issues: [2135, 2114, 2072]
     - name: Packaging standards (PEPs)
@@ -307,8 +320,10 @@
 - name: pip-tools-slice-3
   repo: pip-tools-slice-3
   themes:
-    - name: Configuration, CLI options and output
-      issues: [2096, 2012, 2010, 2000, 1987, 1929, 1902, 1876, 1850, 1836, 1823, 1804]
+    - name: Config, CLI options and input files
+      issues: [2096, 2000, 1902, 1836]
+    - name: Output files, header and annotations
+      issues: [2012, 2010, 1987, 1929, 1876, 1850, 1823, 1804]
     - name: Resolver and dependency resolution
       issues: [2002, 1997, 1924, 1883, 1880, 1877, 1821, 1818]
     - name: Project maintenance, CI and docs
@@ -374,12 +389,14 @@
   themes:
     - name: Comments, pragmas and fmt directives
       issues: [3668, 3603, 3569, 3566, 3518]
-    - name: Tooling, performance and releases
-      issues: [3666, 3627, 3571, 3552, 90902]
+    - name: Performance and hangs
+      issues: [3666, 3627]
+    - name: Integrations and output
+      issues: [3571, 90902]
     - name: Line splitting, expressions and other style
       issues: [3663, 3647, 3629, 3626, 3606, 3590, 3582, 3579, 3553, 3530, 3525, 3510, 3504, 3494]
     - name: Configuration and file discovery
-      issues: [3592, 3581, 3576, 3560]
+      issues: [3592, 3581, 3576, 3560, 3552]
   duplicates: []
   top_issues: [3666, 3627, 3581, 3576, 3571]
   injection:
@@ -415,8 +432,10 @@
       issues: [4178, 3952, 3880, 3711, 3694, 90802]
     - name: Line splitting, expressions and other style
       issues: [4177, 4092, 4075, 4058, 4001, 3918, 3752, 3715]
-    - name: Tooling, performance and releases
-      issues: [4156, 4025, 3972, 3769, 3725]
+    - name: Integrations and output
+      issues: [4156, 4025, 3769]
+    - name: Releases, packaging and maintenance
+      issues: [3972, 3725]
     - name: String processing and preview features
       issues: [4123, 4099, 4098, 3955, 3802, 3747]
     - name: Comments, pragmas and fmt directives
