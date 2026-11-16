@@ -3,6 +3,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
+from bakeoff import runner
 from bakeoff.cli import main
 from bakeoff.impls import IMPLS
 from bakeoff.runner import load_eval
@@ -70,3 +71,34 @@ def test_eval_saves_one_results_file_per_impl(
     assert again.exit_code != 0
     assert "stray: issues not in tiny: [9]" in again.output
     assert len(anthropic_model.sent) == sent and not (tmp_path / "b").exists()
+
+
+def test_eval_saves_the_whole_cases_of_an_interrupted_eval(pydanticai_model, tmp_path, monkeypatch):
+    two = tmp_path / "two.yaml"
+    two.write_text("- {name: first, repo: tiny}\n- {name: second, repo: tiny}\n")
+    run_case = runner.run_case
+
+    def interrupt_the_second(impl, case, repeat, **kwargs):
+        if case.name == "second":
+            raise KeyboardInterrupt
+        return run_case(impl, case, repeat, **kwargs)
+
+    monkeypatch.setattr(runner, "run_case", interrupt_the_second)
+    out = tmp_path / "results"
+    args = [
+        "eval",
+        "--impl",
+        "pydanticai",
+        "--repeats",
+        "1",
+        "--cases",
+        str(two),
+        "--out",
+        str(out),
+    ]
+    result = CliRunner().invoke(main, args)
+    # Ctrl-C still aborts, after the finished case is saved.
+    assert result.exit_code != 0 and "Aborted" in result.output
+    assert "interrupted during second, dropping its 0 finished runs" in result.output
+    [path] = out.glob("*-pydanticai.json")
+    assert [record.case for record in load_eval(path).records] == ["first"]

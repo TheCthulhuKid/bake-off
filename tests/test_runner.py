@@ -1,3 +1,4 @@
+import shutil
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from bakeoff.fixtures import Repo, UnknownRepoError
 from bakeoff.judge import Judgement, ThemeJudge, Verdict
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
 from bakeoff.runner import (
+    EvalInterrupted,
     RescoreError,
     check_cases,
     load_eval,
@@ -167,6 +169,32 @@ def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_pat
     assert load_eval(path) == run
     with pytest.raises(FileExistsError):
         save_eval(run, path)
+
+
+def test_run_eval_keeps_only_whole_cases_when_interrupted(triage_with, tmp_path, monkeypatch):
+    # A second fixture, so the saved files can be seen to leave out the unfinished case's repo.
+    for name in ("tiny", "other"):
+        shutil.copytree(Path(__file__).parent / "fixtures" / "tiny", tmp_path / name)
+    monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", tmp_path)
+    calls = []
+
+    def triage(repo):
+        calls.append(repo)
+        # The second case's second run: its first run is dropped with it.
+        if len(calls) == 4:
+            raise KeyboardInterrupt
+        return REPORT
+
+    triage_with(triage)
+    cases = [CASE, Case(name="other-bare", repo="other")]
+    with pytest.raises(EvalInterrupted) as interrupted:
+        run_eval(["anthropic", "langgraph"], cases, repeats=1)
+    assert (interrupted.value.case, interrupted.value.dropped) == ("other-bare", 1)
+    assert isinstance(interrupted.value.__cause__, KeyboardInterrupt)
+    for run in interrupted.value.runs:
+        assert [record.case for record in run.records] == ["tiny-top"]
+        # The file describes the cases it holds, so it combines with a later run of the rest.
+        assert (run.cases_hash, list(run.fixture_hashes)) == (cases_hash([CASE]), ["tiny"])
 
 
 def test_check_cases_lists_unknown_repos_and_labels_not_in_the_fixture(tiny_root):

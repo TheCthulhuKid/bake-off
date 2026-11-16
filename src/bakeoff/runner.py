@@ -184,6 +184,18 @@ class EvalRun(BaseModel):
     records: list[RunRecord]
 
 
+class EvalInterrupted(Exception):
+    """Raised when an eval stops during ``case``; ``runs`` holds the cases it finished.
+
+    The cause is what stopped it, such as ``KeyboardInterrupt``. ``dropped`` counts the runs of
+    ``case`` already made, which are left out so a later run of that case can share a report.
+    """
+
+    def __init__(self, runs: list[EvalRun], case: str, dropped: int) -> None:
+        super().__init__(f"interrupted during {case}, dropping its {dropped} finished runs")
+        self.runs, self.case, self.dropped = runs, case, dropped
+
+
 def run_eval(
     impls: Sequence[str],
     cases: Sequence[Case],
@@ -198,39 +210,54 @@ def run_eval(
     The impls take turns: every impl runs a case's repeat before the next repeat starts, so a
     slow spell on the API falls on all of them rather than on one impl's whole eval. Returns one
     ``EvalRun`` per impl, in the order given. ``on_record`` sees each impl's record as it is made,
-    so the CLI can show progress without owning the loop.
+    so the CLI can show progress without owning the loop. Anything that stops the loop, Ctrl-C
+    included, raises ``EvalInterrupted`` with the whole cases so far.
     """
     started_at = now()
     # Taken before the first run, so they describe the code and prompts that ran.
     prompt, sha = prompt_hash(), git_sha()
-    labels = cases_hash(cases)
     fixtures = {repo: fixture_hash(repo) for repo in sorted({case.repo for case in cases})}
     sizes = {impl: code_lines(impl) for impl in impls}
     records: dict[str, list[RunRecord]] = {impl: [] for impl in impls}
+    finished: list[Case] = []
+
+    def runs() -> list[EvalRun]:
+        # Only the finished cases, so an interrupted eval's files describe what they hold.
+        repos = {case.repo for case in finished}
+        return [
+            EvalRun(
+                impl=impl,
+                model=SETTINGS.model,
+                effort=SETTINGS.effort,
+                started_at=started_at,
+                prompt_hash=prompt,
+                cases_hash=cases_hash(finished),
+                fixture_hashes={repo: digest for repo, digest in fixtures.items() if repo in repos},
+                page_size=SETTINGS.page_size,
+                body_limit=SETTINGS.body_limit,
+                git_sha=sha,
+                code_lines=sizes[impl][0],
+                code_non_blank_lines=sizes[impl][1],
+                records=records[impl],
+            )
+            for impl in impls
+        ]
+
     for case in cases:
-        for repeat in range(repeats):
-            for impl in impls:
-                record = run_case(impl, case, repeat, judge=judge)
-                on_record(impl, record)
-                records[impl].append(record)
-    return [
-        EvalRun(
-            impl=impl,
-            model=SETTINGS.model,
-            effort=SETTINGS.effort,
-            started_at=started_at,
-            prompt_hash=prompt,
-            cases_hash=labels,
-            fixture_hashes=fixtures,
-            page_size=SETTINGS.page_size,
-            body_limit=SETTINGS.body_limit,
-            git_sha=sha,
-            code_lines=sizes[impl][0],
-            code_non_blank_lines=sizes[impl][1],
-            records=records[impl],
-        )
-        for impl in impls
-    ]
+        new: dict[str, list[RunRecord]] = {impl: [] for impl in impls}
+        try:
+            for repeat in range(repeats):
+                for impl in impls:
+                    record = run_case(impl, case, repeat, judge=judge)
+                    on_record(impl, record)
+                    new[impl].append(record)
+        except (Exception, KeyboardInterrupt) as error:
+            dropped = sum(len(made) for made in new.values())
+            raise EvalInterrupted(runs(), case.name, dropped) from error
+        for impl in impls:
+            records[impl].extend(new[impl])
+        finished.append(case)
+    return runs()
 
 
 def save_eval(run: EvalRun, path: Path) -> None:

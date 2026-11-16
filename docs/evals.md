@@ -310,8 +310,13 @@ directories, and opens it in `"x"` mode, so an existing results file is never ov
 `bakeoff run`. `load_eval(path)` reads a file back as the same `EvalRun`. Every score, the
 judge's included, and every cost is stored in the records, so reporting needs only the files,
 not the cases, the fixtures or a model. The file holds a whole `EvalRun`, so it is written once
-all of an implementation's runs are done: a crash outside a run, which unlike a failed run is
-not recorded, loses that implementation's file.
+all of an implementation's runs are done. A failed run is recorded and the eval goes on; anything
+else that stops the loop, such as Ctrl-C or a crash outside a run, makes `run_eval` raise
+`EvalInterrupted`, holding each implementation's finished cases, and `bakeoff eval` saves those
+before re-raising what stopped it. The case in progress is dropped, its runs included, so a later
+`--repo` run of the rest combines with these files in one report. Their `cases_hash` and
+`fixture_hashes` cover only the finished cases. An implementation with no finished case gets no
+file.
 
 ## Report
 

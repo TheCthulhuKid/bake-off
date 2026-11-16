@@ -11,6 +11,7 @@ from bakeoff.impls import IMPLS
 from bakeoff.judge import ThemeJudge
 from bakeoff.report import IncompatibleRuns, render
 from bakeoff.runner import (
+    EvalInterrupted,
     EvalRun,
     RunRecord,
     check_cases,
@@ -126,7 +127,19 @@ def eval_(
         if judge
         else None
     )
-    runs = run_eval(impls, cases, repeats, judge=theme_judge, on_record=_print_record)
+    try:
+        runs = run_eval(impls, cases, repeats, judge=theme_judge, on_record=_print_record)
+    except EvalInterrupted as interrupted:
+        finished = [run for run in interrupted.runs if run.records]
+        _save_runs(finished, paths)
+        saved = "the files above hold every whole case" if finished else "no case had finished"
+        click.echo(f"{interrupted}; {saved}", err=True)
+        # Re-raised as it was, so Ctrl-C still aborts and a bug still shows its traceback.
+        raise interrupted.__cause__ from None
+    _save_runs(runs, paths)
+
+
+def _save_runs(runs: list[EvalRun], paths: dict[str, Path]) -> None:
     for run in runs:
         save_eval(run, paths[run.impl])
         click.echo(f"saved {paths[run.impl]}")

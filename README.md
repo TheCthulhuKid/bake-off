@@ -217,7 +217,9 @@ One run of an implementation on a recorded repo, saved to a new
 
 The eval runs every implementation on the cases in `evals/cases.yaml`, taking turns on each case
 and repeat, and saves one new `results/<UTC timestamp>-<impl>.json` per implementation. It
-checks the cases against their fixtures and the output paths before the first run:
+checks the cases against their fixtures and the output paths before the first run. If it is
+stopped, by Ctrl-C for example, it saves the cases every implementation finished and drops the
+one in progress, so the rest can be run later with `--repo`:
 
 ```sh
 .venv/bin/bakeoff eval --repeats 3            # all implementations, all cases
