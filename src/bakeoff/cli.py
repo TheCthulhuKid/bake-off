@@ -22,7 +22,7 @@ from bakeoff.runner import (
     result_path,
     run_eval,
     run_once,
-    save_eval,
+    save_result,
     select_cases,
 )
 from bakeoff.runner import rescore as rescore_eval
@@ -63,18 +63,16 @@ def run(impl: str, repo: str, out: Path | None) -> None:
     """Run IMPL once on the recorded REPO and print the report and stats as JSON."""
     if out is not None:
         out = result_path(out, impl)
-        # Done before the run as well as by the "x" mode below, so a bad path costs no tokens.
+        # Checked before the run as well as by save_result, so a bad path costs no tokens.
         _refuse_existing([out])
         out.parent.mkdir(parents=True, exist_ok=True)
     try:
         result = run_once(impl, repo)
     except UnknownRepoError as error:
         raise click.ClickException(str(error)) from error
-    text = result.model_dump_json(indent=2)
-    click.echo(text)
+    click.echo(result.model_dump_json(indent=2))
     if out is not None:
-        with out.open("x", encoding="utf-8") as file:
-            file.write(text + "\n")
+        save_result(result, out)
 
 
 # Named eval_ so the function doesn't shadow the builtin.
@@ -214,7 +212,7 @@ def _theme_judge(client: anthropic.Anthropic | None) -> ThemeJudge:
 
 def _save_runs(runs: Iterable[tuple[EvalRun, Path]]) -> None:
     for run, path in runs:
-        save_eval(run, path)
+        save_result(run, path)
         click.echo(f"saved {path}")
 
 

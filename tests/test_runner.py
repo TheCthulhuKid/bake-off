@@ -20,7 +20,7 @@ from bakeoff.runner import (
     result_path,
     run_case,
     run_eval,
-    save_eval,
+    save_result,
     select_cases,
 )
 from bakeoff.scoring import Scores
@@ -173,10 +173,10 @@ def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_pat
     assert named == tmp_path / "20261110T090000Z-anthropic.json"
     # The results file loads back as the same run, and is never overwritten.
     path = tmp_path / "results" / "run.json"
-    save_eval(run, path)
+    save_result(run, path)
     assert load_eval(path) == run
     with pytest.raises(FileExistsError):
-        save_eval(run, path)
+        save_result(run, path)
 
 
 def test_run_eval_keeps_only_whole_cases_when_interrupted(triage_with, tmp_path, monkeypatch):

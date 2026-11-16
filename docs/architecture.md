@@ -297,7 +297,7 @@ file may exist yet. `runner.select_cases` applies `--repo`: a recorded repo's na
 own case and every case whose fixture has its `source`, which a derived fixture keeps from its
 base, while a derived fixture's name selects only that case. It then calls `run_eval` with every
 implementation (or the one `--impl` names), prints one line per run as it lands, and saves one
-file per implementation with `save_eval`. With `--judge` it builds an Anthropic client and a
+file per implementation with `save_result`. With `--judge` it builds an Anthropic client and a
 `ThemeJudge` over `evals/judge-cache.json`. On `EvalInterrupted` it saves each implementation's
 finished cases and re-raises what stopped it.
 
