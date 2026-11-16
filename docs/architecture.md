@@ -9,17 +9,18 @@ src/bakeoff/
   tools.py         list_issues, get_issue, search_issues over fixture data
   telemetry.py     per-run collector for tool calls, model requests, token usage and run limits
   impls/           one file per framework, each exposing triage(repo) -> TriageReport
-  runner.py        runs an implementation on a recorded repo or an eval case, with its stats
+  runner.py        runs an implementation on a recorded repo or an eval case, with its stats;
+                   rescores saved runs against the current cases
   cases.py         Case and load_cases: the hand-labelled eval cases (docs/evals.md)
   scoring.py       Scores, score_run and the mean and percentile helpers (docs/evals.md)
   judge.py         ThemeJudge: the LLM judge for theme quality, with its on-disk cache
   provenance.py    prompt hash, git commit and code size recorded with each eval
-  report.py        summarise and render: the comparison tables from results files
-  cli.py           bakeoff run, eval and report; input and output handling only
+  report.py        combine, summarise and render: the comparison tables from results files
+  cli.py           bakeoff run, eval, report and rescore; input and output handling only
 evals/
   repos/<name>/    recorded or derived issues, one directory per fixture repo
   derived.yaml     the spec the derived fixtures are built from
-  cases.yaml       hand-labelled ground truth per case (not labelled yet)
+  cases.yaml       hand-labelled ground truth per case
   judge-cache.json the judge's verdicts, created by the first judged eval
 results/           saved runs, never overwritten
 scripts/           record_issues.py, which records a fixture from GitHub, and
@@ -55,7 +56,7 @@ needs a source checkout or an editable install, which is what `uv sync` gives.
 | `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `max_model_requests` | `BAKEOFF_MAX_MODEL_REQUESTS` | 40 | `telemetry.py` request cap |
-| `run_timeout` | `BAKEOFF_RUN_TIMEOUT` | 900 seconds, still a guess | `telemetry.py` deadline, `run_case`'s timeout thread |
+| `run_timeout` | `BAKEOFF_RUN_TIMEOUT` | 900 seconds, far above the full eval's p95 of under 50 s | `telemetry.py` deadline, `run_case`'s timeout thread |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly as `Settings.api_key()` |
@@ -285,8 +286,9 @@ implementation, in the order given: the impl, the model and effort from `SETTING
 in UTC and that implementation's records in run order. `on_record(impl, record)` is called as
 each record is made, so the CLI can show progress without owning the loop. `started_at` comes
 from a `now` argument, so tests can set it. Because the runs are interleaved, every
-implementation's results are held until the last run, so a crash outside a run loses all of
-them, not only one implementation's.
+implementation's results are held until the last run. A case's runs are added only once every
+implementation has finished it, and anything that stops the loop, Ctrl-C included, raises
+`EvalInterrupted` with the finished cases; the files' hashes then cover only those cases.
 
 `bakeoff eval` runs the eval. Before the first run it checks everything that can fail cheaply,
 so a mistake costs no tokens: `--out` must be a directory, the cases file must load and pass
@@ -296,7 +298,14 @@ own case and every case whose fixture has its `source`, which a derived fixture 
 base, while a derived fixture's name selects only that case. It then calls `run_eval` with every
 implementation (or the one `--impl` names), prints one line per run as it lands, and saves one
 file per implementation with `save_eval`. With `--judge` it builds an Anthropic client and a
-`ThemeJudge` over `evals/judge-cache.json`.
+`ThemeJudge` over `evals/judge-cache.json`. On `EvalInterrupted` it saves each implementation's
+finished cases and re-raises what stopped it.
+
+`bakeoff report` reads results files only: `report.combine` merges an implementation's files
+into one row when they agree on everything a score depends on, and `report.render` prints the
+tables. `bakeoff rescore` scores saved runs again with `runner.rescore` after a label fix,
+offline, reading theme scores from the judge's cache, into new files. `docs/evals.md` gives
+the rules for both.
 
 The run's own deadline is only checked between model requests, so `run_case` also runs
 `triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.

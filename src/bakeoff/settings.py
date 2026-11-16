@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # Positive, since a limit of 0 fires on the first call and a page size of 0 can't page.
     max_tool_calls: int = Field(default=25, gt=0)
     max_model_requests: int = Field(default=40, gt=0)
-    # Seconds. A guess: the smoke runs didn't record latency, so check it against the first evals.
+    # Seconds. Far above the full eval's p95 of under 50 s, so it ends only a hung run.
     run_timeout: float = Field(default=900, gt=0)
     body_limit: int = Field(default=4000, gt=0)
     page_size: int = Field(default=30, gt=0)

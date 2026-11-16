@@ -104,7 +104,7 @@ class Summary(BaseModel):
 
 
 def summarise(run: EvalRun) -> Summary:
-    """The summary row for one results file."""
+    """The summary row for one results file, or for an implementation's files combined."""
     records = run.records
     scores = [record.scores for record in records]
     latencies = [record.latency_seconds for record in records]
