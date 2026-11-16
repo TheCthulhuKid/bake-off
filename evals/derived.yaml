@@ -22,7 +22,7 @@
       characters: 200000
 
 # Click slices: consecutive thirds in fixture order, except #2778, moved into slice 1 to keep the
-# natural pair #3652/#2778 together. The other natural pair, #1370/#304, is in slice 3.
+# natural pair #3652/#2778 together.
 
 - name: click-slice-1
   base: click

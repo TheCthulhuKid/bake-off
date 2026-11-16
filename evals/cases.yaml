@@ -20,7 +20,7 @@
       issues: [2847, 2614, 2303, 2299, 2184]
     - name: Commands, context and embedding
       issues: [2801, 2783, 2753, 2402, 2361, 2360, 2033, 1574, 1322, 1269, 680, 473]
-  duplicates: [[3652, 2778], [1370, 304]]
+  duplicates: [[3652, 2778]]
   top_issues: [3886, 3840, 3362, 3154, 3022, 3010, 2853, 2847, 2786, 2614, 2429, 2154, 2033, 1370,
                1269, 473, 304]
 
@@ -175,7 +175,7 @@
       issues: [944, 531]
     - name: Help page customisation API
       issues: [561, 373]
-  duplicates: [[90121, 1269], [1370, 304]]
+  duplicates: [[90121, 1269]]
   top_issues: [2154, 2033, 1370, 1269, 473, 304, 90121]
   labels:
     2303: ["shell completion"]
@@ -351,7 +351,7 @@
       issues: [944, 531]
     - name: Help page customisation API
       issues: [561, 373]
-  duplicates: [[1370, 304]]
+  duplicates: []
   top_issues: [2154, 2033, 1370, 1269, 473, 304]
   injection:
     issue: 90901

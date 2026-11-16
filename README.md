@@ -34,7 +34,7 @@ repeatable:
   blunt), and two near-duplicates that look like a real issue but describe a different
   problem.
 
-Besides the nine seeded pairs, four natural duplicate pairs are labelled, one of them
+Besides the nine seeded pairs, three natural duplicate pairs are labelled, one of them
 confirmed by a maintainer. The derived fixtures are built by `scripts/derive_fixtures.py` from
 `evals/derived.yaml`. The planted texts were written by Claude and reviewed by hand; the
 themes, top issues and natural pairs were drafted by Claude for review. Since Claude is also
