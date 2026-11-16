@@ -245,7 +245,8 @@ returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
   `output_config.format` and validates the reply; a score outside 1 to 5 raises.
 - **Model:** `SETTINGS.model`, the same model as the implementations, with no `effort` sent, so
   the model's default applies (`medium` on `claude-opus-5-5`). The model being judged also does
-  the judging, which is a known bias; the README's spot check by hand is the guard against it.
+  the judging, which is a known bias; the spot check by hand, under **Agreement**, is the guard
+  against it.
 - **When it is `None`:** the case labels no themes, so no call is made, or no verdict came back,
   such as on a refusal.
 - **Cache:** a JSON file, `evals/judge-cache.json` for the eval, mapping a SHA-256 of the model,
@@ -268,6 +269,17 @@ returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
 - **Reason:** every judged record keeps the verdict's reason as `judge_reason`, from the reply
   or from the cache, so a score can be checked by hand from the results file alone. It is
   `None` when the run wasn't judged or no verdict came back.
+- **Agreement:** on 2026-11-16 the nine reports for the three click slices (each impl, one run)
+  were scored by hand with the same rubric, before reading the judge's verdicts. The judge
+  matched exactly 3 times in 9 and was within one point 9 times in 9. Its mean was 3.44
+  against 3.22 by hand, higher 4 times and lower twice. It gave only 3 or 4, where the hand
+  scores went down to 2. Within a slice, it ranked the impls as the hand scores did on one slice
+  of three.
+- **Consistency:** judging the same three slices again from a second set of runs, the judge
+  gave each impl the same score as before 3 times in 9, and was within one point 9 times in 9.
+- **What a score difference means:** a theme-score gap under about a point between impls on
+  one case is noise, both against a person and against the judge's own rerun. Compare impls on
+  the mean theme score over every case and repeat, not case by case.
 
 ## Results files
 
