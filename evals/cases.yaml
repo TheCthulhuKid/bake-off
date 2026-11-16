@@ -6,18 +6,23 @@
 - name: click
   repo: click
   themes:
-    - name: Parameters, types and parsing
-      issues: [3888, 3036, 2835, 2834, 2824, 2786, 2771, 2768, 2676, 2645, 2429, 2205, 1428, 1378,
-               1279, 928, 742, 730, 590]
-    - name: Terminal utilities, prompts and errors
-      issues: [3886, 3840, 3696, 3022, 2875, 2853, 2781, 2740, 2419, 2154, 1370, 944, 531, 304]
-    - name: Release, internals, docs and testing
-      issues: [3847, 3406, 3156, 3154, 3081, 3077, 3076, 2917, 2823, 2706, 2493, 1997]
+    - name: Parsing and options
+      issues: [2835, 2834, 2824, 2786, 2771, 2768, 2676, 2205, 1279, 742, 730, 590]
+    - name: Parameter types and files
+      issues: [3888, 3036, 2645, 2429, 1428, 1378, 928]
+    - name: Terminal utilities and prompts
+      issues: [3886, 3840, 3696, 3022, 2875, 2781, 2154, 1370, 304]
+    - name: Errors and exceptions
+      issues: [2853, 2740, 2419, 944, 531]
+    - name: Click 9.0 and internals
+      issues: [3847, 3406, 3156, 3154, 2706, 2493]
+    - name: Docs and testing
+      issues: [3081, 3077, 3076, 2823, 1997]
     - name: Help output and customisation
       issues: [3652, 3362, 3097, 3094, 3089, 3016, 3010, 2992, 2882, 2881, 2778, 2683, 2679, 561,
                373]
     - name: Shell completion
-      issues: [2847, 2614, 2303, 2299, 2184]
+      issues: [2917, 2847, 2614, 2303, 2299, 2184]
     - name: Commands, context and embedding
       issues: [2801, 2783, 2753, 2402, 2361, 2360, 2033, 1574, 1322, 1269, 680, 473]
   duplicates: [[3652, 2778]]
@@ -115,7 +120,7 @@
 - name: click-slice-1
   repo: click-slice-1
   themes:
-    - name: Parameters, types and parsing
+    - name: Parameter types and files
       issues: [3888, 3036]
     - name: Terminal utilities (pager, editor, colours, prompts)
       issues: [3886, 3840, 3696, 3022, 2875]
@@ -143,8 +148,10 @@
       issues: [2853, 2740, 2419]
     - name: Shell completion
       issues: [2847, 2614]
-    - name: Parameters, types and parsing
-      issues: [2835, 2834, 2824, 2786, 2771, 2768, 2676, 2645, 2429, 90111]
+    - name: Parsing and options
+      issues: [2835, 2834, 2824, 2786, 2771, 2768, 2676]
+    - name: Parameter types and files
+      issues: [2645, 2429, 90111]
     - name: Click 9.0, deprecations and internals
       issues: [2823, 2706, 2493]
     - name: Commands, context and embedding
@@ -167,8 +174,10 @@
       issues: [2360, 2033, 1574, 1322, 1269, 680, 473, 90121]
     - name: Shell completion
       issues: [2303, 2299, 2184]
-    - name: Parameters, types and parsing
-      issues: [2205, 1428, 1378, 1279, 928, 742, 730, 590]
+    - name: Parsing and options
+      issues: [2205, 1279, 742, 730, 590]
+    - name: Parameter types and files
+      issues: [1428, 1378, 928]
     - name: Terminal I/O, prompts and the test runner
       issues: [2154, 1997, 1370, 304]
     - name: Errors and exceptions
@@ -343,8 +352,10 @@
       issues: [2360, 2033, 1574, 1322, 1269, 680, 473]
     - name: Shell completion
       issues: [2303, 2299, 2184]
-    - name: Parameters, types and parsing
-      issues: [2205, 1428, 1378, 1279, 928, 742, 730, 590, 90901]
+    - name: Parsing and options
+      issues: [2205, 1279, 742, 730, 590, 90901]
+    - name: Parameter types and files
+      issues: [1428, 1378, 928]
     - name: Terminal I/O, prompts and the test runner
       issues: [2154, 1997, 1370, 304]
     - name: Errors and exceptions
@@ -383,8 +394,10 @@
       issues: [2853, 2740, 2419]
     - name: Shell completion
       issues: [2847, 2614]
-    - name: Parameters, types and parsing
-      issues: [2835, 2834, 2824, 2786, 2771, 2768, 2676, 2645, 2429]
+    - name: Parsing and options
+      issues: [2835, 2834, 2824, 2786, 2771, 2768, 2676]
+    - name: Parameter types and files
+      issues: [2645, 2429]
     - name: Click 9.0, deprecations and internals
       issues: [2823, 2706, 2493]
     - name: Commands, context and embedding
