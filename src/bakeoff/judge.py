@@ -53,6 +53,9 @@ class NotInCache(LookupError):
 
 
 _CACHE = TypeAdapter(dict[str, Verdict])
+# Room for thinking and a short verdict, and under the 21,333 the SDK allows a request that
+# isn't streamed.
+MAX_TOKENS = 16_000
 
 
 class Judgement(BaseModel):
@@ -90,7 +93,7 @@ class ThemeJudge:
             raise NotInCache(f"no cached verdict for {case.name}'s report")
         response = self._client.messages.parse(
             model=SETTINGS.model,
-            max_tokens=16_000,
+            max_tokens=MAX_TOKENS,
             system=RUBRIC,
             messages=[{"role": "user", "content": prompt}],
             output_format=Verdict,

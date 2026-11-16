@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -26,9 +27,13 @@ def test_run_prints_and_saves_the_result_without_overwriting(pydanticai_model, t
     assert "already exists" in again.output
 
 
+STARTED = datetime(2026, 11, 16, 10, 24, 19, tzinfo=UTC)
+
+
 @pytest.fixture
-def evaluated(pydanticai_model, langgraph_model, anthropic_model, tmp_path):
-    """One eval of the tiny case by every impl: its output and the results files it saved."""
+def evaluated(pydanticai_model, langgraph_model, anthropic_model, tmp_path, monkeypatch):
+    """One eval of the tiny case by every impl, started at ``STARTED``: its output and files."""
+    monkeypatch.setattr("bakeoff.cli.utc_now", lambda: STARTED)
     out = tmp_path / "results"
     args = ["eval", "--repeats", "1", "--cases", str(CASES), "--out", str(out)]
     result = CliRunner().invoke(main, args)
@@ -40,7 +45,10 @@ def test_eval_saves_one_results_file_per_impl(evaluated):
     output, files = evaluated
     assert output.count(": ok (") == 3 and len(files) == 3
     for path in files:
-        [record] = load_eval(Path(path)).records
+        run = load_eval(Path(path))
+        assert run.started_at == STARTED
+        assert Path(path).name.startswith("20261116T102419Z-")
+        [record] = run.records
         assert (record.case, record.schema_valid) == ("tiny-basics", True)
 
 

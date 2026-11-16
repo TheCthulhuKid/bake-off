@@ -1,7 +1,6 @@
 """Runs an implementation on a recorded repo or an eval case and collects its stats."""
 
 import contextvars
-import functools
 import threading
 import time
 from collections import Counter
@@ -20,6 +19,11 @@ from bakeoff.provenance import cases_hash, code_lines, fixture_hash, git_sha, pr
 from bakeoff.scoring import Scores, normalise_label, normalise_labels, score_run
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import RunStats, collect, raise_if_limit_fired
+
+
+def utc_now() -> datetime:
+    """The current time in UTC, the default clock for an eval's start and its file names."""
+    return datetime.now(UTC)
 
 
 class RunResult(BaseModel):
@@ -223,7 +227,7 @@ def run_eval(
     *,
     judge: ThemeJudge | None = None,
     on_record: Callable[[str, RunRecord], None] = lambda impl, record: None,
-    now: Callable[[], datetime] = functools.partial(datetime.now, UTC),
+    now: Callable[[], datetime] = utc_now,
 ) -> list[EvalRun]:
     """Run each impl ``repeats`` times on each case, judging themes if ``judge`` is given.
 
@@ -379,9 +383,7 @@ def _describe(error: Exception) -> str:
     return f"{type(error).__name__}: {error}"
 
 
-def result_path(
-    out: Path, impl: str, now: Callable[[], datetime] = functools.partial(datetime.now, UTC)
-) -> Path:
+def result_path(out: Path, impl: str, now: Callable[[], datetime] = utc_now) -> Path:
     """``out`` itself if it names a ``.json`` file, else ``<UTC timestamp>-<impl>.json`` in it."""
     if out.suffix == ".json":
         return out

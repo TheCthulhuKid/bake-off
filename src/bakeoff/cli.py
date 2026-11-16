@@ -24,6 +24,7 @@ from bakeoff.runner import (
     run_once,
     save_result,
     select_cases,
+    utc_now,
 )
 from bakeoff.runner import rescore as rescore_eval
 from bakeoff.settings import PROJECT_ROOT, SETTINGS
@@ -118,11 +119,14 @@ def eval(
     if not cases:
         raise click.ClickException(f"no cases to run in {cases_path}")
     impls = list(IMPLS) if impl == "all" else [impl]
-    paths = {name: result_path(out, name) for name in impls}
+    started = utc_now()
+    paths = {name: result_path(out, name, now=lambda: started) for name in impls}
     _refuse_existing(paths.values())
     theme_judge = _theme_judge(anthropic.Anthropic(api_key=SETTINGS.api_key())) if judge else None
     try:
-        runs = run_eval(impls, cases, repeats, judge=theme_judge, on_record=_print_record)
+        runs = run_eval(
+            impls, cases, repeats, judge=theme_judge, on_record=_print_record, now=lambda: started
+        )
     except EvalInterrupted as interrupted:
         finished = [run for run in interrupted.runs if run.records]
         _save_runs((run, paths[run.impl]) for run in finished)
