@@ -302,14 +302,15 @@ The run's own deadline is only checked between model requests, so `run_case` als
 `triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.
 If the thread is still running, it sets `limit_fired = "timeout"` on the run's stats and
 records the run as failed with the deadline's `RunLimitExceeded` message; the abandoned run
-stops at its own next limit check. Without this, a request that hangs, such as one from
-`ChatAnthropic`, which sets no request timeout, would hold the eval forever.
+stops at its own next tool call or model request, which both raise once a limit has fired.
+Without this, a request that hangs, such as one from `ChatAnthropic`, which sets no request
+timeout, would hold the eval forever.
 - A daemon thread, not a `ThreadPoolExecutor`, whose worker threads are joined at interpreter
   exit, so one hung request would stop the process from ever exiting.
 - The thread runs `triage` in a `contextvars.copy_context()` of the caller, since a new thread
   starts with an empty context and would not see the run's collector or deadline.
-- The record holds a `model_copy()` of the stats, since an abandoned run keeps updating the
-  original in the background.
+- The record holds a `model_copy()` of the stats, taken as soon as the run returns or is given
+  up on, since an abandoned run keeps updating the original in the background.
 
 ## Tests
 

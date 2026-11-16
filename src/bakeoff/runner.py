@@ -82,13 +82,12 @@ def run_case(
         except Exception as exc:
             error = _describe(exc)
     latency = clock() - start
+    # Copied at once: a run abandoned at its timeout still updates the original in the background.
+    recorded = stats.model_copy()
     issues = {issue.number for issue in repo.issues}
     scores = Scores() if report is None else score_run(report, case, issues)
     judgement, judge_error = _judge_themes(judge, report, case, repo)
     scores.theme_score = judgement.score
-    # One copy for the stats and their price: a run abandoned at its timeout still updates the
-    # original in the background.
-    recorded = stats.model_copy()
     return RunRecord(
         case=case.name,
         repeat=repeat,

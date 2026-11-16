@@ -25,7 +25,8 @@ from bakeoff.runner import (
 )
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
-from bakeoff.telemetry import record_usage
+from bakeoff.telemetry import RunLimitExceeded, record_usage
+from bakeoff.tools import list_issues
 
 CASE = Case(name="tiny-top", repo="tiny", top_issues=[1])
 REPORT = TriageReport(
@@ -102,10 +103,15 @@ def test_run_case_records_a_failed_run_and_whether_its_schema_failed(
 def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     monkeypatch.setattr(SETTINGS, "run_timeout", 0.05)
     release, done = threading.Event(), threading.Event()
+    late = []
 
     def triage(repo):
         release.wait(5)
         record_usage(100, 10)
+        try:
+            list_issues(repo)
+        except RunLimitExceeded as error:
+            late.append(str(error))
         done.set()
         return REPORT
 
@@ -118,6 +124,8 @@ def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     release.set()
     assert done.wait(5)
     assert record.stats.input_tokens == 0
+    # Its next tool call stops it, as its next model request would.
+    assert late == ["run timeout of 0.05 s reached"]
 
 
 def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_path):
