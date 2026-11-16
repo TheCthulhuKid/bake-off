@@ -20,6 +20,7 @@ from bakeoff.runner import (
     result_path,
     run_case,
     run_eval,
+    run_once,
     save_result,
     select_cases,
 )
@@ -126,6 +127,15 @@ def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     assert record.stats.input_tokens == 0
     # Its next tool call stops it, as its next model request would.
     assert late == ["run timeout of 0.05 s reached"]
+
+
+def test_run_once_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
+    monkeypatch.setattr(SETTINGS, "run_timeout", 0.05)
+    release = threading.Event()
+    triage_with(lambda repo: release.wait(5) and REPORT)
+    with pytest.raises(RunLimitExceeded, match="run timeout of 0.05 s reached"):
+        run_once("fake", "tiny")
+    release.set()
 
 
 def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_path):

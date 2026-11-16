@@ -30,12 +30,15 @@ class RunResult(BaseModel):
 
 
 def run_once(impl: str, repo: str) -> RunResult:
-    """Run ``impl`` on ``repo`` once; an unknown repo or impl raises before any model is called."""
+    """Run ``impl`` on ``repo`` once, within the run timeout as an eval run is.
+
+    An unknown repo or impl raises before any model is called.
+    """
     # The repo first: it is the cheap check, and importing a framework can fail on a missing key.
     load_repo(repo)
     triage = get_triage(impl)
     with collect() as stats:
-        report = triage(repo)
+        report = _triage_within_timeout(triage, repo, stats)
     return RunResult(impl=impl, repo=repo, report=report, stats=stats)
 
 

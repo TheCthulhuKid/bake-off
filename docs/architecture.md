@@ -249,14 +249,14 @@ Registered as `pydanticai`, `langgraph` and `anthropic`.
 
 ## Running
 
-`runner.run_once(impl, repo)` checks that the recorded repo exists, imports the
-implementation, runs it once inside `collect()` and returns a `RunResult` (impl, repo, report,
-stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out` also writes it to a new
-file. `runner.result_path` picks the file: a path ending in `.json` is used as given, and any
-other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
-`YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
-before the run starts, so a bad or taken path costs no tokens. Errors from the run itself,
-including `ToolLimitExceeded`, propagate.
+`runner.run_once(impl, repo)` checks that the recorded repo exists, imports the implementation, runs
+it once inside `collect()`, on the same timeout thread as an eval run, and returns a `RunResult`
+(impl, repo, report, stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out` also
+writes it to a new file. `runner.result_path` picks the file: a path ending in `.json` is used as
+given, and any other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp
+as `YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists before
+the run starts, so a bad or taken path costs no tokens. Errors from the run itself, including
+`ToolLimitExceeded`, propagate.
 
 `runner.run_case(impl, case, repeat, judge=None)` is the eval's unit: one run of an
 implementation on one case. Like `run_once` it loads the case's repo and imports the
