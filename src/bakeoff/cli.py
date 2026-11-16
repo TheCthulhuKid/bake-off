@@ -75,8 +75,7 @@ def run(impl: str, repo: str, out: Path | None) -> None:
         save_result(result, out)
 
 
-# Named eval_ so the function doesn't shadow the builtin.
-@main.command("eval")
+@main.command()
 @click.option(
     "--impl",
     type=click.Choice(["all", *IMPLS]),
@@ -101,7 +100,7 @@ def run(impl: str, repo: str, out: Path | None) -> None:
     show_default="results",
     help="Directory for one new <UTC timestamp>-<IMPL>.json per implementation.",
 )
-def eval_(
+def eval(
     impl: str, repeats: int, cases_path: Path, repos: tuple[str, ...], judge: bool, out: Path
 ) -> None:
     """Run the eval cases and save one results file per implementation."""
