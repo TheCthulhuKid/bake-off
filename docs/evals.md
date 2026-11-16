@@ -24,7 +24,9 @@ Only `name` and `repo` are required. Every other field defaults to empty, or to 
 integer, so `labels` keys are issue numbers as written.
 
 A duplicate pair must name two different issues, as in the contract's `DuplicatePair`, and no
-two cases in a file may share a `name`, since results are reported by case name. `load_cases`
+two cases in a file may share a `name`, since results are reported by case name. A file that
+isn't YAML, a case that doesn't validate and a repeated name each raise `ValueError`, naming the
+file, which `bakeoff eval` and `bakeoff rescore` print as a one-line error. `load_cases`
 doesn't check that `repo` exists, since that depends on the fixtures rather than the cases file.
 `runner.check_cases(cases)` does that check against the fixtures, so an eval can stop before
 its first run: it lists each case whose repo has no fixture, and each issue number a case labels

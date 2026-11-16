@@ -42,5 +42,20 @@ def test_load_cases_rejects_repeated_case_names(tmp_path, second, expected):
         load_cases(path)
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("- {name: a, repo: tiny}\n", nullcontext()),
+        ("- name: [unclosed\n", pytest.raises(ValueError, match=r"cases\.yaml is not valid YAML")),
+        ("- {name: a}\n", pytest.raises(ValueError, match=r"cases\.yaml: 1 validation error")),
+    ],
+)
+def test_load_cases_names_the_file_it_cannot_read(tmp_path, text, expected):
+    path = tmp_path / "cases.yaml"
+    path.write_text(text)
+    with expected:
+        load_cases(path)
+
+
 def test_eval_cases_match_their_fixtures():
     assert check_cases(load_cases(PROJECT_ROOT / "evals" / "cases.yaml")) == []

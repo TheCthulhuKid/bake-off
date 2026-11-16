@@ -106,7 +106,7 @@ def eval_(
     try:
         cases = load_cases(cases_path)
     except ValueError as error:
-        raise click.ClickException(f"{cases_path}: {error}") from error
+        raise click.ClickException(str(error)) from error
     # The whole file is checked, so a broken case stops any eval, and selecting can rely on
     # every fixture loading.
     if problems := check_cases(cases):
