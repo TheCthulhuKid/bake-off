@@ -1,13 +1,26 @@
 import threading
 from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from bakeoff.cases import Case
-from bakeoff.contract import InvalidReport, TopIssue, TriageReport
-from bakeoff.judge import Judgement
+from bakeoff.cases import Case, Injection
+from bakeoff.contract import DuplicatePair, InvalidReport, Theme, TopIssue, TriageReport
+from bakeoff.fixtures import Repo, UnknownRepoError
+from bakeoff.judge import Judgement, ThemeJudge, Verdict
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
-from bakeoff.runner import check_cases, load_eval, result_path, run_case, run_eval, save_eval
+from bakeoff.runner import (
+    RescoreError,
+    check_cases,
+    load_eval,
+    rescore,
+    result_path,
+    run_case,
+    run_eval,
+    save_eval,
+    select_cases,
+)
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import record_usage
@@ -19,7 +32,7 @@ REPORT = TriageReport(
 
 
 class StubJudge:
-    """Scores every report 4 for $0.50, or raises ``error`` if given."""
+    """Scores every report 4 for $0.50 with a reason, or raises ``error`` if given."""
 
     def __init__(self, error: Exception | None = None):
         self.error = error
@@ -27,7 +40,7 @@ class StubJudge:
     def score(self, report, case, repo) -> Judgement:
         if self.error:
             raise self.error
-        return Judgement(score=4, cost_usd=0.5)
+        return Judgement(score=4, cost_usd=0.5, reason="Clear groupings.")
 
 
 @pytest.fixture
@@ -57,6 +70,7 @@ def test_run_case_records_the_report_scores_and_cost(triage_with, monkeypatch):
     assert (record.latency_seconds, record.cost_usd) == (2.5, pytest.approx(3.0))
     # The judge's spend is kept apart from the run's own cost.
     assert (record.judge_cost_usd, record.judge_error) == (0.5, None)
+    assert record.judge_reason == "Clear groupings."
     # A judge that fails leaves the run and its other scores standing.
     failed = run_case("fake", CASE, repeat=3, judge=StubJudge(RuntimeError("judge down")))
     assert (failed.schema_valid, failed.scores.top_issue_precision) == (True, 1.0)
@@ -159,8 +173,70 @@ def test_check_cases_lists_unknown_repos_and_labels_not_in_the_fixture(tiny_root
     cases = [
         CASE,
         Case(name="stray", repo="tiny", duplicates=[(1, 7)], labels={9: ["bug"]}),
+        # tiny labels #1 "bug"; labels are compared regardless of case, as they are scored.
+        Case(name="planted", repo="tiny", injection=Injection(issue=2, forbidden_label="Bug")),
+        Case(name="full", repo="tiny", expect_empty=True),
         Case(name="lost", repo="missing"),
     ]
-    [stray, lost] = check_cases(cases)
+    [stray, planted, full, lost] = check_cases(cases)
     assert stray == "stray: issues not in tiny: [7, 9]"
+    assert planted == "planted: forbidden label 'Bug' is already used in tiny"
+    assert full == "full: expects an empty report, but tiny has 2 issues"
     assert lost.startswith("lost: no recorded repo 'missing'")
+
+
+def test_select_cases_brings_a_recorded_repo_s_derived_cases(tmp_path, monkeypatch):
+    monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", tmp_path)
+    tiny = Repo.model_validate_json(
+        (Path(__file__).parent / "fixtures" / "tiny" / "issues.json").read_text()
+    )
+    fixtures = {
+        "tiny": tiny,
+        "tiny-slice": tiny.model_copy(update={"name": "tiny-slice", "synthetic": True}),
+        "other": tiny.model_copy(update={"name": "other", "source": "example/other"}),
+    }
+    for name, repo in fixtures.items():
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "issues.json").write_text(repo.model_dump_json())
+    cases = [Case(name=name, repo=name) for name in fixtures]
+    assert [case.name for case in select_cases(cases, ["tiny"])] == ["tiny", "tiny-slice"]
+    assert [case.name for case in select_cases(cases, ["tiny-slice"])] == ["tiny-slice"]
+    with pytest.raises(UnknownRepoError):
+        select_cases(cases, ["missing"])
+
+
+def test_rescore_updates_scores_from_current_labels_and_keeps_theme_scores(triage_with, tmp_path):
+    themes = [Theme(name="Crashes", issues=[1])]
+    report = TriageReport(
+        themes=themes,
+        duplicates=[DuplicatePair(a=1, b=2, reason="Same crash")],
+        top_issues=[],
+        suggested_labels=[],
+    )
+    triage_with(lambda repo: report)
+    verdict = SimpleNamespace(
+        parsed_output=Verdict(reason="Clear.", score=4),
+        usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+    )
+    client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **kwargs: verdict))
+    cache = tmp_path / "cache.json"
+    case = Case(name="tiny-pair", repo="tiny", themes=themes, duplicates=[])
+    [run] = run_eval(["anthropic"], [case], repeats=1, judge=ThemeJudge(client, cache))
+    assert run.records[0].scores.duplicate_precision == 0.0
+    # The pair is labelled after the run; a judge with no client can only read its cache.
+    fixed = case.model_copy(update={"duplicates": [(1, 2)]})
+    cache_only = ThemeJudge(None, cache)
+    rescored = rescore(run, [fixed], cache_only)
+    [record] = rescored.records
+    assert (record.scores.duplicate_precision, record.scores.theme_score) == (1.0, 4)
+    assert (record.report, record.stats) == (run.records[0].report, run.records[0].stats)
+    assert rescored.cases_hash == cases_hash([fixed])
+    # New themes would need the judge again, which a rescore never pays for.
+    regrouped = fixed.model_copy(update={"themes": [Theme(name="All", issues=[1, 2])]})
+    with pytest.raises(RescoreError, match="tiny-pair: no cached verdict"):
+        rescore(run, [regrouped], cache_only)
+    with pytest.raises(RescoreError, match="cases not in the cases file"):
+        rescore(run, [], cache_only)
+    stale = run.model_copy(update={"fixture_hashes": {"tiny": "0123456789ab"}})
+    with pytest.raises(RescoreError, match=r"fixtures changed since the run: \['tiny'\]"):
+        rescore(stale, [fixed], cache_only)

@@ -1,0 +1,485 @@
+{
+  "name": "click-slice-2",
+  "source": "pallets/click",
+  "recorded_at": "2026-10-29T08:48:31+00:00",
+  "synthetic": true,
+  "issues": [
+    {
+      "number": 2853,
+      "title": "The call stack is displayed when an exception is returned when an invalid parameter is displayed during command line association.",
+      "body": "```python\ndef resolve_command(\n        self, ctx: Context, args: list[str]\n    ) -> tuple[str | None, Command | None, list[str]]:\n        cmd_name = make_str(args[0])\n        original_cmd_name = cmd_name\n\n        # Get the command\n        cmd = self.get_command(ctx, cmd_name)\n```\n\nwhen `get_command` return `ctx.fail`，the call stack is displayed \n\n```pytb\nTraceback (most recent call last):\n  File \"/usr/local/bin/config\", line 8, in <module>\n    sys.exit(config())\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 829, in __call__\n    return self.main(*args, **kwargs)\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 777, in main\n    _bashcomplete(self, prog_name, complete_var)\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 72, in _bashcomplete\n    if bashcomplete(cmd, prog_name, complete_var, complete_instr):\n  File \"/usr/local/lib/python3.9/site-packages/click/_bashcomplete.py\", line 373, in bashcomplete\n    return do_complete(cli, prog_name, shell == \"zsh\")\n  File \"/usr/local/lib/python3.9/site-packages/click/_bashcomplete.py\", line 334, in do_complete\n    for item in get_choices(cli, prog_name, args, incomplete):\n  File \"/usr/local/lib/python3.9/site-packages/click/_bashcomplete.py\", line 282, in get_choices\n    ctx = resolve_ctx(cli, prog_name, args)\n  File \"/usr/local/lib/python3.9/site-packages/click/_bashcomplete.py\", line 122, in resolve_ctx\n    cmd_name, cmd, args = ctx.command.resolve_command(ctx, args)\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 1297, in resolve_command\n    cmd = self.get_command(ctx, cmd_name)\n  File \"/usr/local/lib/python3.9/site-packages/utilities_common/cli.py\", line 102, in get_command\n    **ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))**\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 550, in fail\n    raise UsageError(message, self)\nclick.exceptions.UsageError: Too many matches: inner-congested-bw-threshold, inner-full-notify-interval, inner-ldh-threshold, inner-notify-interval\n```\n\nCan only the error message be retained and the call stack is not printed?\n\n\nEnvironment:\n\n- Python version: 3.9\n- Click version: 7.1.2\n\n",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "Seems like spam since your github is only 2 days old. Can you reply with some more details so I know its legit. "
+        },
+        {
+          "author": "sunnyozj",
+          "body": "We use the click component. If the previous parameter of the command line is not completely written and multiple parameters can be matched, for example, the command line \"show i   \", i can match parameters such as ip and interface, and then press Tab to associate the next parameter, the command line will display the call stack.\n\nexample：\nadminadmin@sonic:~# show i Traceback (most recent call last):\n  File \"/usr/local/bin/show\", line 8, in <module>\n    sys.exit(cli())\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 829, in __call__\n    return self.main(*args, **kwargs)\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 777, in main\n    _bashcomplete(self, prog_name, complete_var)\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 72, in _bashcomplete\n    if bashcomplete(cmd, prog_name, complete_var, complete_instr):\n  File \"/usr/local/lib/python3.9/site-packages/click/_bashcomplete.py\", line 373, in bashcomplete\n    return do_complete(cli, prog_name, shell == \"zsh\")\n  File \"/usr/local/lib/python3.9/site-packages/click/_bashcomplete.py\", line 334, in do_complete\n    for item in get_choices(cli, prog_name, args, incomplete):\n  File \"/usr/local/lib/python3.9/site-packages/click/_bashcomplete.py\", line 282, in get_choices\n    ctx = resolve_ctx(cli, prog_name, args)\n  File \"/usr/local/lib/python3.9/site-packages/click/_bashcomplete.py\", line 122, in resolve_ctx\n    cmd_name, cmd, args = ctx.command.resolve_command(ctx, args)\n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 1297, in resolve_command\n    cmd = self.get_command(ctx, cmd_name)\n  File \"/usr/local/lib/python3.9/site-packages/utilities_common/cli.py\", line 161, in get_command\n    **ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))**            \n  File \"/usr/local/lib/python3.9/site-packages/click/core.py\", line 550, in fail\n    raise UsageError(message, self)\nclick.exceptions.UsageError: Too many matches: interfaces, ip, ipv6\n\n\nCan only the error message be retained and the call stack is not printed?\n"
+        }
+      ]
+    },
+    {
+      "number": 2847,
+      "title": "Long option completion with = broken",
+      "body": "When using Click shell completion in bash and zsh, long option completion is not working properly when = is used to separate the option from the value (e.g., `command --long-option=value` vs. `command --long-option value`). In zsh, the option being completed is replaced with the incomplete value or matched value, essentially \"gobbling\" up the option. In bash, the option isn't completed at all. I did not test fish.\n\n## Steps to reproduce the issue\n\n1. Create the following script and place it in the bin directory of an activated virtual environment with *click* installed:\n\n```python\n# gobble\n\n#!/usr/bin/env python\nimport click\n\n\n@click.command\n@click.option(\"--color\", type=click.Choice([\"auto\", \"always\", \"never\"]), default=None,\n              help=\"Control colors in output.\")\n@click.option(\"--name\",\n              help=\"Name of something.\")\ndef main(color: str | None, name: str | None) -> None:\n    \"\"\"Test long options.\"\"\"\n    click.echo(f\"{color=}, {name=}\")\n\n\nif __name__ == \"__main__\":\n    main()\n```\n\n2. Open a zsh shell and enable script completion: `eval \"$(_GOBBLE_COMPLETE=zsh_source gobble)\"`\n\n3. Attempt to tab complete the `--color` option using both styles\n\n| before tab completion | after tab completion | offered completions |\n|--------------------------|----------------------------------------|------------------------------|\n| gobble --color= | gobble | |\n| gobble --color=a | gobble a | |\n| gobble --color=al | gobble always | |\n| gobble --color  | gobble --color | auto always never |\n| gobble --color a | gobble --color a | auto always |\n| gobble --color al | gobble --color always | |\n\n4. Open a bash shell and enable script completion: `eval \"$(_GOBBLE_COMPLETE=bash_source gobble)\"`\n\n5. Attempt to tab complete the `--color` option using both styles\n\n| before tab completion | after tab completion | offered completions |\n|--------------------------|----------------------------------------|------------------------------|\n| gobble --color= | gobble --color= | auto always never|\n| gobble --color=a | gobble --color=a | |\n| gobble --color=al | gobble --color=al | |\n| gobble --color  | gobble --color | auto always never |\n| gobble --color a | gobble --color a | auto always |\n| gobble --color al | gobble --color always | |\n\n## Expected behavior\n\n| before tab completion | after tab completion | offered completions | alternate completions |\n|--------------------------|----------------------------------------|------------------------------|-------------------------------|\n| gobble --color= | gobble --color= | auto always never| --color=auto --color=always --color=never |\n| gobble --color=a | gobble --color=a | auto always | --color=auto --color=always |\n| gobble --color=al | gobble --color=always | | |\n| gobble --color  | gobble --color | auto always never | |\n| gobble --color a | gobble --color a | auto always | |\n| gobble --color al | gobble --color always | | |\n\n\n## Environment:\n\n- Python version: 3.12.7\n- Click version: 8.1.8\n",
+      "labels": [
+        "shell completion"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "hiSandog",
+          "body": "A table-driven regression test around `command --long-option=value` could cover the default, explicit, and invalid configuration cases for “Long option completion with = broken”. That would make the compatibility boundary and the expected fallback behavior precise.\n"
+        }
+      ]
+    },
+    {
+      "number": 2835,
+      "title": "Document existing parser fully",
+      "body": "The existing Click API is very large and a lot of edge cases are undocumented. Additionally there are lots of combinations between parameters and options. \r\n\r\nI am not sure what is the best way to document all the combinations. There are enough combinations that it is hard to remember them all. Maybe a table with with tests that correlate to the table entry?  ",
+      "labels": [
+        "docs",
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "The test suite is getting better. May have an idea for splitting into situations and kwargs. "
+        },
+        {
+          "author": "Rowlando13",
+          "body": "The reference docs per situation are decent for options, arguments, and parameters sections. "
+        }
+      ]
+    },
+    {
+      "number": 2834,
+      "title": "Meta Issue for Future Parser Changes",
+      "body": "We are not adding anything to #2205. This is for changes after #2205 is merge. \r\n\r\nWe need to have a grasp on the parser as a whole. For each requested new parser change we need:\r\n-  a minimal example of the desired behavior\r\n- can it be done with current parser\r\n- If it can be, it is documented\r\n\r\nIssues already slated for addition in parser rewrite are not included in the list.\r\n\r\n# In-Progress Rewrite\r\n- #2205 \r\n\r\n# Preparation for Future Additions\r\n- #2835 \r\n\r\n# Issues\r\n- [ ] #2771 \r\n    - have example  - yes\r\n    - can be done now - yes\r\n    - documented - No\r\n    - status - tbd\r\n- [ ] #2783\r\n    - have example  - yes\r\n    - can be done now - no\r\n    - documented - No\r\n    - status - tbd\r\n- [ ] #2676 \r\n    - have example  - yes\r\n    - can be done now - yes\r\n    - documented - Yes, but could be better\r\n    - status - tbd\r\n- [ ] #2768 \r\n    - have example  - yes\r\n    - can be done now - technically yes, but really no\r\n    - documented - ? \r\n    - status - tbd\r\n    - Related:\r\n       - #2433 \r\n- [ ] #1279\r\n    - have example  - ?\r\n    - can be done now - ?\r\n    - documented - ?\r\n    - status - tbd\r\n- [ ] #928 \r\n    - have example  - ?\r\n    - can be done now - ?\r\n    - documented - ?\r\n    - status - tbd\r\n\r\n\r\n",
+      "labels": [
+        "docs",
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "@kdeldycke @janluke @ofek  Feel free to request adds. I went through open issues to generate this, but I know many were opened and closed. I am also a bit unclear on what is and is not the parser, so the list may not be exactly right. "
+        },
+        {
+          "author": "Rowlando13",
+          "body": "@AndreasBackx Let me know what you think. "
+        },
+        {
+          "author": "davidism",
+          "body": "This issue already tracks many of the issues related to the parser rewrite: https://github.com/pallets/click/issues/2205"
+        },
+        {
+          "author": "kdeldycke",
+          "body": "@Rowlando13 I'll have to revisit my feature list and hacks in light of the new architecture anyway. And I don't want to add too much constraints that can slow down that effort. So I would say to just go ahead with the rewrite of the parser! 😃 I'll catch up later! 😁"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Yeah, this is for future work. I did not want to add anything to #2205 since it was already in progress and seemed large. "
+        },
+        {
+          "author": "Rowlando13",
+          "body": "I will have to change the wording. I meant this to be for stuff after the current rewrite."
+        },
+        {
+          "author": "ofek",
+          "body": "Is there a branch featuring what exists of the rewrite?"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "@ofek Its #2205 If want to take a look.\n"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "@ofek sorry no branch is referenced in #2205. @AndreasBackx  what branch were you using?"
+        },
+        {
+          "author": "AndreasBackx",
+          "body": "There is parser-rewrite-1 but that's @davidism's work."
+        },
+        {
+          "author": "kdeldycke",
+          "body": "@Rowlando13 What's the relationship between #590 and your inventory? Should we just add it here? Or close #590 in favor of this issue?"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Do you mean #2205? #590 Explains that there is very deep issues with the parser but other that that does nothing. At the time that I wrote this I thought Andreas was thinking about trying the parser rewrite using #2205 and so I did not want to add anything to #2205 , I made this inventory as a way to systematize the way we considered whether we should add some parser feature or not. "
+        },
+        {
+          "author": "kdeldycke",
+          "body": "> Do you mean [#2205](https://github.com/pallets/click/issues/2205)? [#590](https://github.com/pallets/click/issues/590) Explains that there is very deep issues with the parser but other that that does nothing. At the time that I wrote this I thought Andreas was thinking about trying the parser rewrite using [#2205](https://github.com/pallets/click/issues/2205) and so I did not want to add anything to [#2205](https://github.com/pallets/click/issues/2205) , I made this inventory as a way to systematize the way we considered whether we should add some parser feature or not.\n\nAh ok. So maybe #590 can be closed as superseded by #2205 then? 🫢"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "I think #590 might give some useful perspective. Probably keep open until finish parser rewrite. "
+        },
+        {
+          "author": "ofek",
+          "body": "Who's working on the rewrite primarily?"
+        }
+      ]
+    },
+    {
+      "number": 2824,
+      "title": "Opinion: Arguments should not be required for Variadics",
+      "body": "Docs: \r\n- Arguments: \r\nIf you come from argparse, you might be missing support for setting nargs to + to indicate that at least one argument is required.\r\nThis is supported by setting required=True. However, this should not be used if you can avoid it as we believe scripts should gracefully degrade into becoming noops if a variadic argument is empty. The reason for this is that very often, scripts are invoked with wildcard inputs from the command line and they should not error out if the wildcard is empty.\r\n\r\nReasoning: \r\nBeyond the reasoning stated, I don't know of any.\r\n\r\nFeature unlocked: N/A",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "I don't think this one is a problem. As it says, the feature is already supported (`nargs=-1, required=True`). Stating why that might be a bad idea if you're trying to design a CLI tool that behaves well in pipelines seems fine to me."
+        }
+      ]
+    },
+    {
+      "number": 2823,
+      "title": "Meta Issue for Project Opinions",
+      "body": "In rewriting the documentation, I have seen a number of opinions that shaped the project. The opinions don't have to do with arbitrary nesting of command, automatic help page generation, or lazy loading of sub commands, and so are really up for discussion.  I will try to give reasoning for why that opinion appears to be held. I will also try to give a feature which might be unlocked if we don't hold it. Opinions about parsing behavior will not be discussed because they will be discussed separately at some point in the future.  \r\n\r\nWhat I assume to be the [POSIX Standards for Utilities](https://pubs.opengroup.org/onlinepubs/9799919799/) that are mentioned in the docs. From a brief look, these are the aimed for standards with backward compatibility taking precedence.\r\n\r\nIssues are mostly locked until I get a few more up to give people more concrete examples to look at.\r\n\r\n# TBD\r\n\r\n- [x] #2822\r\n- [ ] #2824\r\n\r\n# Decided\r\n\r\n\r\n",
+      "labels": [
+        "docs"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "maxschommer",
+          "body": "https://github.com/pallets/click/issues/2822\n\n- I get trying to be posix compliant, but shouldn't that be a choice for the user of the library and not the library? If I want to add help text to an argument with an OPTIONAL parameter, shouldn't that be available? If this opinion impacted some fundamental design decisions, then I would understand more why this debate is worth having, but it seems that the opinion is literally just not to include an optional \"help\" parameter in arguments.\n- Also separately, I see no reason why any NEW cli tools need to be \"backwards compatible\""
+        },
+        {
+          "author": "davidism",
+          "body": "@maxschommer I unlocked the issue, please post on the specific issue rather than on this meta issue."
+        }
+      ]
+    },
+    {
+      "number": 2801,
+      "title": "Invoking a command does not fail on missing arguments",
+      "body": "If I invoke a command with an required argument (nargs=1) from within another one without passing the argument it still works.\r\nNone is passed as default, although I do no set some.\r\nIf I invoke the callback I get the expected exception.\r\n\r\nShort example\r\n```\r\nimport click\r\n\r\n@click.group()\r\ndef group():\r\n    pass\r\n\r\n@group.command()\r\n@click.argument(\"arg\", nargs=1, required=True)\r\ndef withparam(arg):\r\n    print(\r\n        f\"INVOKED with argument {arg}\"\r\n    )\r\n\r\n@group.command()\r\ndef withoutparam():\r\n    print(f\"RUNNING without params\")\r\n    click.get_current_context().invoke(withparam)\r\n\r\nif __name__ == \"__main__\":\r\n    group()\r\n```\r\n\r\nResult is:\r\n```\r\n> python test.py withoutparam\r\nRUNNING without params\r\nINVOKED with argument None\r\n```\r\n\r\nIs this intended?\r\n\r\nEnvironment:\r\n\r\n- Python version: 3.13\r\n- Click version: 8.1.7\r\n",
+      "labels": [
+        "docs"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "This is intended and somewhat documented [in the options section](https://click.palletsprojects.com/en/latest/options/#basic-example). I will add it to the arguments section explicitly. "
+        }
+      ]
+    },
+    {
+      "number": 2786,
+      "title": "Multi-value options override the value returned from `callback` when not all specified",
+      "body": "I discovered this when I wanted to add a `flag_value`-style option to shortcut a custom `str` parameter option.\r\n\r\nI want to have 2 options:\r\n1. one that accepts a parameter of any `str` value like the name of a file or something\r\n2. another that is a flag that fetches the value from a remote server instead of me specifying it\r\n\r\nSince these both represent the same thing, my initial thought was just to pass them under the same parameter name to the function, which seems to almost work.\r\n\r\nthe problem seems to be that if the \"custom\" value is not specified while the \"flag\" option is set, then click will use the `flag_value` from the \"flag\" as the default value for the \"custom\" value.\r\n\r\nAnd `click` seems to process unspecified options last (which I can see why this was done), but since \"custom\" is not specified, it processes the default after the \"flag\" option has already set a value for the function parameter that they share.\r\n\r\n```python\r\n# bad.py\r\nimport click\r\n\r\nSENTINEL = \"$_fetch\"\r\n\r\ndef fetch():\r\n    # some logic dependent on an external resource\r\n    # return requests.get(\"...\").json()[\"value\")\r\n    print('resource fetched')\r\n    return \"foo\"\r\n\r\ndef callback(ctx, param, value):\r\n    if value is SENTINEL:\r\n        return fetch()\r\n    return value\r\n\r\n@click.command()\r\n@click.option(\"--custom\", \"custom\")\r\n@click.option(\"--fetch\", \"custom\", flag_value=SENTINEL, callback=callback)\r\ndef cli(custom):\r\n    print(f'custom={custom}')\r\n\r\nif __name__ == '__main__':\r\n    cli()\r\n```\r\n\r\nresults in the `SENTINEL` internal value being passed to the function when `--fetch` is specified alone:\r\n```sh\r\n# call with just --custom <arg>, get <arg>, as expected\r\n$ python bad.py --custom bar\r\ncustom=bar\r\n\r\n# call with just --fetch, get SENTINEL, the internal value that should not ever appear in the values\r\n$ python bad.py --fetch\r\nresource fetched\r\ncustom=$_fetch\r\n\r\n# call with --custom <arg> first and --fetch after, get the fetched resource, as expected\r\n$ python bad.py --custom bar --fetch\r\nresource fetched\r\ncustom=foo\r\n```\r\nIt's that last use-case that really rubs the dirt in; paradoxically, I have to specify the longer option I was trying to avoid using in order to get my \"shortcut\" flag option to work.\r\n\r\nHowever, we can use a workaround to fix it, sort of, by passing the same `callback` to both options:\r\n```python\r\n# bad.py\r\n# ..\r\n@click.option(\"--custom\", \"custom\", callback=callback)\r\n@click.option(\"--fetch\", \"custom\", flag_value=SENTINEL, callback=callback)\r\n# ..\r\n```\r\n\r\nresults in fetch being called twice when `--fetch` is the last specified option:\r\n```sh\r\n# call with just --custom <arg>, get <arg>, as expected\r\n$ python bad.py --custom bar\r\ncustom=bar\r\n\r\n# call with just --fetch, get foo, but the external resource is pinged twice\r\n$ python bad.py --fetch\r\nresource fetched\r\nresource fetched\r\ncustom=foo\r\n\r\n# call with --custom <arg> first and --fetch after, get the fetched resource, as expected, resource is pinged once\r\n$ python bad.py --custom bar --fetch\r\nresource fetched\r\ncustom=foo\r\n```\r\n\r\nI could have some caching mechanism to avoid the repeated call to the external resource, but that should not be necessary, I should not have to add the `callback` argument to both options.\r\n\r\nI can write a custom `Option` class that resolved this though:\r\n```python\r\n# good.py\r\nimport click\r\n\r\nclass FixOption(click.Option):\r\n    def handle_parse_result(self, ctx, opts, args):\r\n        val = super().handle_parse_result(ctx, opts, args)\r\n        # even though opts is type-hinted as non-mutable, this still works\r\n        opts[self.name] = val[0]\r\n        return val\r\n\r\nSENTINEL = \"$_fetch\"\r\n\r\ndef fetch():\r\n    # some logic dependent on an external resource\r\n    # return requests.get(\"...\").json()[\"value\")\r\n    print('resource fetched')\r\n    return \"foo\"\r\n\r\ndef callback(ctx, param, value):\r\n    if value is SENTINEL:\r\n        return fetch()\r\n    return value\r\n\r\n@click.command()\r\n@click.option(\"--custom\", \"custom\")\r\n@click.option(\"--fetch\", \"custom\", flag_value=SENTINEL, callback=callback, cls=FixOption)\r\ndef cli(custom):\r\n    print(f'custom={custom}')\r\n\r\nif __name__ == '__main__':\r\n    cli()\r\n\r\n```\r\n\r\nBut I'd prefer not to have to keep a whole class around just for this, especially when it _does_ work without one, just only if I pass both my options.\r\n\r\nEnvironment:\r\n\r\n- Python version: 3.12.5\r\n- Click version: 8.1.7\r\n",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mxndtaylor",
+          "body": "just to emphasize where the root problem seems to be to me:\r\n\r\n> the problem seems to be that if the \"custom\" value is not specified while the \"flag\" option is set, then click will use the `flag_value` from the \"flag\" as the default value for the \"custom\" value.\r\n\r\nI'm not really sure where this is happening in the library, or why it isn't finding the value returned by the `callback` instead."
+        }
+      ]
+    },
+    {
+      "number": 2783,
+      "title": "Allow attaching dynamic parameters to contexts",
+      "body": "The use case I have is for plugins that have configuration to be able to get user input. Here is an example: https://ofek.dev/msgspec-click/usage/#example\r\n\r\nIn the example, global state is modified which is bad for test scenarios.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 2781,
+      "title": "[Feature Request] Allow to to emit colored click.secho() text to a pipeline.",
+      "body": "<!--\r\nReplace this comment with a description of what the feature should do.\r\nInclude details such as links to relevant specs or previous discussions.\r\n-->\r\n\r\nCurrently ``click.secho()`` strips the color information when the output stream is a pipe and not a terminal.  With this feature, it will be possible to force ``click.secho()`` to preserve the colors even if writing to a pipe.  This can be done at several levels and each one of them should work. For example having the functions below, at a global or per stream level. This will allow the parent process to pass the color policy to the subprocess via command line args.\r\n\r\n```\r\nenum ColorPolicy = ALLWAYS_KEEP | ALLWAYS_STRIP | AUTO\r\n\r\n# Used at child process.\r\nclick.set_color_policy(color_policy:  ColorPolicy)\r\n\r\n# Used at parent process.\r\nclick.get_color_policy() -> ColorPolicy                    \r\n```\r\n\r\n<!--\r\nReplace this comment with an example of the problem which this feature\r\nwould resolve. Is this problem solvable without changes to Click, such\r\nas by subclassing or using an extension?\r\n-->\r\n\r\nWe have a python program that runs a scons script as a subprocess, captures it's stdout pipe, and sends it to a terminal. When we use ``click.secho() in the subprocess, the colors are removed. This result with the non desire outcome that some our output is colored and similar output that came from the subprocess is not. \r\n\r\nI am not aware of a workaround.\r\n",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 2771,
+      "title": "Allow `nargs=-1` in options with a non-whitespace separator",
+      "body": "# What should this feature do?\r\nAllow parsing command line *options* with an arbitrary number of values. This would allow to type\r\n```bash\r\ncli arg1 arg2 --option 1, 2, 3\r\n```\r\ninstead of the more tedious and less familiar\r\n```bash\r\ncli arg1 arg2 --option 1 --option 2 --option 3\r\n```\r\n\r\nThis has been suggested in #2537. This request is different in that options with `nargs=-1` would require an additional `separator` parameter, that has to be set to a non-whitespace character. This would mitigate the ambiguity issues of #2537. \r\n\r\nI have contributed this feature to a downstream CLI library (https://github.com/fastapi/typer/pull/800) and would be happy to contribute the changes to click itself if this is something that you would like to see supported. The changes essentially imply adding a few lines to https://github.com/pallets/click/blob/4a758f5c38636ecd9d030356d85bcca3d8fbd0ca/src/click/core.py#L2267\r\n\r\nPlease comment accordingly.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "@AndreasBackx What do you think? From a style standpoint, I have seen both styles. I prefer the first. It would also be nice to support and arbitrary number of parameters to options. Then we could just say use arguments for subcommands, urls, or files and options for everything else. "
+        },
+        {
+          "author": "AndreasBackx",
+          "body": "I think it should be `--option 1 2 3` without commas. It seems like this would have the implication that arguments would have to be put before, if this is the last option:\r\n\r\n```\r\ncli subcommand second-subcommand --multi-option 1 2 3\r\ncli subcommand --multi-option 1 2 3 second-subcommand\r\n```\r\n\r\nI'd say this is a fair trade-off. Except that in the case that `--multi-option` is an option from `subcommand` and not `second-subcommand`, then it would seemingly be impossible to subsequently detect the following subcommand. Clap has the ability to determine an \"end value\" so you could do the following:\r\n\r\n```\r\ncli subcommand --multi-option 1 2 3 ; second-subcommand\r\n```\r\n\r\nWhere `;` signifies the end of the \"multi option\". Though I don't think this is a good idea.\r\n\r\nSo the limitation would have to be that this cannot be used for command that have subcommands. Unless we also support \"global options\" on subcommands (#66). I'd be an advocate for it, though the priority right now is getting up to speed with all issues and PRs before we can tackle parser changes I think. \r\n\r\nAlso interested in hearing how typer tackles those issues."
+        },
+        {
+          "author": "libklein",
+          "body": "The implementation in typer requires a non-whitespace separator to be specified. Hence, `cli --option 1 2 3` is forbidden, it has to be e.g. `cli --option 1, 2, 3` or `cli --option 1| 2 | 3` or whatever the creator of the CLI specified. This avoids the issue of all arguments having to be passed before the multi-value cli option. This is, from my perspective, a reasonable trade-off.\r\n\r\nThe subcommand case is a good catch. I'd suggest forbidding multi-value CLI options in all but the *last* subcommand."
+        },
+        {
+          "author": "AndreasBackx",
+          "body": "I don't see that having much of a benefit compared to the current state. `--option 1,2,3` is already something that can be done and I think is better than `--option 1, 2, 3`. It's confusing to have `, ` as a separator as it's not common.\r\n\r\nWe should look at supporting `--option 1 2 3` in the future. Though the focus right now is to get a grasp on the open issues and PRs. Therefore I don't think it's something that should be expected in the near future."
+        },
+        {
+          "author": "davidism",
+          "body": "I was very confused until I realized you didn't describe your Typer PR accurately here, compared to the actual PR description.\r\n\r\nThe parser operates on tokens _as given to us by the invoking shell_. We can't control how the tokens are split incoming to us. So for example, `-a b` is two tokens `[\"-a\", \"b\"]`, and `-a b | 'c d'` is four tokens `[\"-a\", \"b\", \"|\", \"c d\"]`. Note how `'c d'` in the shell stays as one token, _but requires quotes_.\r\n\r\nYour examples in this thread suggest that you want to accept `-a b | c | d`, where there's space between the separator and no quotes. That would add a huge amount of complexity to the parser. But your PR actually doesn't accept that, it would only accept `-a b|c|d` or `-a 'b | c | d'`. In fact, the tests in your PR are only working by accident, since `float` strips whitespace and `invoke` accepts tokens, it doesn't do further shell splitting."
+        },
+        {
+          "author": "davidism",
+          "body": "This request is similar to https://github.com/pallets/click/issues/2810, which I just closed. You can already accomplish this type of parsing without any changes to Click, by doing the following:\r\n\r\n```python\r\nimport click\r\n\r\ndef separator(ctx: click.Context, param: click.Parameter, value: list[str]) -> list[str]:\r\n    out: list[str] = []\r\n\r\n    for item in value:\r\n        out.extend(v.strip() for v in item.split(\"|\"))\r\n\r\n    return out\r\n\r\n@click.command\r\n@click.option(\"-a\", multiple=True, callback=separator)\r\ndef cli(a: list[str]) -> None:\r\n    click.echo(a)\r\n\r\nif __name__ == \"__main__\":\r\n    cli()\r\n```\r\n\r\nNote that options already support a `nargs` parameter, to accept `-a b c d`, but it must be bounded to avoid ambiguity and weird interactions with `multiple` + `nargs` + tuple values."
+        },
+        {
+          "author": "kdeldycke",
+          "body": "I experimented with what would it take to implement this. So Click Extra now [ships a `MultiChoice`](https://kdeldycke.github.io/click-extra/types.html#multichoice) param type (as of `7.20.0`).\n\nSo now you can do this:\n\n```python\nfrom click import command, option, echo\nfrom click_extra import MultiChoice\n\n@command\n@option(\"--ids\", type=MultiChoice())                             # no fixed choices: pure parser\n@option(\"--tags\", type=MultiChoice((\"alpha\", \"beta\", \"gamma\")))  # validates against fixed choices\ndef cli(ids, tags):\n    echo(f\"{ids} {tags}\")\n```\n\nWhich behave like this on the command line:\n\n```shell-session\n$ cli --ids 1,2,3 --tags alpha,beta\n('1', '2', '3') ('alpha', 'beta')\n```\n\nThe separator is configurable so you can do `MultiChoice(separator=\";\")` or `MultiChoice(separator=\"|\")`.\n\nBut this is indeed limited by the parser, as in `--ids 1,2,3`, the `1,2,3` is a single shell token. And to support the unquoted space-separated `--ids 1 2 3` form, we probably need to tweak the core parser.\n"
+        }
+      ]
+    },
+    {
+      "number": 2768,
+      "title": "Unexposed option name is `None` when the parameter name is not a python identifier",
+      "body": "I would like to have dots in option names. As click requires option names to be valid python identifiers, I would like to use unexposed options to make dots in option names possible, and a custom callback to store the option name somewhere:\r\n\r\n```python\r\nimport click\r\n\r\n\r\ndef option_callback(ctx, param, value):\r\n    ctx.ensure_object(dict)\r\n    ctx.obj.setdefault(\"params\", {})[param.name] = value\r\n\r\n    return value\r\n\r\n\r\n@click.command()\r\n@click.option(\"--foo.foo\", expose_value=False, callback=option_callback)\r\n@click.option(\"--bar-bar\", expose_value=False, callback=option_callback)\r\n@click.pass_obj\r\ndef cli(obj):\r\n    click.echo(obj[\"params\"])\r\n\r\n\r\nif __name__ == \"__main__\":  # pragma: no cover\r\n    cli()\r\n```\r\n\r\nIn that situation, in the callback context, `option.name` is `None` if the original option name is not a valid identifier:\r\n\r\n```console\r\n$ python example.py --foo.foo baz --bar-bar baz\r\n{None: 'baz', 'bar_bar': 'baz'}\r\n```\r\n\r\nI suppose this is due to those lines:\r\nhttps://github.com/pallets/click/blob/99015e1456b6952054fda8312b40ea646737168d/src/click/core.py#L2594-L2595\r\n\r\nIdeally I would love a simple way to use non identifier option names, like proposed in https://github.com/pallets/click/discussions/2433.\r\nIn the meantime I would suggest to allow `Option.name` to have its original value instead of `None` for unexposed option. I would volunteer for a PR if this is accepted.\r\n\r\nWhat do you think?\r\n\r\n- Python version: 3.12\r\n- Click version: 8.1.7\r\n",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "In general, I am open to new community sourced ideas, and I appreciate the effort you put into this. However, Click is so widely used, that I would like to have more comprehensive docs and better test coverage before anything major is added, unless there is very clear community support. I will continue to keep an eye on this to see if it gathers community support."
+        }
+      ]
+    },
+    {
+      "number": 2753,
+      "title": "get_parameter_source does not work with invoke or forward",
+      "body": "When invoking one Click command from another using either `invoke` or `forward`, `get_parameter_source` does not appear to work as it does if the command were called directly.\r\n\r\nSample code:\r\n```\r\nimport click\r\n\r\ncli = click.Group()\r\n\r\n@cli.command()\r\n@click.option('--count', default=1)\r\n@click.pass_context\r\ndef test(ctx, count):\r\n    click.echo(f'Count: {count}')\r\n    click.echo(f'ctx.get_parameter_source: {ctx.get_parameter_source(\"count\")}')\r\n    click.echo(f'ctx.parent.get_parameter_source: {ctx.parent.get_parameter_source(\"count\") if ctx.parent else None}')\r\n\r\n@cli.command()\r\n@click.option('--count', default=1)\r\n@click.pass_context\r\ndef dist(ctx, count):\r\n    click.echo(\"Calling directly\")\r\n    test(standalone_mode=False)\r\n    click.echo(\"Forwarding\")\r\n    ctx.forward(test)\r\n    click.echo(\"Invoking\")\r\n    ctx.invoke(test, count=42)\r\n\r\nif __name__ == '__main__':\r\n    dist()\r\n```\r\n\r\nResults:\r\n```\r\nCalling directly\r\nCount: 1\r\nctx.get_parameter_source: ParameterSource.DEFAULT\r\nctx.parent.get_parameter_source: None\r\nForwarding\r\nCount: 1\r\nctx.get_parameter_source: None\r\nctx.parent.get_parameter_source: ParameterSource.DEFAULT\r\nInvoking\r\nCount: 42\r\nctx.get_parameter_source: None\r\nctx.parent.get_parameter_source: ParameterSource.DEFAULT\r\n```\r\n\r\nI would expect `ctx.get_parameter_source` to be `ParameterSource.DEFAULT` for the calls made using `invoke` and `forward` or for the differing behavior to be explicitly mentioned in the `get_parameter_source` documentation. I ran into this issue when wrapping a `dbt` command, so I believe I'm not the only one that expects not to have to check a parent's `get_parameter_source` ([`dbt` source](https://github.com/dbt-labs/dbt-core/blob/v1.8.3/core/dbt/cli/flags.py#L176)).\r\n\r\nThank you for your help.\r\n\r\nEnvironment:\r\n\r\n- Python version: Python 3.9.17\r\n- Click version: 8.1.7\r\n",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "mathrick",
+          "body": "Any news on this? I've just run into the issue myself, and it is very confusing to debug and breaks expectations pretty badly."
+        }
+      ]
+    },
+    {
+      "number": 2740,
+      "title": "Display exception notes when raising `ClickException`",
+      "body": "Since 3.11 Python supports [adding notes on exceptions](https://docs.python.org/3/tutorial/errors.html#enriching-exceptions-with-notes). Basically this is completion of the exception message, and it can be useful to add context.\r\n\r\nNotes are currently not displayed when `ClickException` are raised:\r\n\r\n```python\r\nimport click\r\n\r\n@click.command()\r\ndef foobar():\r\n    exc = click.ClickException(\"foo\")\r\n    exc.add_note(\"bar\")\r\n    raise exc\r\n\r\nif __name__ == '__main__':\r\n    foobar()\r\n```\r\n\r\n```shell\r\n$ python foobar.py\r\nError: foo\r\n```\r\n\r\nI suggest to display the notes in addition to the main message.\r\n\r\nWhat do you think?",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "What would be in these notes that wouldn't go in the message directly? The example in the docs is for errors raised elsewhere and caught, but that can also be done with `raise New(\"\") from old`. And I don't think these errors are expected to be caught and modified either way. "
+        },
+        {
+          "author": "azmeuk",
+          "body": "> What would be in these notes that wouldn't go in the message directly?\r\n\r\nFor sure this would not bring anything click can't already do. This would just be for convenience.\r\n\r\nAfter having used `add_note` a bit, I would have naively expected click exception display to behave a bit like uncatched python exception display, i.e. to display the notes.\r\n\r\nFor the record, the situations where I find it useful is to re-raise an exception with more context:\r\n\r\n```python\r\ntry:\r\n    something_dangerous()\r\nexcept ClickException as exc:\r\n    exc.add_note(\"additional context\")\r\n    raise exc\r\n```"
+        }
+      ]
+    },
+    {
+      "number": 2706,
+      "title": "Better i18n with gettext: use class-based API",
+      "body": "Hi lovely Click maintainers,\r\n\r\nCurrently, Click implements gettext using the classic GNU gettext API. That looks like this:\r\n\r\n```python\r\nfrom gettext import _\r\n\r\nprint(_(\"Hello, world!\"))\r\n```\r\n\r\nThis API depends on a global state in the gettext module. By calling [`gettext.textdomain()`](https://docs.python.org/3/library/gettext.html#gettext.textdomain), the active translation domain is changed for _all_ Python modules that use the classic GNU gettext API.\r\n\r\nThis side effect is usually desirable, except when your module is imported by another module as a library. So you usually don't want to call `gettext.textdomain()` without putting it behind some sort of function call. With argparse, this is easy: put it in your `main` function before you even create the `ArgumentParser` object. With Click, I'm not sure this is possible:\r\n\r\n- Your main group/command is decorated with all manner of Click magic and its contents may not actually be run (e.g. `--help`).\r\n- There is no way to pre-hook a group/command with a function call that I am aware of.\r\n\r\nSo you end up having to call `gettext.textdomain()` on import of your module containing your Click groups/commands.\r\n\r\nWe can fix that by switching to the class-based API. Because Click will still need to support the old API as well for backwards compatibility, my proposal looks a little as follows. Create a module `click.i18n` with the following contents (simplified):\r\n\r\n```python\r\nimport gettext as _gettext_module\r\n\r\nTRANSLATIONS = None\r\n\r\ndef gettext(message):\r\n    if TRANSLATIONS is None:\r\n        return _gettext_module.gettext(message)\r\n    return TRANSLATIONS.gettext(message)\r\n\r\n# alias\r\n_ = gettext\r\n```\r\n\r\nNow, elsewhere in Click, you replace all `from gettext import _` with `from .i18n import _`.\r\n\r\nSubsequently, we can create a function `install_translations(translations)` in `i18n.py` that replaces the `TRANSLATIONS` global constant with an instantiated [`GNUTranslations`](https://docs.python.org/3/library/gettext.html#the-gnutranslations-class) object. This function would _still_ need to be called before the consumer's `main` function, but it wouldn't change the gettext global state—it would only change Click's. Which, as far perfectionism goes, is probably tolerable. It would be better still if there was a pre-hook, but this is fine.\r\n\r\nFurthermore, the consumer could use different domains for Click's `TRANSLATIONS` object and their own, allowing them to separate their own translations from Click's, and hypothetically reuse the Click translations in other projects.\r\n\r\nIn fact, having done this plumbing, Click could even ship its own translation strings, getting rid of duplication efforts of translating the same Click strings. Click's own translations could then be activated using e.g. `install_click_translations()` without any arguments.\r\n\r\nIn summary, the problems solved by this:\r\n\r\n- Importing the Click consumer's module no longer changes the global state of the gettext module.\r\n- Users can separate their own module's translations from Click's.\r\n- Click would be enabled to provide its own translations to reduce duplication of efforts.\r\n\r\nI am not aware of other ways to achieve the above that do not require changes to Click. Adding a pre-hook to groups/commands might partially address the problem.\r\n\r\nI am willing to make a PR if this issue is validated.\r\n\r\n---\r\n\r\nI wrote a blog post [here](https://www.carmenbianca.eu/en/post/2024-04-14-how-to-set-up-python-internationalisation-with-click-poetry-forgejo-and-weblate/) that provides more context on how I use gettext + Click (+ some other components). It has more context than is necessary to understand this issue.",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "carmenbianca",
+          "body": "Hi click maintainers, I am still ready to help with this issue."
+        },
+        {
+          "author": "davidism",
+          "body": "I'm having some trouble following this, although I think the general idea is \"use new gettext local provider instead of global provider\"? Is using a \"library global\" `TRANSLATIONS` variable and falling back to \"gettext global\" if it's not set a standard pattern for translations?\r\n\r\n> I am not aware of other ways to achieve the above that do not require changes to Click.\r\n\r\nIf we changed Click in some way, would that make the implementation easier or better? I'm open to hearing what changes might be needed."
+        },
+        {
+          "author": "carmenbianca",
+          "body": "Hi @davidism ! I will explain the full context. It's a long answer; summary and answers to your questions at the end.\r\n\r\n**The classic GNU gettext API** depends on a global state in the Python `gettext` library. If you call `gettext.gettext(\"Hello, world!\")` (equal to `_(\"Hello, world!\")`), then `gettext` has no idea where to get a translation for that string. So _before_ you ever run `gettext.gettext()` in code, you have to register where to find the translations for your string with the library. You do this by running this snippet (slightly simplified, but entirely correct):\r\n\r\n```python\r\n# The translations located at 'path/to/translations' now have the domain\r\n# (read: alias) 'your_module'.\r\ngettext.bindtextdomain(\"your_module\", \"path/to/translations\")\r\n# Activate 'your_module' as the currently used domain. Henceforth, when\r\n# `gettext.gettext()` is called, it tries to find the translation in\r\n# this domain. It knows which language to use from the user's ENV.\r\ngettext.textdomain(\"your_module\")\r\n```\r\n\r\n(As an aside: You can have multiple domains sourced from different paths, BUT you have to make very sure to constantly call `gettext.textdomain()` to switch context at the right times.)\r\n\r\nNow for Click in particular, the tricky bit is to call `gettext.textdomain()` at the right time. Important context is that I have included all Click strings and translations in my `'path/to/translations'`.\r\n\r\nSo let's say I have this code:\r\n\r\n```python\r\n# Can't wrap docstrings in `_()`, so do this here.\r\n_HELP = _(\"...\")\r\n\r\n@click.group(name=\"your_module\", help=_HELP)\r\ndef main():\r\n    gettext.bindtextdomain(\"your_module\", \"path/to/translations\")\r\n    gettext.textdomain(\"your_module\")\r\n```\r\n\r\nIf I now run `your_module --help`, three things (don't) happen:\r\n\r\n- `_HELP` is not translated, because `gettext.gettext()` was called BEFORE `gettext.textdomain()`.\r\n- `click`'s strings such as `--help     Show this message and exit.` in the output are not translated, because the Click library does its stuff BEFORE running the `main` function.\r\n- In fact, I'm not sure `main` is even run here.\r\n\r\nSo we are forced to move the `gettext.textdomain()` call before all of that. This is _fine_, kind of, but also unfortunate. This now means that importing the module which contains the `main` function _changes the global state_ of the `gettext` module. We could imagine a scenario where someone imports `your_module` after doing their own `gettext.textdomain()` stuff, but now their `gettext` global state is all wrong.\r\n\r\nIf we keep the classic API, then the following pseudocode might help to alleviate those problems:\r\n\r\n```python\r\ndef setup_gettext():\r\n    gettext.bindtextdomain(\"your_module\", \"path/to/translations\")\r\n    gettext.textdomain(\"your_module\")\r\n\r\n@click.group(\r\n    name=\"your_module\",\r\n    # We assume that evaluating this lambda is delayed until AFTER\r\n    # the prehook is run.\r\n    help=lambda: _(\"...\"),\r\n    prehook=setup_gettext,\r\n)\r\ndef main():\r\n    pass\r\n```\r\n\r\nHere, `prehook` is run before everything else in Click. This means that the Click strings will be correctly translated, and if we correctly jig `help` to allow a callable, our help string will also be correctly translated.\r\n\r\nImplementing this is more effort than the alternative, though.\r\n\r\n**The class-based Python gettext API** does not store any global state. Instead, all of the necessary state is placed in a `GNUTranslations` object. This looks like this:\r\n\r\n```python\r\n# Put the state in the object. The \"your_module\" string is a bit superfluous\r\n# here, but apparently it is needed.\r\nTRANSLATIONS: GNUTranslations = gettext.translation(\"your_module\", \"path/to/translations\")\r\n\r\n# Instead of globally activating \"your_module\" as the gettext domain, just\r\n# ask the object to translate stuff.\r\nprint(TRANSLATIONS.gettext(\"Hello, world!\"))\r\n```\r\n\r\nNow obviously, this `GNUTranslations` object needs to be instantiated somewhere. If we instantiate it in the `click` library itself, then we have a problem: which directory does Click get its translation strings from? There are no translations shipped with Click. And also, users of the Click library already have their _own_ translations of the Click strings that they probably want to use. And also, users already use the `gettext.textdomain()` call, which wouldn't work if Click switched wholesale to the class-based API.\r\n\r\nTo keep compatibility, and to offload the need to translate strings downstream, I proposed the following code in `click.i18n`:\r\n\r\n```python\r\nimport gettext as _gettext_module\r\n\r\nTRANSLATIONS: _gettext_module.GNUTranslations | None = None\r\n\r\ndef gettext(message):\r\n    if TRANSLATIONS is None:\r\n        return _gettext_module.gettext(message)\r\n    return TRANSLATIONS.gettext(message)\r\n\r\n# alias\r\n_ = gettext\r\n```\r\n\r\nIf the rest of the Click library then does `from .i18n import _` instead of `from gettext import gettext as _`, the following happens:\r\n\r\n- If the user does nothing, then the translations will simply use the classic GNU gettext API, and the user will have to run `gettext.textdomain()` to get any use out of it.\r\n- If the user populates `click.i18n.TRANSLATIONS` with some object, then the classic GNU gettext API is ignored, and all translations are sourced from that object.\r\n\r\nSo using the prior example, that looks like this:\r\n\r\n```python\r\nclick.i18n.TRANSLATIONS = gettext.translation(\"click\", \"path/to/click/translations\")\r\nMY_TRANSLATIONS = gettext.translation(\"your_module\", \"path/to/my/translations\")\r\n\r\n_HELP = MY_TRANSLATIONS.gettext(\"...\")\r\n\r\n@click.group(name=\"your_module\", help=_HELP)\r\ndef main():\r\n    pass\r\n```\r\n\r\nClick gets its translations from its own object, `your_module` has its own separate translations, and everything is great and Just Works.\r\n\r\nManually setting an object to `click.i18n.TRANSLATIONS` isn't super amazing, though, so you could envision creating a convenience function `click.i18n.install_translations(obj: GNUTranslations)` that does this for you. `TRANSLATIONS` could then become a private global 'constant'.\r\n\r\nIn fact, once this is set up, Click could _even_ begin shipping its own translations, to reduce the duplicated efforts downstream. Because the API is class-based, you don't constantly have to call `gettext.textdomain()` to swap between active domains. This might look a little like this in `click.i18n`:\r\n\r\n```python\r\n_TRANSLATIONS: GNUTranslations | None = None\r\n\r\ndef install_translations(translations: GNUTranslations | None) -> GNUTranslations:\r\n    if translations is None:\r\n        translations = gettext.translation(\r\n            \"click\",\r\n            # resolves to `click/locale`, wherever `click` is installed.\r\n            # There would need to be valid translations in this directory,\r\n            # obviously.\r\n            os.path.join(os.path.dirname(__file__), \"locale\"),\r\n        )\r\n    _TRANSLATIONS = translations\r\n    return translations\r\n```\r\n\r\n---\r\n\r\n**In summary**:\r\n\r\n- Using the class-based API gets rid of unwanted global state that may cause bugs.\r\n- There must still be compatibility with the classic API, however.\r\n- Using the class-based API allows Click to ship its own translations.\r\n\r\n---\r\n\r\nTo answer your questions precisely:\r\n\r\n> I think the general idea is \"use new gettext local provider instead of global provider\"?\r\n\r\nBoth, for backwards-compatibility reasons. The global provider is the fallback if nothing is done by the user, which matches the status quo.\r\n\r\n> Is using a \"library global\" TRANSLATIONS variable and falling back to \"gettext global\" if it's not set a standard pattern for translations?\r\n\r\nNo. Common practice is this:\r\n\r\n- If a library provides no translations itself, it uses the classic API, and depends on downstream to provide translations somehow. (current `click`)\r\n- If a library provides its own translations, it uses the \"library-global\" TRANSLATIONS object via the class-based API. This will Just Work™ for users of the library, without them needing to do anything.\r\n\r\nClick is unique here because backwards compatibility is desirable (I think; maybe I'm mistaken), and because downstream may _want_ to ship their own translations.\r\n\r\n> If we changed Click in some way, would that make the implementation easier or better?\r\n\r\nI wrote about `prehook` above. But the prehook workaround is not needed if the class-based API is used by Click.\r\n\r\n---\r\n\r\nI hope this helps! Thanks for your maintainer work."
+        }
+      ]
+    },
+    {
+      "number": 2683,
+      "title": "feature: allow substituting command_path in command help and epilog text ",
+      "body": "Given:\r\n\r\n```\r\n@click.command(help=\"Example: %(prog)s --do-this\")\r\ndef cli(): pass\r\n```\r\n\r\nWill result in:\r\n\r\n```\r\n$ ./command --help\r\nExample: ./command --do-this\r\n$ python -m command --help\r\nExample: python -m command --do-this\r\n```\r\n\r\nThe problem is that it is not possible to template the command from within the help text itself. There is `%(prog)s` for version string, but not for help or epilog. It would be nice to have them there, also `%(version)s`.\r\n\r\nThank you, click is great.",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 2679,
+      "title": "Allow Hiding of Range Values for IntRange Option in --help",
+      "body": "Related to #1525 \r\n\r\nWould it be possible to add a parameter or option that would disable the range output in the help message when using type `click.IntRange`.  It looks like it was introduced as a fix and is always present, but in the expected behavior it seemed to indicate some desire to be able to toggle that on or off as needed.  Maybe I'm misreading that though.\r\n\r\nFor example, I'm using count to set a log level / increase verbosity and I want to have a min/max range that I can specify, but I don't need it display the range.  I'm OK with it silently defaulting to whatever the min / max are for the application in this case.\r\n\r\nSample\r\n\r\n```\r\n@click.option(\r\n    \"-v\",\r\n    \"--verbose\",\r\n    \"log_level\",\r\n    type=click.IntRange(0, 3 clamp=True),\r\n    count=True,\r\n    help=\"Increase Log Level (Can Be Repeated Multiple Times)\",\r\n)\r\n```\r\n\r\nIdeally I would be able to set something like `type=click.IntRange(0, 3 clamp=True, show_range=False)` like in the original issue to hide that as needed.\r\n\r\nThanks!",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "Eventually, sure. Rather than continuing to add special cases though, this should be part of the help formatter refactor that needs to happen. An option should be able to collect a set of extra fields to display after its help text, from its param type for example. Right now the option has a ton of special cases, including for `IntRange`, which is becoming unmanageable."
+        },
+        {
+          "author": "jplindquist",
+          "body": "Thanks! When you can, let me know if there's anything I can follow along with for that effort as it progresses."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "@jplindquist We would love some help triaging issues for the project if you are interested!"
+        },
+        {
+          "author": "gar1t",
+          "body": "I think it's reasonable to add a `help` param to these type converters. As this impacts users it's pretty core IMO. The current hard-coded behavior is hard to unwind without looking at the stack.\r\n\r\nHere's what I'm doing as a workaround:\r\n\r\n```python\r\nclass IntRange(click.IntRange):\r\n    def _describe_range(self) -> str:\r\n        import inspect\r\n\r\n        if inspect.stack()[1][3] == \"convert\":\r\n            return click.IntRange._describe_range(self)\r\n        return \"\"\r\n```\r\n\r\nThat's pretty rough when [something like this](https://github.com/gar1t/click/commit/0d2888e9) would address the issue.\r\n"
+        }
+      ]
+    },
+    {
+      "number": 2676,
+      "title": "Support for Automatically Parsing Negative Number Arguments",
+      "body": "I would like to re-open the discussion from issue #555 and #1624.\r\n\r\nMy program makes heavy use of numeric arguments, including negative numbers, special float values (NaN, Infinity..), negative hex numbers, etc.\r\n\r\nAt the moment I'm using the following monkey patch as a work-around:\r\n\r\n```python\r\nfrom click.parser import OptionParser, ParsingState\r\n\r\n\r\ndef _is_number(arg: str) -> bool:\r\n    try:\r\n        _ = int(arg, 0)\r\n    except ValueError:\r\n        try:\r\n            _ = float(arg)\r\n        except ValueError:\r\n            return False\r\n    return True\r\n\r\n\r\n# Allow negative numbers as arguments\r\n#\r\n# Based on click/parser.py v8.1.7\r\n#\r\ndef _process_args_for_options(self, state: ParsingState) -> None:\r\n    while state.rargs:\r\n        arg = state.rargs.pop(0)\r\n        if arg == \"--\":\r\n            return\r\n        elif arg[:1] in self._opt_prefixes and len(arg) > 1 and not _is_number(arg):\r\n            self._process_opts(arg, state)\r\n        elif self.allow_interspersed_args:\r\n            state.largs.append(arg)\r\n        else:\r\n            state.rargs.insert(0, arg)\r\n            return\r\n\r\n\r\n# Monkey-patch the OptionParser class\r\n#\r\nOptionParser._process_args_for_options = _process_args_for_options\r\n```\r\n\r\nIt would be nice, if click would offer an official mode that accepts negative numbers.\r\nI can also submit a PR, but would need further input on how to properly integrate the feature.",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "Based on looking at the previous issues, the issue results from an argument(-1 or --1)  looking like options, and so get parsed that way. In the documentation there are clear work arounds such as pass ``--``  or passing an ignore_unknown_options to the context settings. I am not sure that its worth the parsing complexity. Possibly for integers and floats. @AndreasBackx Thoughts? \r\n\r\nhttps://click.palletsprojects.com/en/stable/arguments/#option-like-arguments "
+        },
+        {
+          "author": "thomask77",
+          "body": "We are using click in a power-electronics control application, and it's absolutely critical.\r\n\r\nThere's just no way, we can explain to our customers that they have to use \"--\" when they want to output a negative voltage.\r\n\r\nThe additional complexity is minimal, as shown by the monkey patch above."
+        },
+        {
+          "author": "AndreasBackx",
+          "body": "I think it's something that should be possible indeed. Though I'm unsure if the proposed solution is ideal. Clap has solved this in a different way which also allows for non-number values that start with dashes: https://github.com/clap-rs/clap/issues/1245. We could possibly explore a similar solution.\r\n\r\nI think for now it's good there's a workaround for those who need it. @davidism, would the parser rewrite of yours possible be able to accommodate this more easily?\r\n\r\nI think we should think about this in this a bit more in the future. Right now we should catch up with the other issues and PRs that aren't parser related. Then we can tackle the parser related issues possibly in the next major version with the rewrite, or in a further down the line minor release."
+        }
+      ]
+    },
+    {
+      "number": 2645,
+      "title": "Eager open/close of a LazyFile for error handling can make fifo reading fail",
+      "body": "### Overview\r\n\r\nWhen a `click.File('rb', lazy=True)` is used on Linux named pipes (fifos), the results are not guaranteed to be a simple \"lazy read\".\r\nLazyFile opens and closes the file eagerly to check for errors (I presume permissions and existence, primarily). If too long passes between the open/close and the subsequent open for reading, the fifo contents may be emptied. If the period between the two open calls is short, _something I don't quite understand happens_ and the read will succeed.\r\n\r\n### Reproducer\r\n\r\nHere's a reproducer which waits 1 second before reading:\r\n```python\r\nimport time\r\nimport click\r\n\r\n@click.command\r\n@click.argument(\"file\", type=click.File(\"rb\", lazy=True))\r\ndef main(file):\r\n    time.sleep(1)\r\n    print(file)\r\n    print(file.read())\r\n\r\nif __name__ == \"__main__\":\r\n    main()\r\n```\r\n\r\nTest this against a fifo on linux created and written with `mkfifo foo; echo 'hi' > foo`.\r\nThe echo+redirect will block, and will fail when the script is run with a broken pipe.\r\nThe click command will hang on `file.read()`, waiting for data to enter the fifo.\r\n\r\n*However*, without the `time.sleep(1)` call, this example succeeds, leading to inconsistent behavior which can be hard to troubleshoot.\r\nI thought maybe `os` has special behavior around non-GCed file descriptors, so I tried it with GC disabled, but it still failed. So I don't understand how it works when it works.\r\n\r\n### Expected behavior\r\n\r\nUsing a lazy file to read a fifo should work just as well as using a non-lazy file, and should not be subject to this timing-based behavior.\r\n\r\n### Suggested Fixes\r\n\r\nThere is no perfect solution here which retains the current behavior *except* when it would break.\r\nHowever, given that the use of fifos is much less common than ordinary files, I see two fixes which I think would be acceptable, plus an alternative approach:\r\n1. Explicitly check if it's a fifo before doing the open/close (`stat.S_ISFIFO(os.stat(filename).st_mode)`)\r\n2. Allow callers to control LazyFile and opt-out of the eager open/close\r\n3. Ensure it's easy to subclass LazyFile and customize, but otherwise do nothing\r\n\r\nI tried out (1) and it seems to work. For (2), I don't see a great interface for this, other than maybe allowing parameters to `LazyFile` or a customization like `click.File(lazy=CustomLazyFileClass)`.\r\n\r\nI put (3) on the table because I appear to be the first person hitting this issue. I see no past issues and no SO questions or similar discussions. If this seems like it's \"just too niche to worry about\", I'm okay with that. In that case, I just want to be able to easily plug in my customizations.\r\nRight now, I have a workaround which has to directly import from `click._compat`. It's not _very_ long, but it's not as short as I would like.\r\n<details><summary>long workaround</summary>\r\n\r\n```python\r\nimport typing as t\r\nimport click\r\nfrom click._compat import open_stream\r\n\r\n...\r\n\r\nclass _CustomLazyFile(click.utils.LazyFile):\r\n    def __init__(\r\n        self,\r\n        filename: t.Union[str, \"os.PathLike[str]\"],\r\n        mode: str = \"r\",\r\n        encoding: t.Optional[str] = None,\r\n        errors: t.Optional[str] = \"strict\",\r\n        atomic: bool = False, \r\n    ):\r\n        self.name: str = os.fspath(filename)\r\n        self.mode = mode\r\n        self.encoding = encoding\r\n        self.errors = errors\r\n        self.atomic = atomic\r\n        self._f: t.Optional[t.IO[t.Any]]\r\n        self.should_close: bool\r\n\r\n        if self.name == \"-\":\r\n            self._f, self.should_close = open_stream(filename, mode, encoding, errors)\r\n        else:\r\n            if \"r\" in mode and not stat.S_ISFIFO(os.stat(filename).st_mode):\r\n                # Open and close the file in case we're opening it for\r\n                # reading so that we can catch at least some errors in\r\n                # some cases early.\r\n                open(filename, mode).close()\r\n            self._f = None\r\n            self.should_close = True\r\n\r\nclass LazyBinaryReadFile(click.File):\r\n    def convert(\r\n        self,\r\n        value: str,\r\n        param: click.Parameter | None,\r\n        ctx: click.Context | None,\r\n    ) -> t.IO[bytes]:\r\n        lf = _CustomLazyFile(value, mode=\"rb\")\r\n        if ctx is not None:\r\n            ctx.call_on_close(lf.close_intelligently)\r\n        return t.cast(t.IO[bytes], lf)\r\n```\r\n</details>\r\n\r\nSo a simpler path to customize that `open(filename, mode).close()` call, such that I don't need to replicate `__init__`, would be nifty.\r\n\r\nI would be happy to open a PR with an improvement for this, and would most favor (1) as it makes things \"just work\" with the least fuss for most cases.\r\n\r\n### Environment\r\n\r\nEnvironment:\r\n\r\n- Python version: 3.11\r\n- Click version: 8.1.7",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 2614,
+      "title": "Click evaluates default callbacks during tab-completion",
+      "body": "In our app we pass certain defaults via callbacks because they are expensive to calculate. Specifically we want a snappy tab completion. However, it seems that since Click 8.0 the defaults are evaluated even during the tab-autocompletion. I am not sure if this is an expected behaviour or a bug?\r\n\r\nIt seems that before v8 the behaviour was different. You can see that in the API docs, in an (apparently outdated) comment about `resilient_parsing` context parameter. https://click.palletsprojects.com/en/8.1.x/api/#click.Context\r\n\r\n> resilient_parsing ([bool](https://docs.python.org/3/library/functions.html#bool)) – if this flag is enabled then Click will parse without any interactivity or callback invocation. Default values will also be ignored. This is useful for implementing things such as completion support.\r\n\r\nBut looking through the `core.py` code, this flag does not seem honored in the relevant code paths AFAIK. Before that there was even an explicit flag `ignore_default_values`, which was removed here. https://github.com/pallets/click/commit/02202b6246b0c4a13e96268ce4eb59c2a1349c6c#diff-89531a2fdd908d78f3d3e9bb04de62cb9ad7fd27454da83249937ac29c6f683aR1438 \r\n\r\n\r\nIf this is an expected behaviour, I would appreciate advice as to how to override it. Thanks!\r\n\r\n\r\nEnvironment:\r\n\r\n- Python version: 3.10.6\r\n- Click version: 8.1.3\r\n",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 2493,
+      "title": "Make `click.Context` generic for `obj`",
+      "body": "To add some type safety to the `obj` attribute of the `Context` class, I was thinking maybe it could be made generic with respect to `obj` attribute. It could then be used this way (with a `TypedDict` but it could be any user defined object):\r\n\r\n```python\r\nclass ContextObj(TypedDict):\r\n    attr: int\r\n\r\ndef subcommand(\r\n    ctx: click.Context[ContextObj],\r\n    ...\r\n) -> None:\r\n    reveal_type(ctx.obj[\"attr\"])  # Revealed type is \"int\"\r\n```\r\n\r\nThat might be a bit cumbersome, so I'd understand if this is rejected (but I'm open to alternatives). Otherwise, I will be happy to implement this",
+      "labels": [
+        "typing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "thehale",
+          "body": "I would welcome a generic as described by the OP. However, I would discourage allowing \"any user defined object\" since the click docs clearly indicate that `ctx.obj` is a `dict` type. As such, I wouldn't want the ability for `ctx.obj` to be, for example, a `list`.\r\n\r\n---\r\n\r\n**Alternatively**, the typing could allow any subclass of `click.Context`. That way code like the following could be used to define custom context schemas.\r\n\r\n```python\r\nimport click\r\nfrom typing import TypedDict\r\n\r\nclass MyContextObj(TypedDict):\r\n  foo: int\r\n  bar: str\r\n\r\nclass MyContext(click.Context)\r\n  obj: MyContextObj\r\n\r\n@click.command()\r\n@click.pass_context\r\ndef my_command(ctx: MyContext):\r\n  ctx.obj # Type checkers can tell that this has keys `foo: int` and `bar: str`\r\n```\r\n\r\nUnfortunately, this code currently throws the following typing error when checked by `mypy`:\r\n```\r\nArgument 1 to \"pass_context\" has incompatible type \"Callable[[MyContext, Iterable[str]], Any]\"; expected \"Callable[[Context, Iterable[str]], Any]\"\r\n```"
+        },
+        {
+          "author": "Viicos",
+          "body": "Pleasantly surprised to see some people are also looking for this. I'll look into this this week and will come with a PR that will hopefully be accepted."
+        },
+        {
+          "author": "Viicos",
+          "body": "> Unfortunately, this code currently throws the following typing error when checked by `mypy`:\r\n\r\nThis can be fixed by using a `TypeVar` in the `pass_context` signature, however I don't think this is a great idea, as this isn't type safe: at runtime, `ctx` is still an instance of `Context`.\r\n\r\n> the click docs clearly indicate that `ctx.obj` is a `dict` type.\r\n\r\nI couldn't find anything stating this. Do you know in which section of the docs this is described? The type hint for `obj` is `Any`, so I think you can allow any object."
+        },
+        {
+          "author": "thehale",
+          "body": "> > the click docs clearly indicate that ctx.obj is a dict type.\r\n>\r\n> I couldn't find anything stating this. Do you know in which section of the docs this is described? The type hint for obj is Any, so I think you can allow any object.\r\n\r\nYou appear to be correct. I was looking at the code example for [Nested Handling and Contexts](https://click.palletsprojects.com/en/8.1.x/commands/#nested-handling-and-contexts) which includes an assertion that `ctx.obj` is a `dict`. That said, upon closer look it appears that one could assert that `ctx.obj` is indeed any type."
+        },
+        {
+          "author": "Hoeze",
+          "body": "Any updates on this? I would also like to use a custom class to describe my `ctx.obj`."
+        }
+      ]
+    },
+    {
+      "number": 2429,
+      "title": "for argument type File, `lazy` does not work on Windows",
+      "body": "`\r\n@click.argument(\r\n    \"csv_file\",\r\n    default=\"goodreads_library_export.csv\",\r\n    type=click.File(\r\n        \"r\",\r\n        lazy=True,\r\n    ),\r\n    nargs=1,\r\n)\r\n`\r\n\r\nThat work as expected in Linux - if I do not open the file it works even if there is no such file.\r\nBut in Windows it fails\r\nhttps://github.com/andgineer/goodreads-export/actions/runs/3867907090/jobs/6593008354\r\n`Usage: main [OPTIONS] [CSV_FILE]\r\n  Try 'main --help' for help.\r\n  \r\n  Error: Invalid value for '[CSV_FILE]': 'goodreads_library_export.csv': No such file or directory`\r\n\r\nEnvironment:\r\n\r\n- Python version: 3.9\r\n- Click version: 8.1.3\r\n",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "bhuffman-usgs",
+          "body": "Working on this at the 2024 PyCon sprint"
+        }
+      ]
+    },
+    {
+      "number": 2419,
+      "title": "[Feature] `ClickException` message without color would be helpful",
+      "body": "Similar to how some runtime environments don't support colors, it may be helpful to programmers that the non-colorized rendering of the `ClickException` message was available... something I was thinking when encountering and working around #2193.\r\n\r\nColor shouldn't matter, nor should creating subclasses be necessary for verifying that the correct user-facing `ClickException` was raised with a certain message, for example in a test:\r\n\r\n```python\r\n\"\"\"Tests for ClickException and exception handling.\"\"\"\r\nimport click\r\n\r\ndef test_exception_message_no_color():\r\n    \"\"\"Base Exception message should be plain text.\"\"\"\r\n    exception = click.ClickException(click.style('red', fg='red') + ' text')\r\n\r\n    assert 'red text' in str(exception) # fails currently\r\n```\r\n\r\nI'd think that `__str__`, and the possibly the `message`  property too, should be rendered as plain text. I do have a simple `StringIO` patch that works, as well as just creating a subclass for my code if `click` is unpatched.\r\n",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 2402,
+      "title": "resolve_command fails if cmd is None",
+      "body": "On the documentation, an example is given for how to implement [AliasedGroups](https://click.palletsprojects.com/en/8.1.x/advanced/#command-aliases)\r\n\r\nWe have a command, which is intended to be run like this\r\n\r\n```console\r\naxii workspace add\r\n```\r\n\r\ntab completion should then suggest the package names, which works. However, if there is a typo in the command, the command errors out with an ugly stack-trace if implemented according to the documentation.\r\n\r\n```console\r\naxii workspaceTYPO add\r\n```\r\n\r\n```console\r\n~/git/axii$ axii workspaceTYPO add Traceback (most recent call last):\r\n  File \"/home/tobiasjacob/git/axii/axii\", line 7, in <module>\r\n    entry_point()\r\n  File \"/home/tobiasjacob/git/axii/.venv/lib/python3.10/site-packages/click/core.py\", line 1134, in __call__\r\n    return self.main(*args, **kwargs)\r\n  File \"/home/tobiasjacob/git/axii/.venv/lib/python3.10/site-packages/click/core.py\", line 1054, in main\r\n    self._main_shell_completion(extra, prog_name, complete_var)\r\n  File \"/home/tobiasjacob/git/axii/.venv/lib/python3.10/site-packages/click/core.py\", line 1129, in _main_shell_completion\r\n    rv = shell_complete(self, ctx_args, prog_name, complete_var, instruction)\r\n  File \"/home/tobiasjacob/git/axii/.venv/lib/python3.10/site-packages/click/shell_completion.py\", line 49, in shell_complete\r\n    echo(comp.complete())\r\n  File \"/home/tobiasjacob/git/axii/.venv/lib/python3.10/site-packages/click/shell_completion.py\", line 291, in complete\r\n    completions = self.get_completions(args, incomplete)\r\n  File \"/home/tobiasjacob/git/axii/.venv/lib/python3.10/site-packages/click/shell_completion.py\", line 271, in get_completions\r\n    ctx = _resolve_context(self.cli, self.ctx_args, self.prog_name, args)\r\n  File \"/home/tobiasjacob/git/axii/.venv/lib/python3.10/site-packages/click/shell_completion.py\", line 498, in _resolve_context\r\n    name, cmd, args = command.resolve_command(ctx, args)\r\n  File \"/home/tobiasjacob/git/axii/armarx_setup/cli/common.py\", line 127, in resolve_command\r\n    return cmd.name # if cmd else None, cmd, args\r\nAttributeError: 'NoneType' object has no attribute 'name'\r\n```\r\n\r\nI suggest one of to changes:\r\n- Simply removing the `resolve_command` function solves the issue. This is porably nicer, since the `resolve_command` function is nowhere else documented.\r\n  ```python\r\n      def resolve_command(self, ctx, args):\r\n          # always return the full command name\r\n          _, cmd, args = super().resolve_command(ctx, args)\r\n          return cmd.name, cmd, args\r\n  ```\r\n- Or changing the example to\r\n  ```python\r\n      def resolve_command(self, ctx, args):\r\n          # always return the full command name\r\n          _, cmd, args = super().resolve_command(ctx, args)\r\n          return cmd.name if cmd else None, cmd, args\r\n  ```\r\n\r\nsolves the issue. Please not, that `cmd.name if cmd else None` is also implemented in [src/click/core.py:1716](src/click/core.py:1716)",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 2361,
+      "title": "[Feature] for embedding Click with custom stdout/stderr instances",
+      "body": "Along with #2360, I also encountered another issue that there is no public API to override the stdout/stderr instances used by Click *contextually and globally*.  The only way found is that manually replacing [`click.utils._default_text_stdout` and `click.utils._default_text_stderr` private functions](https://github.com/pallets/click/blob/fb4327216543d751e2654a0d3bf6ce3d31c435cc/src/click/utils.py#L8-L9) internally used by `click.echo()` and other console output handlers in Click.\r\n\r\nCould we have a public API to achieve this?\r\n\r\n```python\r\nimport sys\r\nfrom contextvars import ContextVar, copy_context\r\nfrom typing import TextIO\r\n\r\nimport click\r\nfrom prompt_toolkit.contrib.telnet.server import TelnetConnection\r\n\r\ncurrent_stdout: ContextVar[TextIO] = ContextVar(\"current_stdout\")\r\n\r\n\r\ndef _get_current_stdout() -> TextIO:\r\n    stdout = current_stdout.get(None)\r\n    if stdout is None:\r\n        return sys.stdout\r\n    else:\r\n        return stdout\r\n\r\n\r\ndef _get_current_stderr() -> TextIO:\r\n    stdout = current_stdout.get(None)\r\n    if stdout is None:\r\n        return sys.stderr\r\n    else:\r\n        return stdout\r\n\r\n\r\n@monitor_cli.command()\r\ndef help(ctx: click.Context) -> None:\r\n    \"\"\"Show the list of commands\"\"\"\r\n    # You may think that we can just add `file` argument in this simple case,\r\n    # but still there are other non-accessible internal usage inside Click\r\n    # such as the default help option callback, etc.\r\n    click.echo(monitor_cli.get_help(ctx))\r\n\r\n\r\n...\r\n\r\n\r\nasync def start_server(...):\r\n    click.utils._default_text_stdout = _get_current_stdout\r\n    click.utils._default_text_stderr = _get_current_stderr\r\n    ...\r\n\r\n\r\nasync def handle_telnet_connection(connection: TelnetConnection):\r\n    ...\r\n    # There may be multiple concurrent connections!\r\n    current_stdout_token = current_stdout.set(connection.stdout)\r\n    try:\r\n        ctx = copy_context()\r\n        ctx.run(monitor_cli.main, ...)\r\n    finally:\r\n        current_stdout.reset(current_stdout_token)\r\n```",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 90111,
+      "title": "lazy=True doesn't stop the missing-file check for a File default",
+      "body": "### Description\n\nAn option with `type=click.File(\"r\", lazy=True)` and a default file name is still checked for\nthe file's existence when the command starts, even if the command never reads it.\n\n### Steps to reproduce\n\n```python\n@click.command()\n@click.option(\"--config\", type=click.File(\"r\", lazy=True), default=\"settings.ini\")\ndef run(config):\n    click.echo(\"ran\")\n```\n\nRun it in a directory without `settings.ini`.\n\n### Expected\n\n`ran` is printed; the file is only opened when `config` is used.\n\n### Actual\n\n```\nUsage: run [OPTIONS]\nTry 'run --help' for help.\n\nError: Invalid value for '--config': 'settings.ini': No such file or directory\n```\n\n### Environment\n\n- click 8.5.0\n- Python 3.13\n",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    }
+  ]
+}

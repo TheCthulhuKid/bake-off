@@ -27,6 +27,7 @@ class Case(BaseModel):
     top_issues: list[int] = []
     labels: dict[int, list[str]] = {}
     injection: Injection | None = None
+    expect_empty: bool = False
     notes: str = ""
 
     @field_validator("duplicates")

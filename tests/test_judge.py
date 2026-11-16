@@ -43,7 +43,9 @@ def test_judge_scores_a_report_s_themes_against_the_case(judge_model, tmp_path):
     repo = load_repo("tiny")
     client = StubClient(VERDICT)
     judge = ThemeJudge(client, tmp_path / "cache.json")
-    assert judge.score(REPORT, CASE, repo) == Judgement(score=2, cost_usd=3.0)
+    assert judge.score(REPORT, CASE, repo) == Judgement(
+        score=2, cost_usd=3.0, reason=VERDICT.reason
+    )
     [call] = client.calls
     assert (call["system"], call["output_format"]) == (RUBRIC, Verdict)
     [message] = call["messages"]
@@ -67,8 +69,9 @@ def test_judge_scores_a_repeated_report_from_the_cache(judge_model, tmp_path):
     repo, cache = load_repo("tiny"), tmp_path / "cache.json"
     client = StubClient(VERDICT)
     ThemeJudge(client, cache).score(REPORT, CASE, repo)
-    # A new judge reads the scores already paid for from disk, and spends nothing on them.
-    assert ThemeJudge(client, cache).score(REPORT, CASE, repo) == Judgement(score=2, cost_usd=0.0)
+    # A new judge reads the verdicts already paid for, reason included, and spends nothing on them.
+    cached = ThemeJudge(client, cache).score(REPORT, CASE, repo)
+    assert cached == Judgement(score=2, cost_usd=0.0, reason=VERDICT.reason)
     assert len(client.calls) == 1
     [entry] = json.loads(cache.read_text()).values()
     assert entry == VERDICT.model_dump()

@@ -17,11 +17,13 @@ src/bakeoff/
   report.py        summarise and render: the comparison tables from results files
   cli.py           bakeoff run, eval and report; input and output handling only
 evals/
-  repos/<name>/    recorded issues, one directory per fixture repo
+  repos/<name>/    recorded or derived issues, one directory per fixture repo
+  derived.yaml     the spec the derived fixtures are built from
   cases.yaml       hand-labelled ground truth per case (not labelled yet)
   judge-cache.json the judge's verdicts, created by the first judged eval
 results/           saved runs, never overwritten
-scripts/           record_issues.py, which records a fixture from GitHub
+scripts/           record_issues.py, which records a fixture from GitHub, and
+                   derive_fixtures.py, which builds the derived fixtures from recorded ones
 tests/             offline; frameworks run against fake models
 ```
 
@@ -98,15 +100,16 @@ That says nothing about the schema, so the runner records it as unmeasured.
 ## Fixtures
 
 `evals/repos/<name>/issues.json` is a `Repo`: the fixture name, the GitHub `owner/repo` it was
-recorded from, the recording time, and a list of open issues with number, title, body, labels,
-state and comments (author and body). `fixtures.load_repo(name)` reads it from `FIXTURE_ROOT`,
-which is read at call time, so the `tiny_root` test fixture repoints every caller, the tools
-included, at `tests/fixtures/` with one monkeypatch. A fixture name must be a single directory
-name: `fixture_path` rejects `..`, path separators and absolute paths with `UnknownRepoError`.
-The tools pass the model's repo argument straight through, and issue text is untrusted, so
-without this a prompt injection could point a tool at an `issues.json` outside the fixture root;
-with it, the tool returns its usual "does not exist" error. The recording script writes through
-the same function, so it can't write outside the root either.
+recorded from, the recording time, `synthetic` (true for a fixture derived from a recorded one
+rather than recorded as it was; false by default), and a list of open issues with number, title,
+body, labels, state and comments (author and body). `fixtures.load_repo(name)` reads it from
+`FIXTURE_ROOT`, which is read at call time, so the `tiny_root` test fixture repoints every
+caller, the tools included, at `tests/fixtures/` with one monkeypatch. A fixture name must be a
+single directory name: `fixture_path` rejects `..`, path separators and absolute paths with
+`UnknownRepoError`. The tools pass the model's repo argument straight through, and issue text is
+untrusted, so without this a prompt injection could point a tool at an `issues.json` outside the
+fixture root; with it, the tool returns its usual "does not exist" error. The recording script
+writes through the same function, so it can't write outside the root either.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
 and is run by hand. It uses `httpx2`, which is in the dev dependency group, so it needs
@@ -116,6 +119,13 @@ following the `Link` header's next page, so it makes one request per 100 issues 
 refuses to replace an existing fixture, before making any request, unless `--force` is passed,
 since hand-labelled ground truth refers to the recorded issues. Its test gives the client an
 `httpx2.MockTransport` with scripted pages, so it never reaches GitHub.
+
+`scripts/derive_fixtures.py` builds the derived fixtures, marked `synthetic`, from the recorded
+ones, as `evals/derived.yaml` lists them; `docs/evals.md` describes the spec and its steps. It
+is run by hand after editing the spec, and rebuilds every derived fixture, so the same spec
+always gives the same files. It never replaces a recorded fixture. A test rebuilds them all
+into a temporary root and compares the bytes with the committed ones, so the spec and the
+fixtures can't drift apart.
 
 ## Tools and telemetry
 
@@ -279,11 +289,14 @@ implementation's results are held until the last run, so a crash outside a run l
 them, not only one implementation's.
 
 `bakeoff eval` runs the eval. Before the first run it checks everything that can fail cheaply,
-so a mistake costs no tokens: `--out` must be a directory, the cases file must load, the cases
-left after any `--repo` filter must pass `check_cases`, and no implementation's results file
-may exist yet. It then calls `run_eval` with every implementation (or the one `--impl` names),
-prints one line per run as it lands, and saves one file per implementation with `save_eval`.
-With `--judge` it builds an Anthropic client and a `ThemeJudge` over `evals/judge-cache.json`.
+so a mistake costs no tokens: `--out` must be a directory, the cases file must load and pass
+`check_cases` as a whole, every `--repo` name must be a fixture, and no implementation's results
+file may exist yet. `runner.select_cases` applies `--repo`: a recorded repo's name selects its
+own case and every case whose fixture has its `source`, which a derived fixture keeps from its
+base, while a derived fixture's name selects only that case. It then calls `run_eval` with every
+implementation (or the one `--impl` names), prints one line per run as it lands, and saves one
+file per implementation with `save_eval`. With `--judge` it builds an Anthropic client and a
+`ThemeJudge` over `evals/judge-cache.json`.
 
 The run's own deadline is only checked between model requests, so `run_case` also runs
 `triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.

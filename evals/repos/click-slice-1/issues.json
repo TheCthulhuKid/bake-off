@@ -1,0 +1,736 @@
+{
+  "name": "click-slice-1",
+  "source": "pallets/click",
+  "recorded_at": "2026-10-29T08:48:31+00:00",
+  "synthetic": true,
+  "issues": [
+    {
+      "number": 3888,
+      "title": "use the path_type to perform the other click.Path checks",
+      "body": "click.Path exposes a path_type but does currently not use it for path sanity checks such as exists, file_okay, dir_okay etc.\nIf path_type is for instance a cloudpathlib.AnyPath and the cli user points to a S3 those checks will always go wrong since they expect path_type to handle only local paths.\nIssue #2661 addressed similar thoughts but when the path_type itself is pathlib compliant, I would hope that click.Path would honor the users wish to supply their own path_type.\n",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "faizansaiyed123",
+          "body": "I think the key distinction here is that `path_type` shouldn't just control the returned value — it should also be the object used for the checks when one is provided.\n\nRight now `convert()` runs `os.stat()` / `os.access()` on the original value and only calls `coerce_path_result()` at the end. That makes `path_type=cloudpathlib.AnyPath` ineffective for `exists`, `file_okay`, `dir_okay`, etc. because those checks are still against the local filesystem.\n\nIt seems reasonable to coerce the value first when `path_type` is set, then use the resulting object's path semantics for the checks, while keeping the current `os.*` behavior for the default local-path case.\n\nThat would also make `path_type` behave more like an actual path abstraction rather than only a return-type conversion."
+        },
+        {
+          "author": "davidism",
+          "body": "The `Path` param type is intended for local paths only. Maybe we should make that more clear. The `path_type` arg is purely for migrating to use `Path` instead of `str`. We couldn't change the default without breaking, but everyone wanted the new `Path` type instead of the old `os.path` strings. But there's a deep assumption that we're working with local paths, so it's fine to use `os.path` internally. Changing that would mean adding a different code path based on what the type was, which is a lot of complexity.\n\nIn retrospect, I would never have added `path_type`, I would have made a new `Pathlib` param type. Similarly, you should probably create a `CloudPath` param type to do exactly what you need."
+        },
+        {
+          "author": "davidism",
+          "body": "@faizansaiyed123 please read https://palletsprojects.com/contributing/llm-ai"
+        },
+        {
+          "author": "hoshimura",
+          "body": "@davidism thank you for your answer. I guess it means you disapprove this feature request? If that is so, I am sorry, for click is a really great lib and I am sure my request would add value to it. If you approve, I am gladly willing to help with an implementation"
+        }
+      ]
+    },
+    {
+      "number": 3886,
+      "title": "Prevent Click from terminating when less is interrupted",
+      "body": "Today, if I stream output to `less` from Click, I can enter follow mode (`F`):\n> ```\n>        F      Scroll  forward,  and  keep  trying to read when the end of file is reached.  Normally this command would be used when already at the end of the file.  It is a way to monitor the\n>               tail of a file which is growing while it is being viewed.  (The behavior is similar to the \"tail -f\" command.)  To stop waiting for more data, enter the interrupt character (usu‐\n>               ally ^C).  On some systems you can also use ^X.\n> ```\n\nAs described, SIGINT is used to exit that mode... That kills Click, though (i.e. no more output is produced)!\nThis behavior appears to be intentional, but there does not appear to be a way to have output continue.\nIf we were to suppress background interrupts, I could still get Click to terminate by exiting the pager.\n\nIs this something the project would entertain (i.e. adding SIGINT isolation during paging), perhaps behind a flag if both behaviors are desirable?",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "Click's core purpose is a CLI parsing and processing library, not a CLI UI library. Pager support is already ridiculously complex. I do not want to add signal support on top of that. Use rich https://rich.readthedocs.io/en/stable/console.html#paging or some other library if you need more complex support."
+        }
+      ]
+    },
+    {
+      "number": 3847,
+      "title": "More private utilities that need to be marked and public api deprecated",
+      "body": "In types.py\n- [ ]  `convert_type` - rename to _convert_type - currently has no top level import\n- [ ] `FuncParamType` - maybe typing thing? - currently has no top level import\n\nIn _ ?,\n- [ ] consider deprecating 'open_file'",
+      "labels": [
+        "typing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "sirosen",
+          "body": "Should `open_file` and `safecall` be made private as well?\n\nI'm looking at adapting `pip-tools` to handle v8.5.0 this morning, and we have (this all looks weird to me)...\n```python\nmy_file = click.open_file(filename, \"w+b\", atomic=True, lazy=True)\nassert my_file is not None\nif isinstance(my_file, click.utils.LazyFile):\n    ctx.call_on_close(click.utils.safecall(my_file.close_intelligently))\n```\n\nI don't see any reason that anyone outside of `click` should ever use `safecall`: it's trivial to write it yourself. `open_file` doesn't seem good to expose if its return type won't be exposed. It's hard to figure out how to use it correctly in this case.\n\n(We do want `close_intelligently()` since the target filename could be `\"-\"`.)"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "safe call is deprecated. It should issue a deprecation warning. I will have to check on the other. "
+        },
+        {
+          "author": "Rowlando13",
+          "body": "We will have to look at open_file. It is public on purpose but may need better type annotation or docs. "
+        },
+        {
+          "author": "sirosen",
+          "body": "I didn't want to suggest too much at first, but maybe we can spec it out with a `typing.Protocol`? I'm happy to help out if you want to go that route.\n\nAnd yeah, I didn't notice that `safecall` was also warning, since I fixed this \"all at once\" on my end."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Feel free to open an issue and propose a PR for what you think is best. I am always interested in type hints or docs that make usage clearer. "
+        },
+        {
+          "author": "davidism",
+          "body": "I feel like `open_file` should be private, but I haven't looked enough. `atomic` should be deprecated, if I remember correctly it's not actually atomic and there are better libraries out there for atomic access. `lazy` is only useful for the `File` param type when opening a file for writing, and should be invisible to the public API. It shouldn't matter if it's lazy, it should just close silently."
+        },
+        {
+          "author": "sirosen",
+          "body": "Aside: I didn't suggest a protocol because I didn't come up with a good name or home for it. Which might be a sign that it's not a great idea.\n\nI'm not aware of a good, supported library for atomic/transactional writes. So if it becomes private, I'll probably review [this old thread](https://discuss.python.org/t/adding-atomicwrite-in-stdlib/11899) (which has lots of good notes and ideas) and roll my own. Which I'm okay with.\n\nFrom my perspective:\n- it's weird that `open_file` is exposed at all; it feels orthogonal to most of the concerns of `click` (even though it will be a pain for me, I'm in favor of making it private)\n- it's arguable that even implementing `lazy=True` is outside of what `click` should be doing\n\nI'm using `LazyFile` in a few places today, but I feel like the ideal path is to put together something that's a replacement and can be passed as a param type, but outside of `click`. Let the core library stay lean and focused."
+        },
+        {
+          "author": "davidism",
+          "body": "> it feels orthogonal to most of the concerns of click\n\nYes, this is a general problem with the pallets libraries exposing so many utilities and customization points. We're trying to clean this up in general. See for example the next Werkzeug 3.2 release, which is a huge wall of deprecations."
+        },
+        {
+          "author": "davidism",
+          "body": "The library I was thinking of was [atomicwrites](https://github.com/untitaker/python-atomicwrites), which is archived in favor of [`os.replace`](https://docs.python.org/3.14/library/os.html#os.replace) or [`os.rename`](https://docs.python.org/3.14/library/os.html#os.rename). Those are both documented as atomic.\n\nThe simplest answer for lazy is probably to use `Path` instead of `File` param types, and handle opening the file yourself when you write. That's probably a lot simpler than all the stuff we have to go through for `File` anyway."
+        }
+      ]
+    },
+    {
+      "number": 3840,
+      "title": "`click.edit` on Windows throws WinError 14001 or 87",
+      "body": "I found this bug while testing my own Click application. In about half the times `click.edit()` is attempted on Windows, `notepad.exe` will fail to launch with one of these two error messages (output under spoilers):\n\n<details>\n<summary>OSError: [WinError 87] The parameter is incorrect</summary>\n\n```\nPS C:\\Users\\Emory> python .\\click-notepad-me.py\nTraceback (most recent call last):\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 729, in edit_files\n    c = subprocess.Popen(\n        args=shlex.split(editor) + list(filenames),\n        env=environ,\n    )\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\subprocess.py\", line 1038, in __init__\n    self._execute_child(args, executable, preexec_fn, close_fds,\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n                        pass_fds, cwd, env,\n                        ^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n                        gid, gids, uid, umask,\n                        ^^^^^^^^^^^^^^^^^^^^^^\n                        start_new_session, process_group)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\subprocess.py\", line 1552, in _execute_child\n    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,\n                       ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n                             # no special security\n                             ^^^^^^^^^^^^^^^^^^^^^\n    ...<4 lines>...\n                             cwd,\n                             ^^^^\n                             startupinfo)\n                             ^^^^^^^^^^^^\nOSError: [WinError 87] The parameter is incorrect\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Emory\\click-notepad-me.py\", line 3, in <module>\n    _ = click.edit()\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\termui.py\", line 904, in edit\n    return ed.edit(text)\n           ~~~~~~~^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 783, in edit\n    self.edit_files((name,))\n    ~~~~~~~~~~~~~~~^^^^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 739, in edit_files\n    raise ClickException(\n        _(\"{editor}: Editing failed: {e}\").format(editor=editor, e=e)\n    ) from e\nclick.exceptions.ClickException: notepad: Editing failed: [WinError 87] The parameter is incorrect\n```\n</details>\n\nor\n\n<details>\n<summary>OSError: [WinError 14001] The application has failed to start because its side-by-side configuration is incorrect. Please see the application event log or use the command-line sxstrace.exe tool for more detail</summary>\n\n```\nPS C:\\Users\\Emory> python .\\click-notepad-me.py\nTraceback (most recent call last):\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 729, in edit_files\n    c = subprocess.Popen(\n        args=shlex.split(editor) + list(filenames),\n        env=environ,\n    )\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\subprocess.py\", line 1038, in __init__\n    self._execute_child(args, executable, preexec_fn, close_fds,\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n                        pass_fds, cwd, env,\n                        ^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n                        gid, gids, uid, umask,\n                        ^^^^^^^^^^^^^^^^^^^^^^\n                        start_new_session, process_group)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\subprocess.py\", line 1552, in _execute_child\n    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,\n                       ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n                             # no special security\n                             ^^^^^^^^^^^^^^^^^^^^^\n    ...<4 lines>...\n                             cwd,\n                             ^^^^\n                             startupinfo)\n                             ^^^^^^^^^^^^\nOSError: [WinError 14001] The application has failed to start because its side-by-side configuration is incorrect. Please see the application event log or use the command-line sxstrace.exe tool for more detail\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Emory\\click-notepad-me.py\", line 3, in <module>\n    _ = click.edit()\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\termui.py\", line 904, in edit\n    return ed.edit(text)\n           ~~~~~~~^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 783, in edit\n    self.edit_files((name,))\n    ~~~~~~~~~~~~~~~^^^^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 739, in edit_files\n    raise ClickException(\n        _(\"{editor}: Editing failed: {e}\").format(editor=editor, e=e)\n    ) from e\nclick.exceptions.ClickException: notepad: Editing failed: [WinError 14001] The application has failed to start because its side-by-side configuration is incorrect. Please see the application event log or use the command-line sxstrace.exe tool for more detail\n```\n</details>\n\nTo replicate, run this script until you get one of these:\n\n```py\nimport click\n_ = click.edit()\nprint(\"If you got here, no crash occurred\")\n```\n\nEnvironment:\n\n- Python version: 3.12.14 / also reproduced on my system 3.14 install\n- Click version: 8.5.0\n- OS: Windows 11 (64-bit)\n",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Vaibhavtripathi7",
+          "body": "I tried recreating the issue on my own system: `windows 11 build number (26100.9445)`, `python version 3.14`, and also checked for Notepad execution alias toggle which was default nothing to change, but I couldn't recreate it , tested it for for total 30 iterations no failures not even one.\nThen I investigated the issue from different paths, and perspectives : first - I tired to crosscheck shlex working and how it is used in the codebase, as `shlex` is based on unix systems, so it treats backslashes differently which can cause an error but as 'notepad' passed directly Nothing could be wrong here( it’s single string so no split), and environment which was passed in click function, was just copy of original one Nothing changed.So that completely eliminated any parsing issue, or conditional check issue as error messages suggested.\nSo next thing i dig up was, windows error which were mentioned : `INVALID_PARAMETER` and `ERROR_SXS_CANT_GEN_ACTCTX`, I explored few articles on this , one was completely related to this ( it is from Microsoft's own Q&A platform) , and it’s main point was that crash inside a specific alias-resolution dll, is inconsistent or random getting 4 times out of 10 time failures( same condition as described in the this issue description ), but it pointed to alias thing which again i tried to debug and analyse it ( as many users have experience this issue, regarding notepad specifically in windows).\nAnd as i couldn't recreate the error, it is currently too vague to work on a solution and from my conclusion it seems like a know windows platform bug rather than click functionality error, here's is a thread to support this (<https://learn.microsoft.com/en-us/answers/questions/2109069/createprocess-on-notepad-exe-fails-due-to-a-crash>) , and as in the thread, someone already tested with full exe path too, but it did not succeed as per them.\nI would like to know the maintainers view on this particular issue, and about my findings.\n\n"
+        }
+      ]
+    },
+    {
+      "number": 3696,
+      "title": "Increasing utilities quality and documentation",
+      "body": "The existing utilities are here to stay, but are feature complete. This needs to be documented, the doc strings need updating, the typing need checking, the test coverage is incomplete. Some also need notes points to projects that have fuller versions of what we have like TQDM, Rich, Prompt Toolkit, and others. This would be a good issue  for someone that I have met at a python meetup to start with if they have a desire to contribute in a more long term way. ",
+      "labels": [
+        "docs",
+        "typing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Arbaaz123676",
+          "body": "Hi @Rowlando13, I'd like to work on this issue can you please assign this to me?"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Please select a different issue. I have some other plans for this. "
+        },
+        {
+          "author": "davidism",
+          "body": "Also note our AI policy: https://palletsprojects.com/contributing/llm-ai"
+        }
+      ]
+    },
+    {
+      "number": 3652,
+      "title": "Automatically append ellipsis (`...`) to metavars when `multiple=True` in options",
+      "body": "When building a command-line interface with `click.option(..., multiple=True)`, the auto-generated usage string does not visually signal to the user that the option can be repeated. For instance, an option --foo=FOO looks identical whether it accepts single or multiple arguments. This is different from the common convention for multi-value items in shell interfaces often suggests adding an ellipsis like `--foo=FOO...`\n\nExpected behavior if option \"foo\" has `multiple=True`:\n```\nUsage: script.py [OPTIONS]\n\nOptions:\n  --foo TEXT...  A list of foo strings.\n  --help         Show this message and exit.\n```\n",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "I don't think that's a good indication that the option itself needs to be repeated. This seems like something we should expose to the customizable formatter when we eventually refactor that."
+        },
+        {
+          "author": "kdeldycke",
+          "body": "I also noticed something similar in GNU conventions: `[OPTION]...`. But that seems to only applies in the usage leading line of the `--help` screens. I guess this topic needs a bit of research to at least make a survey of POSIX/GNU conventions and other popular tools and CLI frameworks in other languages."
+        },
+        {
+          "author": "kdeldycke",
+          "body": "Also does `--foo TEXT...` means multiple `TEXT` values like `--foo TEXT1 TEXT2 TEXT3` or multiples `--foo` options like `--foo TEXT1 --foo TEXT2 --foo TEXT3`? 😏 So yeah, this looks like a rabbit hole I will not dive into. Not yet at least until we start thinking about the shape the customizable formatter should look like."
+        },
+        {
+          "author": "iynehz",
+          "body": "@kdeldycke yes the standard is to have `...` in the usage line  https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap12.html#tag_12_01\n\nI agree what I proposed is non-standard. While the exact implementation can be discussed, my point is that we need some easy way to indicate that an option can be specified multiple times. It shall be in the CLI's usage message, and shall be obvious to the user which could be human or agent today. \n\nThere can be multiple ways to do it. For now in my project I can surely hardcode something like “can be specified multiple times” or use some meta programming to expand that `[OPTIONS]` in the usage line. But I wish we have something out-of-the-box.\n"
+        }
+      ]
+    },
+    {
+      "number": 3406,
+      "title": "Migrate sentinels to use Python 3.15's PEP 661 `sentinel` built-in with typing_extensions backport",
+      "body": "Migrate sentinel values like at `src/click/_utils.py` to use the introduced `sentinel` built-in coming in Python 3.15. For older versions we can use [`typing_extenions.sentinel`](https://typing-extensions.readthedocs.io/en/latest/index.html#typing_extensions.sentinel).",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 3362,
+      "title": "`HelpFormatter.write_usage` breaks options at a hyphen",
+      "body": "If an option containing a hyphen in its name is printed at the line break limit, it’s broken at the hyphen.\n\n### Reproduction\n\n```python\nimport click\n\noptions = [\n    \"--enable-verbose-logging\",\n    \"--output-file-path\",\n    \"--max-retry-count\",\n    \"--disable-cache-mode\",\n    \"--config-file-location\",\n    \"--user-auth-token\",\n    \"--auto-update-interval\",\n    \"--force-overwrite-existing\",\n    \"--network-timeout-seconds\",\n    \"--debug-trace-enabled\",\n]\n\nf = click.HelpFormatter(width=65)\nf.write_usage(\"program\", \" \".join(options))\nprint(f.getvalue())\n```\n\n### Expected output\n```\nUsage: program --enable-verbose-logging --output-file-path\n               --max-retry-count --disable-cache-mode\n               --config-file-location --user-auth-token\n               --auto-update-interval --force-overwrite-existing\n               --network-timeout-seconds --debug-trace-enabled\n```\n\n### Actual output\n```\nUsage: program --enable-verbose-logging --output-file-path --max-\n               retry-count --disable-cache-mode --config-file-\n               location --user-auth-token --auto-update-interval\n               --force-overwrite-existing --network-timeout-\n               seconds --debug-trace-enabled\n```\n\n### Environment\n\n- Python version: 3.12.3\n- Click version: 8.3.1\n\n### Additional information\n\n#### `width` option\n\nThis also happens without specifying `width`. The `width` option is altered in the example to make the issue more frequent.\n\n#### Relevance to other use cases\n\nThis may likely only affect:\n\n- direct users of `click.HelpFormatter`,\n- users of `click.argument` with custom `metavar` containing hyphens. \n\nOn the other hand, `click` prints `[OPTIONS]` instead of listing individual options on the usage line and uses underscores instead of hyphens in argument names (unless specifying `metavar`).\n\n#### Cause\n\nI looked into the code and found that `textwrap.TextWrapper` is used under the hood, which has the [`break_on_hyphens`](https://docs.python.org/3/library/textwrap.html#textwrap.TextWrapper.break_on_hyphens) option. However, there is no option for the `click` user to influence this, apart from reimplementing `HelpFormatter.write_usage` (in a subclass) and `wrap_text`.",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "ThiefMaster",
+          "body": "@Pitchfork-and-Torch It is not acceptable to let LLM agents open issues/PRs autonomously - https://palletsprojects.com/contributing/llm-ai"
+        }
+      ]
+    },
+    {
+      "number": 3156,
+      "title": "Remove deprecated code for 9.0",
+      "body": "<!--\nReplace this comment with a description of what the feature should do.\nInclude details such as links to relevant specs or previous discussions.\n-->\n\n<!--\nReplace this comment with an example of the problem which this feature\nwould resolve. Is this problem solvable without changes to Click, such\nas by subclassing or using an extension?\n-->",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "Should do this for next feature release"
+        },
+        {
+          "author": "kdeldycke",
+          "body": "Superseeded by https://github.com/pallets/click/issues/3481"
+        },
+        {
+          "author": "davidism",
+          "body": "Deprecated code, such as `BaseCommand`, the parser module, etc, different than remaining compat stuff in that issue."
+        },
+        {
+          "author": "kdeldycke",
+          "body": "> Deprecated code, such as `BaseCommand`, the parser module, etc, different than remaining compat stuff in that issue.\n\nMake sense, these are still lingering in the code base. Targeting 9.0 then."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "This is vague and redundant. Going to close see #3154 as 9.0 gets closer. "
+        },
+        {
+          "author": "kdeldycke",
+          "body": "> This is vague and redundant. Going to close see [#3154](https://github.com/pallets/click/issues/3154) as 9.0 gets closer.\n\nI guess you created this issue as a reminder of the first task to do as soon as we prepare 9.0.0, which is removing all deprecated code right? So why not keep this open an keep an inventory of stuff to delete in the body of that issue?"
+        }
+      ]
+    },
+    {
+      "number": 3154,
+      "title": "Click 9.0",
+      "body": "Theme: reduce overhead and actually fix hacks that we had to make to patch bugs \n\nTentative Guidelines: \n- make sure to add guidance to the upgrade guide \n- Remove deprecations made in 8.5.0\n- https://github.com/pallets/click/pull/3827\n- https://github.com/pallets/click/discussions/3147#discussioncomment-14998543",
+      "labels": [
+        "parsing"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "ulgens",
+          "body": "Any chance to cut a 8.x release with 3.14 support before this one? It looks like 9.0 will take some time, but 3.14 support is already in place and can be released."
+        },
+        {
+          "author": "edgarrmondragon",
+          "body": "> Any chance to cut a 8.x release with 3.14 support before this one?\n\nAre there any known issues with 3.14? I've been using 8.3.1 with 3.14 and it seems to be well-supported."
+        },
+        {
+          "author": "davidism",
+          "body": "Click has always supported 3.14."
+        },
+        {
+          "author": "ulgens",
+          "body": "> Are there any known issues with 3.14? I've been using 8.3.1 with 3.14 and it seems to be well-supported.\n\nNo issues yet, but also there is no declaration of support. I was checking when 3.14 was added to CI and found that the related commit hasn't been included in a release yet.\n\n> Click has always supported 3.14.\n\nI'm not sure what \"always\" means in this context but I guess you mean it didn't cause any issues yet.\n\nI was planning to use click for another library I'm preparing to release. It will declare support for 3.14, and I was trying to select a min version for click too, by looking for the earliest version that is tested with 3.14. That release doesn't exist yet, and it turns out click doesn't declare support for any Python version at all (no Python minors in the trove classifiers), which I find rather unfortunate from a maintainer's perspective.\n\nIf the 8-year-old decision to not manage trove classifiers can be revisited, I'm willing to create a PR to add them.\n\n---\n\nThanks for the quick response and merry Christmas / happy New Year! 🎄 "
+        },
+        {
+          "author": "Rowlando13",
+          "body": "I don't know much about trove clasifiers other than we don't use them. It seemed like they were not worth the effort at the time. 3.14 has been in the test suite for a few months without any issues. "
+        },
+        {
+          "author": "ulgens",
+          "body": "> It seemed like they were not worth the effort at the time.\n\nAre there any concerns about them? Enabling them only needs a 4-5 lines of string change, and 1 extra line with each update.\n\n> 3.14 has been in the test suite for a few months without any issues.\n\nYep. But no release was created after that change in the test suite.\n\nIf I were looking at click for a project (not a library), pinning my dependency to the main wouldn't be an issue, but for a library that aims to support 3.14, this is a bit of a deal breaker. "
+        },
+        {
+          "author": "davidism",
+          "body": "See https://github.com/di/pyreadiness/issues/18 for my reasons not to use python version classifiers.Please drop this line of conversation, it's not changing. Click supports Python 3.14, no pinning to main required. If you find a bug with 3.14, report a bug."
+        }
+      ]
+    },
+    {
+      "number": 3097,
+      "title": "WIP: Help page customization low level api",
+      "body": "# Work in Progress ...\n\n# General \n\n- help kwarg stays as is.\n- for Commands and Groups, there are new kwargs \n    - custom_help : None | Subclass of CustomHelp  = a custom help class\n    - custom_help_settings : None | Subclass of CustomHelpLoad = for lightly customized custom help classes\n    - custom_help_settings_call: None | function = for heavily customized help classes\n\n- There are two general types of help page, Group help page and Command help page. \n- Help pages may be invoked directly, or shown following an error. \n\n    - ??? custom_help_cascade : bool = True whether or not a custom help formatter cascades to sub command or sub groups. I expect the normal usage pattern to be set one custom fomatter per command line application, so just set in one place, at the top group. However, I can see good reason to allow this to be turned off.\n\n# Questions\n- How do we uphold arbitrary nesting guarantees while allowing for maximal customization? \n- Is this general idea feasible with Clicks current internal design, that is, are we able to expose everything a custom help page creator might want without exposing too many internals?  My first thought is to try fix some of the entangling in Click by having invoke(top level)  call the command/group to see if help has been invoked, then in invoke tell command to dump relevant data in a very flat way. The data is passed in as kwarg to CustomHelp constructor. CustomHelp creates the help page in a very stand alone way. Invoke calls CustomHelp.render() and exits. \n- How does this impact creating error messages?\n\n\n\n# Examples\n\n\n## In Click\n\n```python\n# in click\nclass InvocationSource(Enum, auto):\n    COMMAND = auto()\n    GROUP = auto()\n    BOTH = auto()\n\nclass CustomHelpLoad(ABC):\n    \"\"\"Customization available to User\"\"\"\n\n\n    @abstractmethod\n    def __init__(self, arg_1, arg_2,):\n        \"\"\"By having a separate class, instead of dict, user can see \n        customization available on hover in editor.\n        \"\"\"\n\n\n    @abstractmethod\n    def dump(self,) -> dict:\n        \"\"\"Dump everything given by user to dictionary.\"\"\" \n\n\nclass CustomHelp(ABC):\n    \"\"\" In a relatively standalone way, make a help page.\n    Must handle help pages and errors. \n    \"\"\"\n\n    @abstractmethod\n    def __init__(\n            self, \n            ctx: Context, \n            # Not right but too sick to fix issue.\n            invocation_source_info: dict, \n            invocation_source: InvocationSource,  \n            error: None|dict = None\n            ):\n        \"\"\" Load needed properties. \n        \n        To support truly dynamic customization, the help page might need \n        any number of things, so a basically everything is injected as a \n        kwarg. Identify, what your implementation actually needs and \n        store it in a property. \n        \n        Set default settings dict.\n        \"\"\"\n        \n\n    @abstractmethod\n    def inject_settings(self, settings: CustomHelpLoad):\n        \"\"\"Load in the customized settings by merging default settings dict \n        with customized one.\n        \"\"\"\n        \n        #self.settings.update(CustomHelpLoad.dump())\n\n\n    @abstractmethod\n    def create(self):\n        \"\"\"Actually make the help page. Recommended to break into create error\n        and create help.\"\"\"\n        \n\n    @abstractmethod\n    def render(self):\n        \"\"\"\"Render output to the terminal\"\"\"\n\n# click plugin implementation\nclass _ClickBuiltInHelpLoad(CustomHelpLoad):\n    \"\"\"\"Base implementation will likely offer no customization.\"\"\"\n    \n    def dump(self):\n        return dict()\n\n\nclass _ClickBuiltInHelp(CustomHelp): \n    \"\"\"\"Implementing this will guide data and signature of ABC constructor\"\"\"\n\n    def __init__(self):\n        self.settings = {}\n\n    def inject_settings(self, settings: _ClickBuiltInHelpLoad):\n        self.settings.update(_ClickBuiltInHelpLoad.dump())\n\n```\n\nClick's own plugin classes will be private. When custom help is released, then a guide will be made that uses this as an example. But that will be just an example of how to implement the ABC. We will not expose this, so we can evolve it freely.\n\n## Plugin\n\n```python\nclass RichHelp(CustomHelp):\n    \"\"\"Rich implementation of help page.\"\"\"\n\n# By convention, named <CustomHelpName>Load\nclass RichHelpLoad(CustomHelpLoad):\n    \"\"\"Settings available for user customization.\"\"\"\n\n\n    def __init__(self, color='blue', mode='normal'):\n        pass\n\n    def dump(self):\n        return dict()\n```\n\n## User Code\n```python\nimport click \nfrom click_help_rich import RichHelp\nfrom click_help_rich import RichHelpLoad\n\n\n# drop in help customization \n@click.command(\n    'one', \n    custom_help=RichHelp,\n    custom_help_settings=RichHelpLoad(color='red'),\n)\ndef one():\n    pass \n\n# help heavily customized\n# Much nicer for readability to have the option to factor into a function  \n# Also this limits import time side effects. \ndef rich_help_very_custom():\n    return RichHelpLoad(\n        color='red',\n        mode='sharp',\n    )\n\n\n@click.command(\n    'two', \n    custom_help=RichHelp,\n    custom_help_settings_call=rich_help_very_custom,\n)\ndef two():\n    pass \n```",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "kdeldycke",
+          "body": "https://github.com/pallets/click/pull/3420 could be a building block toward this, as it makes all our wrapping primitives ANSI-aware."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "That could definitely be useful. The big outstanding question is for a help page, how to be allow the correct access for libraries like Rich to build their stuff and then render it to the terminal. As it is, we just build a long string and call print on it. I am not sure that the methods create and render in the new design are sufficient. I don't really know much about low level primitives sent to the terminal. At pycon this week, so hopefully can ask some knowledgeable people. "
+        }
+      ]
+    },
+    {
+      "number": 3094,
+      "title": "Document help page generation for maintainers",
+      "body": "After reading the code, it is not clear to me how exactly help pages are generated. Before any changes can be considered, we should have a shared understanding of the exact path for generating help pages. \n\nAt some point, I will play around in a debugger and work this out. If anyone knows, feel free to chime in.",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "gdesai23",
+          "body": "I traced the current `--help` and `no_args_is_help` flows locally and opened a PR documenting how help is assembled and rendered today.\nPR: https://github.com/pallets/click/pull/3326\n@Rowlando13 "
+        }
+      ]
+    },
+    {
+      "number": 3089,
+      "title": "Help (--help) page customization high level design",
+      "body": "# Intro\n\nThis is a possible high level design for help page(passing in --help) customization. I hope to come to an ideal design that supports the standard and advanced user. I will put together my thoughts then try to work with the community to improve it.\n\n# Design\n\nHelp pages are basically an infinite space for customization with a large number of edge cases. The edge cases stem from the historical development of terminals and the very many shells and terminal emulators, each running on one or more operating systems. Because of this, I think Click should have 2 ways to generate help:\n\n1. Help pages generated directly by Click. No formatting except line breaks and alignment. The focus is on displaying information. Basically the current help pages with a couple of more features. There is a lot of customization on the text displayed but no layout or otherwise formatting customization. \n\n2. Very low level and completely customizable. The intention is for terminal customization libraries like Rich to be able to directly send their primitives to the terminal while having access to as much information about the current invocation as possible. The hope is that some people will write nice plugins, and then most users can pick a plugin that caters to their sense of taste. \n\n# Advantages\n\n- the potentially infinite space for customization is clearly bounded for the maintainers in a way that is easily communicated to users \n\n- the bounding frees Click maintainers to concern themselves with making a good CLI toolkit \n\n- The design also allows for explicit hooks for very dynamic help page customization.\n\n# Possible implementation path:\n- implement low level API \n- implement the standard help page on top of low level API \n\n# Downsides: \n- the default help page is a bit lackluster ",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "Could you be more specific about what you're referring to? Is this about the help output that's shown with `--help`? Or something else?"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Yeah. "
+        },
+        {
+          "author": "kdeldycke",
+          "body": "https://github.com/pallets/click/pull/3420 could be a building block toward this, as it makes all our wrapping primitives ANSI-aware."
+        }
+      ]
+    },
+    {
+      "number": 3081,
+      "title": "Add Screenshot workflow",
+      "body": "In a few places in the docs, it would be really nice to be able to run some code take a screen shot, and draw boxes around different parts. For example setup an example click app with multiple sub commands, options, epilog help, and arguments and then draw boxes and label the various blocks. Requirements: \n- run locally  for doc generation (actually locally not calling out to api)\n- run in ci job (not calling out to external service)\n- No added dependencies that are not pip installable \n- have the screen shots not be blurry (common problem)\n- draw boxes around various sections. \n\nConduct some research and propose some options. A maintainer will pick from the options. and you can implement it. Here is an example of what I was thinking is in the comments below. ",
+      "labels": [
+        "docs"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "I'm not clear why we need screenshots for this?  Code and CLI invocations are entirely text based. This would add a huge amount of complexity to our docs builds.\n\nIf you want to call out certain lines in a block of text, you can do that with Sphinx already: https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html#directive-option-code-block-emphasize-lines"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "It's definitely not a need. More of it would be very nice. See the attached screenshot. The best way I can think to give an overview for a help page if you are unfamiliar with command line help pages would be to show a lot on a help page and box and label it. Gives a very nice overview. ![image](https://github.com/user-attachments/assets/e71bf869-eee8-410f-982a-21862768d5e1)"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "There are a few other places, I had in mind to use it. "
+        },
+        {
+          "author": "Rowlando13",
+          "body": "I was planning on looking at the options and seeing. An option might be nothing is worth it. "
+        },
+        {
+          "author": "kdeldycke",
+          "body": "> * draw boxes around various sections.\n\nI guess you want to do what @janluke did to highlight the different parts of the help screen in Cloup:\n\n<img width=\"1142\" height=\"493\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/1b876bd2-be63-45e8-9fc5-44098124763a\" />\n\nSource: https://cloup.readthedocs.io/en/stable/pages/formatting.html#themes"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Yes. I have never seen this, but I was thinking this exactly. "
+        },
+        {
+          "author": "davidism",
+          "body": "Another requirement: This must not pull in any external dependencies/build dependencies. Users and contributors need to be able to build the docs without more overhead.\n\nThe easiest way here is to take a screenshot and edit it."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "I assume fine as long as pip installable?"
+        },
+        {
+          "author": "davidism",
+          "body": "As long as it's pip installable without requiring external things like imagemagick being installed on the system."
+        },
+        {
+          "author": "ThiefMaster",
+          "body": "@pdonizete It looks like you used some (broken) LLM to generate this comment considering the raw `\\n` linebreaks in there that a human would not write... We are not interested in AI-generated contributions. So if you wish to use LLMs for this, please find another project to contribute to."
+        },
+        {
+          "author": "saxenanurag",
+          "body": "I am taking this. "
+        },
+        {
+          "author": "saxenanurag",
+          "body": "Drafted PR: #3472 "
+        },
+        {
+          "author": "saxenanurag",
+          "body": "I will add the annotated screenshot to the PR as well. "
+        },
+        {
+          "author": "Rowlando13",
+          "body": "In talking with @saxenanurag, best to just manually annotate a screen shot nicely. "
+        },
+        {
+          "author": "kdeldycke",
+          "body": "@Rowlando13 I made an inventory of CLI screenshot solutions in https://kdeldycke.github.io/click-extra/screenshots.html . I did not settled on one yet but will test drive them in the next few months."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Nice!"
+        },
+        {
+          "author": "kdeldycke",
+          "body": "I went the extra mile and you can now produce SVG screenshots of CLIs with Click Extra with a one-liner. No need to install it thanks to `uvx`.\n\nHere is an example of calling `flask` and rendering a simulation of its invocation in a macOS-like terminal and highlighted lines:\n```shell-session\n$ uvx --with flask click-extra screenshot --output flask-help.svg --preset macos --emphasize-lines 2,10,24 --wrap -- flask --help\n```\n\nWhich renders to:\n\n<img width=\"1106\" height=\"820\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/0e09c27b-48f0-455d-9e54-179a9fac0d4c\" />"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "That is cool! I only planned to add a few screenshots for help pages, but I was concerned about increasing the package size. SVG could fix that. "
+        }
+      ]
+    },
+    {
+      "number": 3077,
+      "title": "Add glossary of terms to click reference docs",
+      "body": "Add a section to the general reference docs for glossary of terms. \nShould contain ambiguous terms that defines how we use them in our docs. It allows us to be internally consistent in our usage \n- Option \n- flag \n- command line application \n- command line utility \n- terminal",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Nemoooo22",
+          "body": "Hey. Mind if I take this?"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Sure!"
+        },
+        {
+          "author": "HanslettTheDev",
+          "body": "Hello there, when you say add a glossary of terms under the General reference, I'd like to ask what are some of those Ambigious terms that should be present there, this would give me a better understanding of the words that need to be added into the glossary?"
+        },
+        {
+          "author": "nrschroeder",
+          "body": "Howdy! I'd like to work on adding the glossary section to the reference docs if this issue is still available."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "@nrschroeder there is already a pr, but you could review it. It's a bit of a scavenger hunt. We use most terms pretty consistently across our docs, but it's kinda hard to guarantee consistency without a definition to work against. "
+        }
+      ]
+    },
+    {
+      "number": 3076,
+      "title": "Introduction to the command line tutorial",
+      "body": "Developers coming to Click docs may or may not have command line experience. The command line is a big subject with a lot of cross platform differences. A tutorial which targets basic things you can do would be very helpful. The goal is the minimal amount to get started. \n\nRequirements \n- Written in myst\n- uses Diataxis principles \n- Uses docs tabs so can eventually add multiple oses and shells\n- roughly 15 minutes for user to complete tutorial \n- shows getting operating system information, directory vs file, file path, moving around, making a directory, making a file, editing a file, printing file contents to the terminal, greping something, showing help for a cli \n- good quality links to deeper information on the subject",
+      "labels": [
+        "docs"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Veebaa",
+          "body": "Hi @Rowlando13, can I do this?"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Sure!"
+        },
+        {
+          "author": "HanslettTheDev",
+          "body": "Hello @Rowlando13 , I will like this issue to be assigned to me\nI think I can come up with a good tutorial meeting the above requirements\nThank you"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "@Veebaa Have you made any progress on this? If @Veebaa does not respond in a week or 2, then you can have it. "
+        },
+        {
+          "author": "HanslettTheDev",
+          "body": "Ok got it"
+        },
+        {
+          "author": "Veebaa",
+          "body": "@Rowlando13, Hey, I started a document, but got busy and havent had time to review or edit 🙈 . Shall I upload and @HanslettTheDev can then contribute also?"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Sure!"
+        },
+        {
+          "author": "Veebaa",
+          "body": "@Rowlando13 Cool, I will put it under docs. Let me know if you want me to move it elsewhere."
+        },
+        {
+          "author": "HanslettTheDev",
+          "body": "@Rowlando13 Can I continue working on his PR?"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Yes. "
+        },
+        {
+          "author": "HanslettTheDev",
+          "body": "Got it\nI'll request your review tomorrow \n\nEdit\nI'll send it later this week instead"
+        },
+        {
+          "author": "HanslettTheDev",
+          "body": "Sorry, I couldn't send the update to this pull request earlier. I had an emergency. I look forward to sending an improved version of the existing PR"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "No problem. There a really deadlines for Pallets projects since everyone is a volunteer. "
+        },
+        {
+          "author": "MeGaurav4",
+          "body": "@Rowlando13 hi, I would like to take this one. I see Veebaa started a doc and HanslettTheDev was going to continue, but neither has had time. If neither is still working on it, I can take it from scratch or build on what exists.\n\nI am a B.Tech CSE(AI) student, comfortable with myst and Diataxis. My plan:\n- One docs page at docs/tutorial.md\n- 15-minute end-to-end walkthrough\n- Tabs for macOS / Linux / Windows shells\n- Links to deeper docs at each step\n- Cross-platform grep alternatives (findstr on Windows, for example)\n\nRealistic ETA: a few days, not hours, since I want to do it right rather than rush.\n\nLet me know if I should go ahead, and I would appreciate a pointer to where Veebaa left off if you have it."
+        },
+        {
+          "author": "davidism",
+          "body": "Note that we do not accept AI generated PRs. Do not use AI in anything you submit to us. If you think the draft PR needs more, perhaps a start would be to comment on it, rather than start writing from scratch again."
+        },
+        {
+          "author": "MeGaurav4",
+          "body": "@davidism understood, and thank you for the heads up. I use AI as a tool to help me think and draft, but I respect your policy and will withdraw from this one. If I do come back to a tutorial here, it will be entirely my own work. Thanks for the time."
+        },
+        {
+          "author": "davidism",
+          "body": "Moving @kdeldycke https://github.com/pallets/click/pull/3160#issuecomment-4914295349 here:\n\n> @Rowlando13 is this PR a good candidate overall for the Click documentation? This looks way too generic for a CLI framework. Where should we draw the line? I guess we don't need to explain what a computer is right? 😁 So no need to explain what a CLI is? I vote for closing this PR.\n\nI agree that PR is too generic. I get the motivation here, but I think we need to reassess what we need to teach. It should be specific to understanding Click's execution and responsibilities."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Yeah, the PR is way to generic and not of the quality that I would accept. I was attempting to provide feedback to get it there. "
+        },
+        {
+          "author": "davidism",
+          "body": "I'm thinking more along the lines of the lifecycle/execution model. I did something similar for Flask: https://flask.palletsprojects.com/en/stable/lifecycle/ This helps people understand what Click's responsibilites are and why it works the way it does. I've referred back to that Flask outline regularly, it helps me remember the whole model as a maintainer too.\n\n- The terminal is in charge of how things are displayed.\n    - Mention the common default and popular terminals: Gnome Terminal, KDE Konsole, Windows Terminal, Mac Terminal, Ghostty, Kitty, WezTerm.\n    - Click sends special commands to tell the terminal how to move the cursor and output text.\n    - The terminal starts a shell.\n- The shell is in charge of splitting (tokenizing) typed input, and starting a program with arguments.\n    - Mention the common shells: Bash, Zsh, Fish, PowerShell.\n    - Avoid using CMD on Windows, it's weird. PowerShell is modern and recommended.\n    - The command line is split into tokens on spaces. Quotes are used to keep spaces in a token.\n    - `*` globs, `~` home, and `$` env var expansion.\n    - Windows does not handle the above, so Click emulates it by default.\n    - Environment variables set in the shell are available in Python and Click.\n    - Relative paths are relative to the shell's current directory.\n- Your Click application is started and given the list of tokens from the shell.\n- Click takes your application definition and identifies what `@command` function to run.\n- The command's `@option` and `@argument` definitions are used to turn the shells tokens into the positional and keyword arguments to call Python command function with.\n- Click first divides up the tokens, then converts them to the appropriate types, then validates them.\n- The shell is in charge of how tab completion is displayed and applied. Click is in charge of telling the shell what completions are available.\n- Click provides a special `--help` option by default for each command. This prints out information about the command and its parameters, instead of executing the command.\n- Click can be customized to behave very dynamically. Therefore, is may still execute parent commands and code in order to arrive at the current completion or help output.\n- When the command finishes, Click returns an exit code to the shell. 0 for success, 1 indicates an error, and other values can represent application-specific statuses."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Sounds good. I was thinking something similar. This is a good outline. "
+        },
+        {
+          "author": "kdeldycke",
+          "body": "That lifecycle page from Flask is an excellent template! And @davidism's variant for Click is absolutely answering @Rowlando13 intention, without getting into too much details.\n\nSomething @Rowlando13 pointed at https://github.com/pallets/click/pull/3173#issuecomment-4917222924 is about targeting researchers. This is the right angle: I know a bunch of them and how they work. They're too busy in their own domain producing results, papers, posters and talks at conferences that they have no time to invest into their data workflows and software engineering. So everything is a shell script (I am just slightly exaggerating). Helping them structure their work in CLIs with Click is a good approach.\n\nThat's how I structure my tutorial at https://kdeldycke.github.io/click-extra/tutorial.html#from-script-to-cli-in-30-seconds . And the best pathway to upgrade from crappy script to cool CLI without the hassle is to rely on `uv`'s Python file headers (see: https://kdeldycke.github.io/click-extra/tutorial.html#standalone-script) and you get the best of both worlds.\n\nSo I guess what's left is to synthesize all of this into a proper tutorial to close this issue."
+        }
+      ]
+    },
+    {
+      "number": 3036,
+      "title": "Add support for `set` and `frozenset` (and `dict`?) as native Click types",
+      "body": "### Context\n\nThis is a follow-up on https://github.com/pallets/click/issues/2610. Half of the latter has been solved by #3030. This ticket contain the other half that was not fixed by #3030.\n\nCC @drunkwcodes",
+      "labels": [
+        "typing",
+        "tests"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "I am unclear what this issue is for. @kdeldycke can you please be more specific. Is it for adding the param types for set, frozenset, dict? I saw the test that shows there is a way to instantiate the types. "
+        },
+        {
+          "author": "kdeldycke",
+          "body": "> I am unclear what this issue is for. [@kdeldycke](https://github.com/kdeldycke) can you please be more specific. Is it for adding the param types for set, frozenset, dict? I saw the test that shows there is a way to instantiate the types.\n\nMy goal is to start sparkling these native types in the various unit tests. And just search for edge-cases and inconsistent behavior. A bit like fuzzy testing. If everything's fine then we will have additional tests. If not I will start a discussion and propose code to fix stuff. That's it ! :)"
+        },
+        {
+          "author": "Rowlando13",
+          "body": "Got it. "
+        },
+        {
+          "author": "davidism",
+          "body": "Could you describe what you expect to happen with these types? `tuple` is pretty clear, it indicates a compound type, and data from the CLI is fixed, not a mutable list."
+        },
+        {
+          "author": "kdeldycke",
+          "body": "> Could you describe what you expect to happen with these types? `tuple` is pretty clear, it indicates a compound type, and data from the CLI is fixed, not a mutable list.\n\nI created this ticket to not hide under the rug the concerns raised about these types in #2610, so I could close the later. And also based on some gut feelings. But if this is too speculative for now, we can close it as too vague. I may come back in the future with a more material proposition in the form of a PR."
+        },
+        {
+          "author": "kdeldycke",
+          "body": "All the current behavior of Click around these types has been locked down and covered by unittest in https://github.com/pallets/click/pull/3808 to prevent regression and document the current state of things.\n\nThis issue is still open as it target proper conservation and handling of these types, which has not been addressed and will probably involve some breaking changes. As such I move this issue to the major 9.0.0 release."
+        }
+      ]
+    },
+    {
+      "number": 3022,
+      "title": "Support `FORCE_COLOR` and `NO_COLOR` environment variables",
+      "body": "It would be great if the `FORCE_COLOR` and `NO_COLOR` environment variables could be used during calls to `click.echo`/`click.secho` to determine the default preference for colouring of stdout/stderr when an explicit preference for outputting colour is not set.\n\nIt appears that currently, click simply inspects whether the output stream considers itself to be a physical TTY. This is problematic on build systems such as GitLab or Jenkins or GitHub Actions, as logs that could be output in colour will not be since the output stream is still technically a file.\n\nSupporting this would allow simpler catering for outputs that are designed to help visually impaired users when viewing automated build outputs, but may have other applications as well.\n\nThese environment variables are a good candidate to be used, because [the Python interpreter already considers these specific variables](https://docs.python.org/3/using/cmdline.html#controlling-color), and other libraries such as `colorlog` also respect this.",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "kdeldycke",
+          "body": "I made a custom `--color`/`--no-color` option flag that supports [all variations of the `FORCE_COLOR` and `NO_COLOR` environment variables](https://github.com/kdeldycke/click-extra/blob/main/click_extra/colorize.py#L170-L193). It is available through my [Click Extra project](https://github.com/kdeldycke/click-extra).\n\nRelates to:\n- https://github.com/pallets/click/issues/558\n- https://github.com/pallets/click/issues/1090\n- https://github.com/pallets/click/issues/1498"
+        }
+      ]
+    },
+    {
+      "number": 3016,
+      "title": "Improve text wrapping",
+      "body": "[Currently click has 2 modes to display a help text](https://click.palletsprojects.com/en/stable/documentation/#escaping-click-s-wrapping):\n1. Word-wrap the entire blob, and remove all other whitespaces\n2. Preserve newlines, but disable word-wrapping\n\n\n1) with a console width of 60, visualized with the `*`:\n```\n************************************************************\nUsage: click_wrapping.py [OPTIONS]\n\nOptions:\n  --test [value1|value2]  Example text to show word\n                          wrapping. 'Value1' - short\n                          comment. 'Value2' - A longer\n                          comment that should wrap to the\n                          next line.\n  --help                  Show this message and exit.\n************************************************************\n```\n2) with a console width of 60, visualized with the `*`:\n```\n************************************************************\nUsage: click_wrapping.py [OPTIONS]\n\nOptions:\n  --test [value1|value2]  Example text to show word wrapping.\n                          'Value1' - short comment.\n                          'Value2' - A longer comment that should wrap to the next line.\n  --help                  Show this message and exit.\n************************************************************\n```\n\nThe 2nd option is slightly problematic, because on an actual console with width of 60, it looks like this:\n```\n************************************************************\nUsage: click_wrapping.py [OPTIONS]\n\nOptions:\n  --test [value1|value2]  Example text to show word wrapping\n.\n                          'Value1' - short comment.\n                          'Value2' - A longer comment that s\nhould wrap to the next line.\n  --help                  Show this message and exit.\n************************************************************\n```\n\nAnd that should probably be more along the lines of:\n```\n************************************************************\nUsage: click_wrapping.py [OPTIONS]\n\nOptions:\n  --test [value1|value2]  Example text to show word\n                          wrapping.\n                          'Value1' - short comment.\n                          'Value2' - A longer comment that\n                          should wrap to the next line.\n  --help                  Show this message and exit.\n************************************************************\n```\n\nWould a PR to fix this be accepted?\n(As in, preserve newlines but still wrap on the console width)\n",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 3010,
+      "title": "Impossible to get single newlines in help text",
+      "body": "The expected format is:\n```\n  --annotations [disabled|comment]\n                                  Specify the type of annotations to include in the XML output.\n                                  'Disabled' - no annotations.\n                                  'Comment' - annotations as comments.\n```\nThe actual format is either:\n```\n  --annotations [disabled|comment]\n                                  Specify the type of annotations to include in the XML output.\n\n                                  'Disabled' - no annotations.\n                                  'Comment' - annotations as comments.\n```\nor:\n```\n  --annotations [disabled|comment]\n                                  Specify the type of annotations to include in the XML output. 'Disabled' - no annotations. 'Comment' - annotations as comments.\n```\n\n\n\nHowever the text either has _no_ newlines, or it has double newlines.\nI expected this to work:\n```python\n@click.option(\n    \"--annotations\",\n    type=click.Choice(Annotations, case_sensitive=False),\n    default=Annotations.Comment,\n    help=\"\"\"Specify the type of annotations to include in the XML output.\n    \\b\n    'Disabled' - no annotations.\n    'Comment' - annotations as comments.\"\"\",\n)\n```\nBut that ends up without any newlines.\nAdding an extra blank line before the `\\b` does work, but that also results in an extra blank line in the output (as seen above):\n```python\n@click.option(\n    \"--annotations\",\n    type=click.Choice(Annotations, case_sensitive=False),\n    default=Annotations.Comment,\n    help=\"\"\"Specify the type of annotations to include in the XML output.\n\n    \\b\n    'Disabled' - no annotations.\n    'Comment' - annotations as comments.\"\"\",\n)\n```\n\n\n\nEnvironment:\n\n- Python version: 3.10.11\n- Click version: 8.2.1\n",
+      "labels": [],
+      "state": "open",
+      "comments": [
+        {
+          "author": "davidism",
+          "body": "I'm not clear what you're trying to report. The text you showed has single newlines, I don't see any squashed lines or blank lines."
+        },
+        {
+          "author": "learn-more",
+          "body": "> I'm not clear what you're trying to report. The text you showed has single newlines, I don't see any squashed lines or blank lines.\n\nI tried rewording it to make it a bit more clear"
+        },
+        {
+          "author": "davidism",
+          "body": "See #561, we plan to have a more customizable formatter system in general so users can control exactly how wrapping/breaking/etc works."
+        },
+        {
+          "author": "learn-more",
+          "body": "> See [#561](https://github.com/pallets/click/issues/561), we plan to have a more customizable formatter system in general so users can control exactly how wrapping/breaking/etc works.\n\nConsidering this ticket is from 2016, would it be an option to add a new escape (for example `\\b\\b`) that preserves newlines, but handles wrapping if the console becomes too small?\n\nOr maybe an option to parse docstrings from the type behind `click.Choice` and add those as entries in the help text?"
+        },
+        {
+          "author": "davidism",
+          "body": "I don't plan to add a new escape in the meantime. If you or someone else identifies why the current formatter isn't producing the expected result, we can adjust it, but I don't want to add more markup that we'd need to support going forward."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "There is no intention of supporting formatting help strings so specifically. When the help string for an option in taken in, then it is cleaned [here](https://github.com/pallets/click/blob/a8b41c077b225c30921a78190507a463a20ebb1b/src/click/core.py#L2555) Feel free to take a look at the code as see if you can get it do do what you want, but it depends on a standard lib function so it could break at any time. "
+        },
+        {
+          "author": "learn-more",
+          "body": "> There is no intention of supporting formatting help strings so specifically. When the help string for an option in taken in, then it is cleaned [here](https://github.com/pallets/click/blob/a8b41c077b225c30921a78190507a463a20ebb1b/src/click/core.py#L2555) Feel free to take a look at the code as see if you can get it do do what you want, but it depends on a standard lib function so it could break at any time.\n\nThat is not the part that slams the newlines, that is [this](https://github.com/pallets/click/blob/a8b41c077b225c30921a78190507a463a20ebb1b/src/click/formatting.py#L99) part and [this](https://github.com/pallets/click/blob/a8b41c077b225c30921a78190507a463a20ebb1b/src/click/formatting.py#L78) part specifically."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "I will take a look. "
+        },
+        {
+          "author": "learn-more",
+          "body": "> I will take a look.\n\nI created a suggestion how to fix it:\n#3016 \n\nThe change for that should be fairly simple, as long as there is consensus on the behavior."
+        }
+      ]
+    },
+    {
+      "number": 2992,
+      "title": "Add output of get_usage() to get_info_dict()",
+      "body": "## Context \n\nI am generating some of my user-facing documentation using `get_info_dict()`, and was looking for a way to automate the usage as well without having to hardcode it in the docstrings. \n\n## Potential solution\n\nUsing the calls of `get_info_dict()` to add a `usage` key with the value being the output of `get_usage()`.\n\nOther relevant issues: #2762 \n\n## Workaround\n\nFor now I'm using `get_info_dict()`, then looping through the context to get groups and commands, and using `get_usage()` on each, then adding it to that dictionary. The code looks something like this (with the for loop matching the structure of my CLI):\n\n```python\n    info = ctx.to_info_dict()\n    for cmd_n1 in ctx.command.list_commands(ctx):\n        cmd2 = ctx.command.get_command(ctx, cmd_n1)\n        sub_ctx = ctx._make_sub_context(cmd2)\n        usage = cmd2.get_usage(sub_ctx).replace(\"Usage: \", \"\")\n        info[\"command\"][\"commands\"][cmd_n1][\"usage\"] = usage\n        if isinstance(cmd2, click.Group):\n            # Groups\n            for cmd_n2 in cmd2.list_commands(ctx):\n                cmd3 = cmd2.get_command(ctx, cmd_n2)\n                sub_ctx3 = sub_ctx._make_sub_context(cmd3)\n                usage = cmd3.get_usage(sub_ctx3).replace(\"Usage: \", \"\")\n                info[\"command\"][\"commands\"][cmd_n1][\"commands\"][cmd_n2][\"usage\"] = usage\n\n```\n\n",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    },
+    {
+      "number": 2917,
+      "title": "Add e2e completion testing",
+      "body": "Currently it's a bit hard to know whether our completions actually work end-to-end. Whether when it's all installed, that we actually get the completions we're expecting in our API. It would be nice if we added some way that we could test this. This would've been helpful in #2846.\n\nWe might be able to use [scrut](https://github.com/facebookincubator/scrut?rgh-link-date=2025-05-14T21%3A48%3A40Z) to create a test for it. My team created this tool for our work and it basically allows you to easily create E2E tests. If you can make autocompletions show by running a command on the commandline, you can very easily make a scrut test out of that.\n",
+      "labels": [
+        "shell completion",
+        "tests"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "Ideally the solution would also easily support testing locally. But CI is would be the minimum. "
+        },
+        {
+          "author": "davidism",
+          "body": "The solution _must_ support testing locally and in CI. Having differences between the two is not a good idea."
+        },
+        {
+          "author": "Rowlando13",
+          "body": "@davidism I agree. I just don't know that that exists so I was hesitant to demand it as an initial requirement because we don't have anything. Do you have any ideas for direction.  "
+        },
+        {
+          "author": "davidism",
+          "body": "[argcomplete](https://github.com/kislyuk/argcomplete/blob/main/test/test.py) uses [pexpect](https://pexpect.readthedocs.io/en/stable/)."
+        }
+      ]
+    },
+    {
+      "number": 2882,
+      "title": "Add help string formatters that don't use escaped characters.",
+      "body": "I'd love to use the `\\f` and `\\b` in my docstrings to have a single source of help text. However, [Ruff D301](https://docs.astral.sh/ruff/rules/escape-sequence-in-docstring/)  enforces [PEP 257](https://peps.python.org/pep-0257/#what-is-a-docstring) which requires docstrings to be raw (`r\"\"\"…\"\"\"`) if they have any backslashes in them. Doing _that_ breaks the VS Code syntax highlighting to no longer treat the string as a docstring.\n\nSo, I've had to move documentation out of the docstring for the function and into the `help` argument, repeating the docstring first line, all because I want to use `\\b` and `\\f` to fight Click's helpful auto-formatting. Please add an additional formatting mechanism to support these functions. If I'm going to put visual garbage in my source file to get the formatting to behave, it would be nice if it were self-documenting, e.g. \n\n```python\n@click.option(…)\n@click.option(…)\ndef myfunc(cats: int = 0, feet: int = 0) -> None:\n    \"\"\"Does good stuff.\n    \n    Here's more detailed information\n    on how this works.\n    \n    <<click-preserve-whitespace>>\n    Examples:\n         # basic usage\n         $ myfunc\n    \n         # overrides\n         $ myfunc --cats 1 --feet 17\n\n    <<click-end-help>>\n\n    Args:\n        cats: Number of cats to assume prowling around.\n        feet: How far cats can jump during attacks.\n    \"\"\"\n    pass\n```",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "Click is a long standing project that has been using \\b and \\f for a very long time. I would suggest turning off Ruff D301 or seeing if there is a VS code setting you can alter.  Is there something I am missing ? @kdeldycke "
+        }
+      ]
+    },
+    {
+      "number": 2881,
+      "title": "Allow epilog without indentation.",
+      "body": "When adding an epilog to a group, the text appears to be indented under the commands list.\n\n```python\n@click.group(\n    context_settings={\"max_content_width\": 100, \"show_default\": True},\n    epilog=\"\"\"\\b\n    Example Usage:\n        # Run this stuff first\n        $ some-command\n        \n        # Then run this command\n        my-click-script go\n    \"\"\",\n)\ndef regression() -> None:\n    \"\"\"This is a tool with lots of commands.\"\"\"\n    pass\n```\n\n```txt\n$ regression --help\n\nUsage: regression [OPTIONS] COMMAND [ARGS]...\n\n  This is a tool with lots of commands.\n\nOptions:\n  --help  Show this message and exit.\n\nCommands:\n  bundle  Wrap it all up.\n  guard   Run lots of verifications.\n  report  Generate a report from a bundle.\n  run     Do stuff.\n  store   Don't use this; it's for CI/CD only.\n  verify  Compare two reports and verify they are identical.\n\n  Example Usage:\n      # Run this stuff first\n      $ some-command\n      \n      # Then run this command\n      regression guard\n```\n\nI want the entire epilog to not be indented. Perhaps `indent-epilog=False`?",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "I will keep an eye on this to see if it gathers community support."
+        },
+        {
+          "author": "jpmvferreira",
+          "body": "It has my support! Is there a simple workaround for that in the meantime?"
+        },
+        {
+          "author": "sirosen",
+          "body": "I just ran into a desire for this and solved it by making a customized copy of `help_option` to try to avoid some of the less clearly public APIs.\n\n```python\ndef help_option(*, epilog: str | None = None) -> _t.Callable[[FC], FC]:\n    \"\"\"A variant of the built-in click ``--help`` option.\n\n    Unlike ``click.help_option``, this decorator accepts its own `epilog` text which is\n    printed *without indentation* after help text.\n    \"\"\"\n\n    def show_help(ctx: click.Context, param: click.Parameter, value: bool) -> None:\n        \"\"\"Callback that print the help page on ``<stdout>`` and exits.\"\"\"\n        if value and not ctx.resilient_parsing:\n            click.echo(ctx.get_help(), color=ctx.color)\n            if epilog is not None:\n                formatter = ctx.make_formatter()\n                formatter.write_text(epilog)\n                click.echo(\"\\n\" + formatter.getvalue().rstrip(\"\\n\"), color=ctx.color)\n            ctx.exit()\n\n    return click.option(\n        \"-h\",\n        \"--help\",\n        help=\"Show this message and exit.\",\n        callback=show_help,\n        is_eager=True,\n        expose_value=False,\n        is_flag=True,\n    )\n```\n\nI'm not convinced in favor of a \"dedent epilog\" option -- that seems much too use-case specific. But I would like to be able to hook into this process to customize it more easily. In my example, I had to reproduce the whole help opt, with all of its details.\n"
+        }
+      ]
+    },
+    {
+      "number": 2875,
+      "title": "Method used to build prompts under the hood does not allow for full format customization",
+      "body": "Currently method [`_build_prompt`](https://github.com/pallets/click/blob/main/src/click/termui.py#L60-L73) is implemented in very opinionated way regarding formatting how to display choices or default value. Considering how good of a job the rest of the features do in regards to potential extensions and customizations, I am surprised that the best way I found to customize this method is to overwrite it before use, for example as follows:\n\n```python\nimport click\n\ndef my_own_build_prompts(*args, **kwargs):\n    pass\n\nclick.termui._build_prompt = my_own_build_prompts\n```\n\n---\nEven though it is \"_technically_\" possible to override, I'd argue the fact that in order to find it I had to dig deep into codebase and find the details of implementation feels \"hacky\" and \"not intended\" - and for sure error prone and not future-proof.\n\nI am very happy to contribute and implement the solution, but I'd rather hear some opinions from the library owners beforehand whether this is something they'd find valuable.",
+      "labels": [
+        "prompt"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "Rowlando13",
+          "body": "In general, I am open to new community sourced ideas, and I appreciate the effort you put into this. However, Click is so widely used, that I would like to have more comprehensive docs and better test coverage before anything major is added, unless there is very clear community support. I will continue to keep an eye on this to see if it gathers community support."
+        }
+      ]
+    },
+    {
+      "number": 2778,
+      "title": "Indicate multiple use options in help",
+      "body": "I think it would be nice to append a `...` to the metavar when `multiple` is true. Using curl as an example, `-H TEXT` would become `-H TEXT...`.",
+      "labels": [
+        "help output"
+      ],
+      "state": "open",
+      "comments": [
+        {
+          "author": "swills1",
+          "body": "Can you please explain your overall reasoning? Maybe I am misunderstanding, but couldn't you do this -\r\n\r\n```import click\r\n\r\n@click.command()\r\n@click.option('--color', multiple=True, metavar='<COLOR>', help='Specify a color')\r\n@click.option('--size', multiple=True, metavar='<SIZE>', help='Specify a size')\r\ndef cli(color, size):\r\n    click.echo(f'You selected the colors: {\", \".join(color)}')\r\n    click.echo(f'You selected the sizes: {\", \".join(size)}')\r\n\r\nif __name__ == '__main__':\r\n    cli()\r\n```\r\nThen you would get -\r\n\r\n```\r\n$ python script.py --color red --color green --color blue --size small --size large\r\nYou selected the colors: red, green, blue\r\nYou selected the sizes: small, large\r\n```"
+        }
+      ]
+    },
+    {
+      "number": 90101,
+      "title": "--help usage line cuts argument names in half at the dash",
+      "body": "Small one, but it confused a couple of people on my team.\n\nI gave the arguments of one of our commands descriptive metavars with dashes in them,\nand at 80 columns `--help` prints:\n\n    Usage: mytool storage sync [OPTIONS] LOCAL-SOURCE-DIRECTORY REMOTE-TARGET-\n                               BUCKET-NAME\n\nso `BUCKET-NAME` on the second line looks like a third argument. I thought it was my\nterminal at first but it's Click doing the wrapping. Breaking the line before\n`REMOTE-TARGET-BUCKET-NAME` instead of inside it would be fine.\n\nclick 8.5.0\n",
+      "labels": [],
+      "state": "open",
+      "comments": []
+    }
+  ]
+}

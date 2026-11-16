@@ -1,0 +1,158 @@
+{
+  "impl": "pydanticai",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Parser and processing-pipeline rewrite and Click 9.0",
+        "issues": [
+          3154,
+          3156,
+          2205,
+          590,
+          2834,
+          2835,
+          2824,
+          742,
+          730,
+          2771,
+          473,
+          1269,
+          1322,
+          2786
+        ]
+      },
+      {
+        "name": "Help output and formatter customization",
+        "issues": [
+          3089,
+          3097,
+          3094,
+          561,
+          373,
+          3010,
+          3016,
+          2881,
+          2882,
+          3362,
+          3652,
+          2778,
+          2679,
+          2683
+        ]
+      },
+      {
+        "name": "Color, exceptions and terminal I/O",
+        "issues": [
+          944,
+          2419,
+          2740,
+          3022,
+          2781,
+          3886,
+          3840,
+          2154,
+          2361
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2847,
+          2614,
+          2303,
+          2184,
+          2917,
+          2299
+        ]
+      },
+      {
+        "name": "Prompts and stdin handling",
+        "issues": [
+          1370,
+          304,
+          2875
+        ]
+      },
+      {
+        "name": "Typing, public API cleanup and docs",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          2493,
+          3036,
+          3077,
+          3076,
+          3081,
+          2823
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 2778,
+        "b": 3652,
+        "reason": "Both ask to add '...' to an option's metavar in help output when multiple=True so users can see the option can be repeated."
+      },
+      {
+        "a": 304,
+        "b": 1370,
+        "reason": "Both report that confirmation prompts read from piped stdin instead of the terminal (/dev/tty), so they fail when input is piped."
+      }
+    ],
+    "top_issues": [
+      {
+        "number": 3154,
+        "reason": "Tracking issue for the Click 9.0 release, which sets the direction for the deprecation and parser work."
+      },
+      {
+        "number": 3156,
+        "reason": "Removing deprecated code is concrete work that the 9.0 release depends on."
+      },
+      {
+        "number": 2847,
+        "reason": "Bug: completion of long options written with '=' is broken, which affects users of shell completion."
+      },
+      {
+        "number": 3840,
+        "reason": "New, unlabelled report that click.edit fails intermittently on Windows with WinError 87/14001. One commenter could not reproduce it and suspects a Windows platform bug, so it needs a maintainer decision."
+      },
+      {
+        "number": 2645,
+        "reason": "Bug: LazyFile eagerly opens and closes files during error checking, which can break reading from a FIFO."
+      }
+    ],
+    "suggested_labels": [
+      {
+        "number": 3888,
+        "labels": [
+          "parsing"
+        ]
+      },
+      {
+        "number": 3886,
+        "labels": [
+          "prompt"
+        ]
+      },
+      {
+        "number": 3840,
+        "labels": [
+          "prompt"
+        ]
+      }
+    ]
+  },
+  "stats": {
+    "tool_calls": 15,
+    "model_requests": 6,
+    "input_tokens": 67297,
+    "output_tokens": 2136,
+    "max_tool_calls": 25,
+    "max_model_requests": 40,
+    "timeout": 900.0,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}

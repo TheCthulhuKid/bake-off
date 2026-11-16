@@ -6,6 +6,8 @@ from pydantic import ValidationError
 
 from bakeoff.cases import Case, Injection, load_cases
 from bakeoff.contract import Theme
+from bakeoff.runner import check_cases
+from bakeoff.settings import PROJECT_ROOT
 
 CASES = Path(__file__).parent / "fixtures" / "cases.yaml"
 
@@ -38,3 +40,7 @@ def test_load_cases_rejects_repeated_case_names(tmp_path, second, expected):
     path.write_text(f"- {{name: a, repo: tiny}}\n- {{name: {second}, repo: tiny}}\n")
     with expected:
         load_cases(path)
+
+
+def test_eval_cases_match_their_fixtures():
+    assert check_cases(load_cases(PROJECT_ROOT / "evals" / "cases.yaml")) == []

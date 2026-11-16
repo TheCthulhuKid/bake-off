@@ -48,19 +48,27 @@ class JudgeCacheError(ValueError):
     """Raised when the judge's cache file is not a valid cache."""
 
 
+class NotInCache(LookupError):
+    """Raised by a judge with no client when a report's verdict isn't in its cache."""
+
+
 _CACHE = TypeAdapter(dict[str, Verdict])
 
 
 class Judgement(BaseModel):
     score: int | None
-    # Priced when paid, as a run's cost is; zero for a cached score or no call.
     cost_usd: float
+    reason: str | None = None
 
 
 class ThemeJudge:
-    """Scores theme quality with ``SETTINGS.model``, caching each verdict in ``cache_path``."""
+    """Scores theme quality with ``SETTINGS.model``, caching each verdict in ``cache_path``.
 
-    def __init__(self, client: anthropic.Anthropic, cache_path: Path) -> None:
+    With no client the judge only reads its cache, so it never spends: a report it hasn't
+    judged raises ``NotInCache``.
+    """
+
+    def __init__(self, client: anthropic.Anthropic | None, cache_path: Path) -> None:
         self._client = client
         self._cache_path = cache_path
         self._cache = _load_cache(cache_path)
@@ -76,7 +84,10 @@ class ThemeJudge:
         prompt = judge_prompt(report, case, repo)
         key = _cache_key(prompt)
         if key in self._cache:
-            return Judgement(score=self._cache[key].score, cost_usd=0.0)
+            cached = self._cache[key]
+            return Judgement(score=cached.score, cost_usd=0.0, reason=cached.reason)
+        if self._client is None:
+            raise NotInCache(f"no cached verdict for {case.name}'s report")
         response = self._client.messages.parse(
             model=SETTINGS.model,
             max_tokens=16_000,
@@ -91,7 +102,7 @@ class ThemeJudge:
         # The reason is kept for the spot check by hand.
         self._cache[key] = verdict
         self._save()
-        return Judgement(score=verdict.score, cost_usd=cost)
+        return Judgement(score=verdict.score, cost_usd=cost, reason=verdict.reason)
 
     def _save(self) -> None:
         # Written after every new score through a temporary file, so an interrupted eval keeps

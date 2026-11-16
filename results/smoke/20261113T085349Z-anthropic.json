@@ -1,0 +1,182 @@
+{
+  "impl": "anthropic",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output formatting and customization",
+        "issues": [
+          3652,
+          2778,
+          3362,
+          3097,
+          3094,
+          3089,
+          3016,
+          3010,
+          2882,
+          2881,
+          2683,
+          2679,
+          561,
+          373,
+          3022,
+          2781,
+          2419,
+          944
+        ]
+      },
+      {
+        "name": "Parser internals, behaviour and rewrite",
+        "issues": [
+          3154,
+          3156,
+          2834,
+          2835,
+          2205,
+          590,
+          2824,
+          2786,
+          2771,
+          2768,
+          2753,
+          2402,
+          1322,
+          1279,
+          1269,
+          742,
+          730,
+          680,
+          531,
+          473,
+          2992,
+          1574,
+          2783,
+          928
+        ]
+      },
+      {
+        "name": "Typing, public API cleanup and param types",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          3036,
+          2493,
+          3888,
+          1428,
+          2645,
+          2429,
+          1378,
+          2740,
+          2706
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2917,
+          2847,
+          2614,
+          2303,
+          2184,
+          2299
+        ]
+      },
+      {
+        "name": "Prompts, terminal UI and embedding (prompts, editor, pager, async)",
+        "issues": [
+          1370,
+          304,
+          2875,
+          3840,
+          3886,
+          2154,
+          2033,
+          2360,
+          2361,
+          1997
+        ]
+      },
+      {
+        "name": "Documentation and tutorials",
+        "issues": [
+          3081,
+          3077,
+          3076,
+          2823,
+          2801,
+          2676
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 3652,
+        "b": 2778,
+        "reason": "Both ask for '...' to be added automatically to the metavar in help output when an option has multiple=True."
+      },
+      {
+        "a": 1370,
+        "b": 304,
+        "reason": "Both report that confirm prompts read from the piped stdin instead of from the terminal (tty)."
+      }
+    ],
+    "top_issues": [
+      {
+        "number": 3840,
+        "reason": "Untriaged bug report: click.edit fails on Windows about half the time with WinError 87/14001. Someone needs to decide whether this is a Click bug or a Windows notepad alias bug."
+      },
+      {
+        "number": 3154,
+        "reason": "Tracking issue for the Click 9.0 release (removing deprecated code and hacks), which several other issues depend on."
+      },
+      {
+        "number": 3156,
+        "reason": "Removing deprecated code is concrete work that the 9.0 release needs."
+      },
+      {
+        "number": 2847,
+        "reason": "Functional bug: completing long options written with '=' is broken in shell completion."
+      },
+      {
+        "number": 1269,
+        "reason": "Long-standing parsing bug: a chained command with an argument and an option gives a wrong 'No such command' error."
+      }
+    ],
+    "suggested_labels": [
+      {
+        "number": 3888,
+        "labels": [
+          "parsing",
+          "typing"
+        ]
+      },
+      {
+        "number": 3886,
+        "labels": [
+          "help output"
+        ]
+      },
+      {
+        "number": 3840,
+        "labels": [
+          "prompt",
+          "bug",
+          "windows"
+        ]
+      }
+    ]
+  },
+  "stats": {
+    "tool_calls": 15,
+    "model_requests": 6,
+    "input_tokens": 70267,
+    "output_tokens": 2425,
+    "max_tool_calls": 25,
+    "max_model_requests": 40,
+    "timeout": 900.0,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}

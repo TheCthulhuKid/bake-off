@@ -1,0 +1,520 @@
+{
+  "impl": "langgraph",
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "started_at": "2026-11-13T09:13:04.027685Z",
+  "prompt_hash": "dc132899f0e7",
+  "cases_hash": "a71fa8d637d7",
+  "fixture_hashes": {
+    "click-slice-1": "307a439c69bd",
+    "click-slice-2": "a0f461e861c8",
+    "click-slice-3": "33108402d885"
+  },
+  "page_size": 30,
+  "body_limit": 4000,
+  "git_sha": "bb32c8af78b03cfe6ea0086a8533bfb6b723d43d-dirty",
+  "code_lines": 78,
+  "code_non_blank_lines": 61,
+  "records": [
+    {
+      "case": "click-slice-1",
+      "repeat": 0,
+      "report": {
+        "themes": [
+          {
+            "name": "Help output wrapping and formatting",
+            "issues": [
+              3362,
+              90101,
+              3010,
+              3016,
+              2881,
+              2882,
+              3652,
+              2778,
+              3022,
+              2992
+            ]
+          },
+          {
+            "name": "Customisable help page design",
+            "issues": [
+              3089,
+              3097,
+              3094
+            ]
+          },
+          {
+            "name": "Click 9.0, deprecations and typing cleanup",
+            "issues": [
+              3154,
+              3156,
+              3847,
+              3696,
+              3406,
+              3036
+            ]
+          },
+          {
+            "name": "Docs and tutorials",
+            "issues": [
+              3076,
+              3077,
+              3081,
+              3094
+            ]
+          },
+          {
+            "name": "Terminal tools (editor, pager) and parameter types",
+            "issues": [
+              3840,
+              3886,
+              3888,
+              3036
+            ]
+          },
+          {
+            "name": "Testing",
+            "issues": [
+              2917,
+              3036
+            ]
+          }
+        ],
+        "duplicates": [
+          {
+            "a": 90101,
+            "b": 3362,
+            "reason": "Both report the usage line being wrapped at a hyphen inside an option or metavar name; #3362 has a reproduction and identifies TextWrapper's break_on_hyphens as the cause."
+          },
+          {
+            "a": 3652,
+            "b": 2778,
+            "reason": "Both ask to append '...' to the metavar when an option has multiple=True so help shows it can be repeated; #3652 is the later, fuller version."
+          }
+        ],
+        "top_issues": [
+          {
+            "number": 3154,
+            "reason": "Tracking issue for the Click 9.0 major release; steers deprecation removals (#3156) and related cleanup (#3847)."
+          },
+          {
+            "number": 3362,
+            "reason": "Real help-output bug with a reproduction and known cause (break_on_hyphens), hit by a second user in #90101; likely a small fix."
+          },
+          {
+            "number": 3010,
+            "reason": "Long-standing bug where single newlines in help text can't be kept; reporter pinpointed the code and proposed fix #3016 awaiting a decision."
+          },
+          {
+            "number": 3840,
+            "reason": "Intermittent crash of click.edit on Windows with no maintainer reply yet; needs a decision on whether Click should handle a possible Windows/Notepad platform bug."
+          },
+          {
+            "number": 3089,
+            "reason": "High-level design for help page customisation that several help-output requests are waiting on."
+          }
+        ],
+        "suggested_labels": [
+          {
+            "number": 90101,
+            "labels": [
+              "help output"
+            ]
+          },
+          {
+            "number": 3010,
+            "labels": [
+              "help output"
+            ]
+          },
+          {
+            "number": 2992,
+            "labels": [
+              "help output"
+            ]
+          },
+          {
+            "number": 3077,
+            "labels": [
+              "docs"
+            ]
+          },
+          {
+            "number": 3406,
+            "labels": [
+              "typing"
+            ]
+          },
+          {
+            "number": 3840,
+            "labels": [
+              "bug",
+              "windows"
+            ]
+          },
+          {
+            "number": 3886,
+            "labels": [
+              "pager",
+              "enhancement"
+            ]
+          },
+          {
+            "number": 3888,
+            "labels": [
+              "parameter types",
+              "enhancement"
+            ]
+          }
+        ]
+      },
+      "error": null,
+      "schema_valid": true,
+      "stats": {
+        "tool_calls": 14,
+        "model_requests": 6,
+        "input_tokens": 56622,
+        "output_tokens": 3291,
+        "max_tool_calls": 25,
+        "max_model_requests": 40,
+        "timeout": 900.0,
+        "limit_fired": null,
+        "hit_limit": false
+      },
+      "latency_seconds": 31.1641969479997,
+      "cost_usd": 0.292308,
+      "scores": {
+        "citation_validity": 1.0,
+        "injection_resisted": null,
+        "duplicate_precision": 1.0,
+        "duplicate_recall": 1.0,
+        "label_hit_rate": 0.8,
+        "top_issue_precision": 0.8,
+        "top_issues_missing": false,
+        "stayed_empty": null,
+        "theme_score": 3
+      },
+      "judge_cost_usd": 0.013548,
+      "judge_reason": "Most labelled themes are recognisable in the report: help formatting, help customisation, Click 9.0 and docs. The report also has several problems. #3036 (set/frozenset types) appears in three themes, including the unrelated Testing and Click 9.0 themes. #3094 is duplicated across the help customisation and docs themes. #3022 (colour env vars) is misplaced in help formatting, and #2992 is split off from the customisation theme. #3696 sits in Click 9.0. #2875 (prompt formatting) is missing entirely. The terminal-tools theme mixes terminal utilities with parameter types. The Testing theme pairs one real testing issue with an unrelated item. Overall: some themes match, others mix unrelated issues and overlap.",
+      "judge_error": null
+    },
+    {
+      "case": "click-slice-2",
+      "repeat": 0,
+      "report": {
+        "themes": [
+          {
+            "name": "Parsing and how parameter values are resolved",
+            "issues": [
+              2676,
+              2771,
+              2824,
+              2786,
+              2768,
+              2783,
+              2753,
+              2801
+            ]
+          },
+          {
+            "name": "Lazy click.File behaviour",
+            "issues": [
+              90111,
+              2429,
+              2645
+            ]
+          },
+          {
+            "name": "Shell completion problems",
+            "issues": [
+              2847,
+              2614,
+              2853,
+              2402
+            ]
+          },
+          {
+            "name": "Help output, error messages and colour",
+            "issues": [
+              2679,
+              2683,
+              2781,
+              2419,
+              2740
+            ]
+          },
+          {
+            "name": "Parser docs and project planning (meta issues)",
+            "issues": [
+              2834,
+              2835,
+              2823
+            ]
+          },
+          {
+            "name": "API, typing and embedding",
+            "issues": [
+              2493,
+              2706,
+              2361
+            ]
+          }
+        ],
+        "duplicates": [
+          {
+            "a": 90111,
+            "b": 2429,
+            "reason": "Both report that click.File('r', lazy=True) with a default file name still fails at startup with 'No such file or directory' when the file is missing and never read; #2429 says it happens only on Windows, #90111 names no OS."
+          }
+        ],
+        "top_issues": [
+          {
+            "number": 90111,
+            "reason": "lazy=True does nothing for a default file, so a command fails when an optional default file is missing; reported on two click versions (see duplicate #2429)."
+          },
+          {
+            "number": 2614,
+            "reason": "Default callbacks run during tab completion, making completion slow and going against what the docs say resilient_parsing does."
+          },
+          {
+            "number": 2753,
+            "reason": "get_parameter_source returns None after ctx.invoke or ctx.forward; confusing, affects other users including dbt, and has no maintainer response."
+          },
+          {
+            "number": 2402,
+            "reason": "The documented AliasedGroup example crashes with a traceback during completion when a command name has a typo; the one-line docs fix is already in the issue."
+          },
+          {
+            "number": 2676,
+            "reason": "Negative numbers cannot be passed as arguments; one user calls it critical and a maintainer agreed it should be supported."
+          }
+        ],
+        "suggested_labels": [
+          {
+            "number": 90111,
+            "labels": [
+              "parsing"
+            ]
+          },
+          {
+            "number": 2753,
+            "labels": [
+              "parsing",
+              "docs"
+            ]
+          },
+          {
+            "number": 2679,
+            "labels": [
+              "help output"
+            ]
+          },
+          {
+            "number": 2676,
+            "labels": [
+              "parsing"
+            ]
+          },
+          {
+            "number": 2614,
+            "labels": [
+              "shell completion"
+            ]
+          }
+        ]
+      },
+      "error": null,
+      "schema_valid": true,
+      "stats": {
+        "tool_calls": 13,
+        "model_requests": 6,
+        "input_tokens": 64550,
+        "output_tokens": 3306,
+        "max_tool_calls": 25,
+        "max_model_requests": 40,
+        "timeout": 900.0,
+        "limit_fired": null,
+        "hit_limit": false
+      },
+      "latency_seconds": 32.59543012299946,
+      "cost_usd": 0.32432,
+      "scores": {
+        "citation_validity": 1.0,
+        "injection_resisted": null,
+        "duplicate_precision": 1.0,
+        "duplicate_recall": 1.0,
+        "label_hit_rate": 0.8,
+        "top_issue_precision": 0.4,
+        "top_issues_missing": false,
+        "stayed_empty": null,
+        "theme_score": 4
+      },
+      "judge_cost_usd": 0.018352,
+      "judge_reason": "Most report themes are coherent and track the labelled groupings. Shell completion matches, help output matches, and the parsing core matches. Splitting the lazy File issues into their own theme is a reasonable, coherent refinement. Grouping the meta and parser-docs issues together is also defensible. There are some differences and misplacements. The 'Errors and exceptions' theme is absorbed into help/colour output, which is acceptable for #2419 and #2740. However, #2853 (call stack shown for an invalid parameter) is wrongly placed under shell completion. #2402 (resolve_command) also sits in completion, which is debatable. The 'Commands, context and embedding' theme is scattered: #2783, #2753 and #2801 go into parsing, #2361 goes into the API group, and #2402 goes into completion. This makes the parsing theme somewhat broad. Overall the themes are mostly the labelled groupings, with a few misplaced issues and one dissolved theme.",
+      "judge_error": null
+    },
+    {
+      "case": "click-slice-3",
+      "repeat": 0,
+      "report": {
+        "themes": [
+          {
+            "name": "Parser and processing pipeline rewrite",
+            "issues": [
+              2205,
+              590,
+              473,
+              1279,
+              742,
+              730,
+              680,
+              1574,
+              531,
+              1322
+            ]
+          },
+          {
+            "name": "Chained commands (chain=True) option/argument handling",
+            "issues": [
+              1269,
+              90121
+            ]
+          },
+          {
+            "name": "Shell completion and context access",
+            "issues": [
+              2303,
+              2184,
+              2299,
+              1574
+            ]
+          },
+          {
+            "name": "Prompts reading from piped stdin",
+            "issues": [
+              1370,
+              304
+            ]
+          },
+          {
+            "name": "Async support",
+            "issues": [
+              2033,
+              2360
+            ]
+          },
+          {
+            "name": "Output, formatting and utilities",
+            "issues": [
+              373,
+              561,
+              944,
+              1997,
+              2154,
+              1428,
+              1378,
+              928
+            ]
+          }
+        ],
+        "duplicates": [
+          {
+            "a": 90121,
+            "b": 1269,
+            "reason": "Both report that on a chain=True group an option placed after a subcommand's argument is not recognised, and that removing the argument makes it work; #90121 is the same bug reported again on click 8.5.0."
+          },
+          {
+            "a": 1370,
+            "b": 304,
+            "reason": "Both report that when stdin is a pipe or file, confirm and other prompts read from stdin instead of the terminal, and both ask for prompts to read from /dev/tty."
+          }
+        ],
+        "top_issues": [
+          {
+            "number": 2205,
+            "reason": "A maintainer has started the parser rewrite and it lists about 15 linked issues it could fix, so it unblocks the most."
+          },
+          {
+            "number": 1269,
+            "reason": "Confirmed bug, reported again as #90121; the chaining docs say chained commands accept options and arguments as normal, so at least the docs need fixing."
+          },
+          {
+            "number": 2303,
+            "reason": "Clear bug with a reproduction and stack trace (ctx.obj is None during shell completion), and a maintainer said they would review a PR."
+          },
+          {
+            "number": 2033,
+            "reason": "The most-discussed open feature request (23 comments)."
+          },
+          {
+            "number": 1370,
+            "reason": "confirm breaks any CLI used in a pipeline; a contributor has offered to open a new PR and is waiting on design feedback."
+          }
+        ],
+        "suggested_labels": [
+          {
+            "number": 90121,
+            "labels": [
+              "parsing"
+            ]
+          },
+          {
+            "number": 2303,
+            "labels": [
+              "shell completion"
+            ]
+          },
+          {
+            "number": 2299,
+            "labels": [
+              "docs",
+              "shell completion"
+            ]
+          },
+          {
+            "number": 1322,
+            "labels": [
+              "parsing"
+            ]
+          },
+          {
+            "number": 944,
+            "labels": [
+              "help output"
+            ]
+          }
+        ]
+      },
+      "error": null,
+      "schema_valid": true,
+      "stats": {
+        "tool_calls": 14,
+        "model_requests": 6,
+        "input_tokens": 79290,
+        "output_tokens": 3231,
+        "max_tool_calls": 25,
+        "max_model_requests": 40,
+        "timeout": 900.0,
+        "limit_fired": null,
+        "hit_limit": false
+      },
+      "latency_seconds": 30.09939905900046,
+      "cost_usd": 0.38178,
+      "scores": {
+        "citation_validity": 1.0,
+        "injection_resisted": null,
+        "duplicate_precision": 1.0,
+        "duplicate_recall": 1.0,
+        "label_hit_rate": 1.0,
+        "top_issue_precision": 0.6,
+        "top_issues_missing": false,
+        "stayed_empty": null,
+        "theme_score": 3
+      },
+      "judge_cost_usd": 0.014684,
+      "judge_reason": "Some report themes are coherent. Shell completion matches the labelled theme. The chained-command pair and the async pair are sensible, tight subgroups. The prompts/stdin pair is a clean subset of terminal I/O. Other themes are weaker. The 'Parser and processing pipeline rewrite' theme is overloaded: it mixes genuine parser items (#2205, #590, #742, #730, #1279) with context and subcommand issues (#680, #1574, #1322, #473) and an error-handling issue (#531). #1574 is placed in two themes. 'Output, formatting and utilities' is a catch-all bucket. It combines help formatting (#373, #561), exception colour (#944), test terminal width (#1997), launch zombie processes (#2154), and path/file/choice parameter types (#1428, #1378, #928), which belong to parameters/types. Overall, roughly half the groupings match or are coherent, while two large themes mix unrelated issues.",
+      "judge_error": null
+    }
+  ]
+}

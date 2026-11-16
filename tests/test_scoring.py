@@ -1,3 +1,5 @@
+import pytest
+
 from bakeoff.cases import Case, Injection
 from bakeoff.contract import DuplicatePair, LabelSuggestion, Theme, TopIssue, TriageReport
 from bakeoff.fixtures import load_repo
@@ -47,6 +49,21 @@ def test_score_run_scores_a_report_against_its_case(tiny_root):
     scores = score_run(report.model_copy(update={"top_issues": []}), no_duplicates, issues)
     assert (scores.duplicate_precision, scores.duplicate_recall) == (0.0, None)
     assert (scores.top_issue_precision, scores.top_issues_missing) == (None, True)
+
+
+EMPTY = TriageReport(themes=[], duplicates=[], top_issues=[], suggested_labels=[])
+INVENTED = EMPTY.model_copy(update={"themes": [Theme(name="Made up", issues=[])]})
+
+
+@pytest.mark.parametrize(
+    ("report", "expect_empty", "stayed_empty"),
+    [(EMPTY, True, True), (INVENTED, True, False), (EMPTY, False, None)],
+)
+def test_an_empty_report_is_scored_only_when_the_case_expects_one(
+    report, expect_empty, stayed_empty
+):
+    case = Case(name="empty", repo="empty", expect_empty=expect_empty)
+    assert score_run(report, case, set()).stayed_empty is stayed_empty
 
 
 def test_mean_skips_none_and_percentile_takes_one_value():

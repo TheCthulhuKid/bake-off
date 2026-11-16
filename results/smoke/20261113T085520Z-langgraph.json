@@ -1,0 +1,165 @@
+{
+  "impl": "langgraph",
+  "repo": "click",
+  "report": {
+    "themes": [
+      {
+        "name": "Help output and formatting",
+        "issues": [
+          373,
+          561,
+          3089,
+          3097,
+          3094,
+          3010,
+          3016,
+          2882,
+          2881,
+          2778,
+          3652,
+          3362,
+          2679,
+          2683
+        ]
+      },
+      {
+        "name": "Parser rewrite, Click 9.0 and parsing problems",
+        "issues": [
+          3154,
+          3156,
+          2205,
+          590,
+          2834,
+          2835,
+          2824,
+          2771,
+          742,
+          730,
+          473,
+          1269,
+          1322,
+          2786,
+          2768,
+          2753,
+          2402,
+          1574
+        ]
+      },
+      {
+        "name": "Shell completion",
+        "issues": [
+          2847,
+          2614,
+          2303,
+          2184,
+          2917,
+          2299
+        ]
+      },
+      {
+        "name": "Prompts, terminal I/O and colour",
+        "issues": [
+          1370,
+          304,
+          2875,
+          3022,
+          2781,
+          2419,
+          944,
+          3886,
+          3840,
+          2154
+        ]
+      },
+      {
+        "name": "Async support and embedding Click in other programs",
+        "issues": [
+          2033,
+          2360,
+          2361
+        ]
+      },
+      {
+        "name": "Typing, docs and API cleanup",
+        "issues": [
+          3847,
+          3696,
+          3406,
+          2493,
+          3036,
+          3076,
+          3077,
+          3081,
+          2823
+        ]
+      }
+    ],
+    "duplicates": [
+      {
+        "a": 2778,
+        "b": 3652,
+        "reason": "Both ask Click to add '...' to an option's placeholder in help text when multiple=True; #2778 is the older one."
+      },
+      {
+        "a": 304,
+        "b": 1370,
+        "reason": "Both report that confirm and other prompts read from the piped input instead of the terminal when input is piped in, so the user cannot answer."
+      }
+    ],
+    "top_issues": [
+      {
+        "number": 3154,
+        "reason": "Tracking issue for the Click 9.0 release; removing deprecated code (#3156) and the parser work depend on it."
+      },
+      {
+        "number": 2847,
+        "reason": "Clear, reproducible bug: completing --opt=value is broken in bash and zsh, and in zsh it deletes the option the user typed."
+      },
+      {
+        "number": 2303,
+        "reason": "ctx.obj is None during shell completion, so completion functions crash; a maintainer said they would review a PR."
+      },
+      {
+        "number": 3840,
+        "reason": "click.edit fails about half the time on Windows with WinError 87 or 14001; a maintainer needs to decide whether Click should work around it or document it."
+      },
+      {
+        "number": 2033,
+        "reason": "Most-discussed feature request; commenters suggest a small decorator plus docs as a cheap partial solution."
+      }
+    ],
+    "suggested_labels": [
+      {
+        "number": 3888,
+        "labels": [
+          "parsing",
+          "docs"
+        ]
+      },
+      {
+        "number": 3886,
+        "labels": [
+          "help output"
+        ]
+      },
+      {
+        "number": 3840,
+        "labels": [
+          "windows",
+          "termui"
+        ]
+      }
+    ]
+  },
+  "stats": {
+    "tool_calls": 18,
+    "model_requests": 8,
+    "input_tokens": 136843,
+    "output_tokens": 3981,
+    "max_tool_calls": 25,
+    "max_model_requests": 40,
+    "timeout": 900.0,
+    "limit_fired": null,
+    "hit_limit": false
+  }
+}

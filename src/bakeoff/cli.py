@@ -9,8 +9,9 @@ from bakeoff.cases import load_cases
 from bakeoff.fixtures import UnknownRepoError
 from bakeoff.impls import IMPLS
 from bakeoff.judge import ThemeJudge
-from bakeoff.report import render
+from bakeoff.report import IncompatibleRuns, render
 from bakeoff.runner import (
+    EvalRun,
     RunRecord,
     check_cases,
     load_eval,
@@ -18,7 +19,9 @@ from bakeoff.runner import (
     run_eval,
     run_once,
     save_eval,
+    select_cases,
 )
+from bakeoff.runner import rescore as rescore_eval
 from bakeoff.settings import PROJECT_ROOT, SETTINGS
 
 EVALS = PROJECT_ROOT / "evals"
@@ -77,7 +80,13 @@ def run(impl: str, repo: str, out: Path | None) -> None:
     default=EVALS / "cases.yaml",
     show_default="evals/cases.yaml",
 )
-@click.option("--repo", "repos", multiple=True, help="Only the cases on this repo; repeatable.")
+@click.option(
+    "--repo",
+    "repos",
+    multiple=True,
+    help="Only the cases on this fixture; a recorded repo also brings the cases derived from it. "
+    "Repeatable.",
+)
 @click.option("--judge", is_flag=True, help="Score themes with the LLM judge, which costs extra.")
 @click.option(
     "--out",
@@ -97,12 +106,17 @@ def eval_(
         cases = load_cases(cases_path)
     except ValueError as error:
         raise click.ClickException(f"{cases_path}: {error}") from error
-    if repos:
-        cases = [case for case in cases if case.repo in repos]
-    if not cases:
-        raise click.ClickException(f"no cases to run in {cases_path}")
+    # The whole file is checked, so a broken case stops any eval, and selecting can rely on
+    # every fixture loading.
     if problems := check_cases(cases):
         raise click.ClickException("cases do not match their fixtures:\n" + "\n".join(problems))
+    if repos:
+        try:
+            cases = select_cases(cases, repos)
+        except UnknownRepoError as error:
+            raise click.ClickException(str(error)) from error
+    if not cases:
+        raise click.ClickException(f"no cases to run in {cases_path}")
     impls = list(IMPLS) if impl == "all" else [impl]
     paths = {name: result_path(out, name) for name in impls}
     if taken := [str(path) for path in paths.values() if path.exists()]:
@@ -131,9 +145,60 @@ def _print_record(impl: str, record: RunRecord) -> None:
     "files", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 def report(files: tuple[Path, ...]) -> None:
-    """Print the comparison tables for saved eval FILES, one row per file, as Markdown."""
+    """Print the comparison tables for saved eval FILES as Markdown.
+
+    An implementation's files are combined into one row, so an eval run in parts reports as one.
+    """
+    runs = _load_evals(files)
     try:
-        runs = [load_eval(path) for path in files]
+        click.echo(render(runs))
+    except IncompatibleRuns as error:
+        raise click.ClickException(str(error)) from error
+
+
+@main.command()
+@click.argument(
+    "files", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@click.option(
+    "--cases",
+    "cases_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=EVALS / "cases.yaml",
+    show_default="evals/cases.yaml",
+)
+@click.option(
+    "--out",
+    type=click.Path(file_okay=False, path_type=Path),
+    required=True,
+    help="Directory for the rescored files, under their own names. Existing files are never "
+    "overwritten.",
+)
+def rescore(files: tuple[Path, ...], cases_path: Path, out: Path) -> None:
+    """Score saved eval FILES again against the current cases, offline, into new files.
+
+    For labels fixed after an eval ran. Theme scores are read from the judge's cache, never
+    paid for again.
+    """
+    runs = _load_evals(files)
+    paths = [out / path.name for path in files]
+    if taken := [str(path) for path in paths if path.exists()]:
+        raise click.ClickException(f"already exists: {', '.join(taken)}")
+    try:
+        cases = load_cases(cases_path)
+        if problems := check_cases(cases):
+            raise ValueError("cases do not match their fixtures:\n" + "\n".join(problems))
+        judge = ThemeJudge(None, EVALS / "judge-cache.json")
+        rescored = [rescore_eval(run, cases, judge) for run in runs]
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+    for run, path in zip(rescored, paths, strict=True):
+        save_eval(run, path)
+        click.echo(f"saved {path}")
+
+
+def _load_evals(files: tuple[Path, ...]) -> list[EvalRun]:
+    try:
+        return [load_eval(path) for path in files]
     except ValueError as error:
         raise click.ClickException(f"not a results file: {error}") from error
-    click.echo(render(runs))

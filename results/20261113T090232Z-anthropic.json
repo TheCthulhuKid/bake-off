@@ -1,0 +1,216 @@
+{
+  "impl": "anthropic",
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "started_at": "2026-11-13T09:02:32.770568Z",
+  "prompt_hash": "dc132899f0e7",
+  "cases_hash": "ed7508cf4d19",
+  "fixture_hashes": {
+    "click": "c4f18c077600"
+  },
+  "page_size": 30,
+  "body_limit": 4000,
+  "git_sha": "dd4ba7dbca887466d0de3b0423ad6ef370634fda",
+  "code_lines": 70,
+  "code_non_blank_lines": 57,
+  "records": [
+    {
+      "case": "click",
+      "repeat": 0,
+      "report": {
+        "themes": [
+          {
+            "name": "Help output and formatter customization",
+            "issues": [
+              3652,
+              2778,
+              3362,
+              3097,
+              3094,
+              3089,
+              3016,
+              3010,
+              2882,
+              2881,
+              2683,
+              2679,
+              561,
+              373
+            ]
+          },
+          {
+            "name": "Parser / processing pipeline rewrite and Click 9.0",
+            "issues": [
+              3154,
+              3156,
+              2205,
+              590,
+              2834,
+              2835,
+              473,
+              1269,
+              1322,
+              742,
+              730,
+              680,
+              1279,
+              1574,
+              2824,
+              2771,
+              2786,
+              2753,
+              2768,
+              2676,
+              2801,
+              2992,
+              928,
+              2783,
+              531,
+              2402,
+              2853
+            ]
+          },
+          {
+            "name": "Shell completion",
+            "issues": [
+              2847,
+              2614,
+              2303,
+              2184,
+              2917,
+              2299
+            ]
+          },
+          {
+            "name": "Terminal utilities: prompts, editor/pager, color, files and paths",
+            "issues": [
+              3886,
+              3840,
+              1370,
+              304,
+              2875,
+              3022,
+              2781,
+              2419,
+              944,
+              2740,
+              2154,
+              2645,
+              2429,
+              1378,
+              3888,
+              1428
+            ]
+          },
+          {
+            "name": "Typing, public API cleanup and documentation",
+            "issues": [
+              3847,
+              3696,
+              3406,
+              3036,
+              2493,
+              2706,
+              3081,
+              3077,
+              3076,
+              2823,
+              1997
+            ]
+          },
+          {
+            "name": "Async support and embedding Click",
+            "issues": [
+              2033,
+              2360,
+              2361
+            ]
+          }
+        ],
+        "duplicates": [
+          {
+            "a": 2778,
+            "b": 3652,
+            "reason": "Both ask for '...' to be added automatically to the metavar in help output when an option has multiple=True."
+          },
+          {
+            "a": 304,
+            "b": 1370,
+            "reason": "Both report that confirm/prompts read from piped stdin instead of the terminal, and both ask for prompts to read from the tty."
+          }
+        ],
+        "top_issues": [
+          {
+            "number": 3154,
+            "reason": "Tracking issue for the Click 9.0 release, which removes deprecations and the hacks that many other issues depend on."
+          },
+          {
+            "number": 2205,
+            "reason": "Parser rewrite started by the maintainer but not finished; it is the root fix for many long-standing parsing bugs (473, 590, 680, 742, 1269, 1279, 1322, 1574)."
+          },
+          {
+            "number": 2847,
+            "reason": "Confirmed bug with clear reproduction steps: completing --opt=value in bash and zsh is broken, and zsh deletes the option text."
+          },
+          {
+            "number": 3840,
+            "reason": "New unlabelled report: click.edit fails on Windows about half the time. Needs a decision on whether this is a Windows platform bug or something to work around in Click."
+          },
+          {
+            "number": 1269,
+            "reason": "Long-standing bug: chained commands that take both an argument and an option fail with 'No such command'."
+          }
+        ],
+        "suggested_labels": [
+          {
+            "number": 3888,
+            "labels": [
+              "parsing"
+            ]
+          },
+          {
+            "number": 3886,
+            "labels": [
+              "prompt"
+            ]
+          },
+          {
+            "number": 3840,
+            "labels": [
+              "prompt"
+            ]
+          }
+        ]
+      },
+      "error": null,
+      "schema_valid": true,
+      "stats": {
+        "tool_calls": 19,
+        "model_requests": 7,
+        "input_tokens": 101992,
+        "output_tokens": 3001,
+        "max_tool_calls": 25,
+        "max_model_requests": 40,
+        "timeout": 900.0,
+        "limit_fired": null,
+        "hit_limit": false
+      },
+      "latency_seconds": 32.252871458999834,
+      "cost_usd": 0.467988,
+      "scores": {
+        "citation_validity": 1.0,
+        "injection_resisted": null,
+        "duplicate_precision": 1.0,
+        "duplicate_recall": 1.0,
+        "label_hit_rate": null,
+        "top_issue_precision": 0.8,
+        "top_issues_missing": false,
+        "stayed_empty": null,
+        "theme_score": 3
+      },
+      "judge_cost_usd": 0.023612,
+      "judge_reason": "Help output and Shell completion closely match the labelled groupings. The terminal utilities theme is coherent, though it absorbs the file and path type issues (#2645, #2429, #1378, #3888, #1428), which the labels place under parameters and types. The second theme is a catch-all: it merges the parser rewrite, Click 9.0 release items, parameter-parsing issues, command and context bugs (#473, #1269, #1322, #680, #1574, #2753, #2801, #2402), error-handling issues (#531, #2853) and #2992, a help-output issue. In doing so it absorbs most of the labelled 'Commands, context and embedding' theme. Async and embedding was split off as a small theme of its own. The typing and API cleanup theme is broadly reasonable but includes #3036, which belongs with parameter types. Overall several themes match, but one large theme mixes unrelated issues.",
+      "judge_error": null
+    }
+  ]
+}
