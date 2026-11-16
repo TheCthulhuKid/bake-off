@@ -1,17 +1,20 @@
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from bakeoff.cases import Case, Injection
-from bakeoff.contract import InvalidReport, TopIssue, TriageReport
+from bakeoff.contract import DuplicatePair, InvalidReport, Theme, TopIssue, TriageReport
 from bakeoff.fixtures import Repo, UnknownRepoError
-from bakeoff.judge import Judgement
+from bakeoff.judge import Judgement, ThemeJudge, Verdict
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
 from bakeoff.runner import (
+    RescoreError,
     check_cases,
     load_eval,
+    rescore,
     result_path,
     run_case,
     run_eval,
@@ -200,3 +203,40 @@ def test_select_cases_brings_a_recorded_repo_s_derived_cases(tmp_path, monkeypat
     assert [case.name for case in select_cases(cases, ["tiny-slice"])] == ["tiny-slice"]
     with pytest.raises(UnknownRepoError):
         select_cases(cases, ["missing"])
+
+
+def test_rescore_updates_scores_from_current_labels_and_keeps_theme_scores(triage_with, tmp_path):
+    themes = [Theme(name="Crashes", issues=[1])]
+    report = TriageReport(
+        themes=themes,
+        duplicates=[DuplicatePair(a=1, b=2, reason="Same crash")],
+        top_issues=[],
+        suggested_labels=[],
+    )
+    triage_with(lambda repo: report)
+    verdict = SimpleNamespace(
+        parsed_output=Verdict(reason="Clear.", score=4),
+        usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+    )
+    client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **kwargs: verdict))
+    cache = tmp_path / "cache.json"
+    case = Case(name="tiny-pair", repo="tiny", themes=themes, duplicates=[])
+    [run] = run_eval(["anthropic"], [case], repeats=1, judge=ThemeJudge(client, cache))
+    assert run.records[0].scores.duplicate_precision == 0.0
+    # The pair is labelled after the run; a judge with no client can only read its cache.
+    fixed = case.model_copy(update={"duplicates": [(1, 2)]})
+    cache_only = ThemeJudge(None, cache)
+    rescored = rescore(run, [fixed], cache_only)
+    [record] = rescored.records
+    assert (record.scores.duplicate_precision, record.scores.theme_score) == (1.0, 4)
+    assert (record.report, record.stats) == (run.records[0].report, run.records[0].stats)
+    assert rescored.cases_hash == cases_hash([fixed])
+    # New themes would need the judge again, which a rescore never pays for.
+    regrouped = fixed.model_copy(update={"themes": [Theme(name="All", issues=[1, 2])]})
+    with pytest.raises(RescoreError, match="tiny-pair: no cached verdict"):
+        rescore(run, [regrouped], cache_only)
+    with pytest.raises(RescoreError, match="cases not in the cases file"):
+        rescore(run, [], cache_only)
+    stale = run.model_copy(update={"fixture_hashes": {"tiny": "0123456789ab"}})
+    with pytest.raises(RescoreError, match=r"fixtures changed since the run: \['tiny'\]"):
+        rescore(stale, [fixed], cache_only)

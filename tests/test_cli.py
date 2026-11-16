@@ -50,6 +50,18 @@ def test_eval_saves_one_results_file_per_impl(
     assert "| anthropic | 1 | 100% | 100% | 100% | n/a | 0 | 0 | 0 |" in printed.output
     # Duplicates are unlabelled and nothing was judged, so those columns have no data.
     assert "| anthropic | n/a | n/a | 100% | 100% | 0 | n/a |" in printed.output
+    # One impl's files share a row only if they can: the same case twice is refused.
+    twice = CliRunner().invoke(main, ["report", files[0], files[0]])
+    assert twice.exit_code != 0
+    assert "cases in more than one file: ['tiny-basics']" in twice.output
+    # A rescore writes new files under the same names, offline, and never overwrites them.
+    rescored = tmp_path / "rescored"
+    args = ["rescore", *files, "--cases", str(CASES), "--out", str(rescored)]
+    assert CliRunner().invoke(main, args).exit_code == 0
+    assert load_eval(rescored / Path(files[0]).name) == load_eval(Path(files[0]))
+    again = CliRunner().invoke(main, args)
+    assert again.exit_code != 0
+    assert "already exists" in again.output
     # A case that doesn't match its fixture stops the eval before any model is called.
     bad = tmp_path / "bad.yaml"
     bad.write_text("- {name: stray, repo: tiny, top_issues: [9]}\n")

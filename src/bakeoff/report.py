@@ -1,9 +1,60 @@
 """Summarises saved eval runs into the comparison tables, from the results files alone."""
 
+from collections.abc import Sequence
+
 from pydantic import BaseModel
 
 from bakeoff.runner import EvalRun
 from bakeoff.scoring import mean, percentile
+
+# What a run's scores depend on besides its cases, so an impl's files must agree on all of it to
+# share a row. Code size stands in for the impl's code being unchanged.
+SAME_FOR_AN_IMPL = (
+    "model",
+    "effort",
+    "prompt_hash",
+    "page_size",
+    "body_limit",
+    "code_lines",
+    "code_non_blank_lines",
+)
+
+
+class IncompatibleRuns(ValueError):
+    """Raised when an implementation's results files can't be reported as one eval."""
+
+
+def combine(runs: Sequence[EvalRun]) -> list[EvalRun]:
+    """One run per implementation, in the order first seen, holding all its files' records.
+
+    So an eval run in parts reports like one. An impl's files must agree on ``SAME_FOR_AN_IMPL``
+    and on the hash of any fixture they share, and no case may be in two of them; otherwise
+    ``IncompatibleRuns`` names the impl and what differs.
+    """
+    by_impl: dict[str, list[EvalRun]] = {}
+    for run in runs:
+        by_impl.setdefault(run.impl, []).append(run)
+    return [_merge(impl, group) for impl, group in by_impl.items()]
+
+
+def _merge(impl: str, group: list[EvalRun]) -> EvalRun:
+    first = group[0]
+    for run in group[1:]:
+        for field in SAME_FOR_AN_IMPL:
+            if (theirs := getattr(run, field)) != (ours := getattr(first, field)):
+                raise IncompatibleRuns(f"{impl}: files differ in {field}: {ours} and {theirs}")
+    fixtures: dict[str, str] = {}
+    seen: set[str] = set()
+    for run in group:
+        for repo, digest in run.fixture_hashes.items():
+            if fixtures.setdefault(repo, digest) != digest:
+                raise IncompatibleRuns(f"{impl}: files hold different versions of {repo}")
+        cases = {record.case for record in run.records}
+        if twice := cases & seen:
+            raise IncompatibleRuns(f"{impl}: cases in more than one file: {sorted(twice)}")
+        seen |= cases
+    records = [record for run in group for record in run.records]
+    return first.model_copy(update={"fixture_hashes": fixtures, "records": records})
 
 
 class Summary(BaseModel):
@@ -120,9 +171,17 @@ TABLES: dict[str, list[tuple[str, str, str]]] = {
 
 
 def render(runs: list[EvalRun]) -> str:
-    """The comparison tables as Markdown, one row per results file."""
-    summaries = [summarise(run) for run in runs]
-    return "\n\n".join(_table(title, columns, summaries) for title, columns in TABLES.items())
+    """The comparison tables as Markdown.
+
+    The Runs table has a row per results file, so each file's provenance shows; the others have
+    a row per implementation, over all its files, combined by ``combine``.
+    """
+    files = [summarise(run) for run in runs]
+    impls = [summarise(run) for run in combine(runs)]
+    return "\n\n".join(
+        _table(title, columns, files if title == "Runs" else impls)
+        for title, columns in TABLES.items()
+    )
 
 
 def _table(title: str, columns: list[tuple[str, str, str]], summaries: list[Summary]) -> str:

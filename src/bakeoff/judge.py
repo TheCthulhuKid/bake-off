@@ -48,6 +48,10 @@ class JudgeCacheError(ValueError):
     """Raised when the judge's cache file is not a valid cache."""
 
 
+class NotInCache(LookupError):
+    """Raised by a judge with no client when a report's verdict isn't in its cache."""
+
+
 _CACHE = TypeAdapter(dict[str, Verdict])
 
 
@@ -58,9 +62,13 @@ class Judgement(BaseModel):
 
 
 class ThemeJudge:
-    """Scores theme quality with ``SETTINGS.model``, caching each verdict in ``cache_path``."""
+    """Scores theme quality with ``SETTINGS.model``, caching each verdict in ``cache_path``.
 
-    def __init__(self, client: anthropic.Anthropic, cache_path: Path) -> None:
+    With no client the judge only reads its cache, so it never spends: a report it hasn't
+    judged raises ``NotInCache``.
+    """
+
+    def __init__(self, client: anthropic.Anthropic | None, cache_path: Path) -> None:
         self._client = client
         self._cache_path = cache_path
         self._cache = _load_cache(cache_path)
@@ -78,6 +86,8 @@ class ThemeJudge:
         if key in self._cache:
             cached = self._cache[key]
             return Judgement(score=cached.score, cost_usd=0.0, reason=cached.reason)
+        if self._client is None:
+            raise NotInCache(f"no cached verdict for {case.name}'s report")
         response = self._client.messages.parse(
             model=SETTINGS.model,
             max_tokens=16_000,

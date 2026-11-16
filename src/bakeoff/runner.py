@@ -14,7 +14,7 @@ from bakeoff.cases import Case
 from bakeoff.contract import InvalidReport, TriageReport
 from bakeoff.fixtures import Repo, UnknownRepoError, load_repo
 from bakeoff.impls import get_triage
-from bakeoff.judge import Judgement, ThemeJudge
+from bakeoff.judge import Judgement, NotInCache, ThemeJudge
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, git_sha, prompt_hash
 from bakeoff.scoring import Scores, normalise_label, normalise_labels, score_run
 from bakeoff.settings import SETTINGS
@@ -243,6 +243,46 @@ def save_eval(run: EvalRun, path: Path) -> None:
 def load_eval(path: Path) -> EvalRun:
     """Read a results file written by ``save_eval``."""
     return EvalRun.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+class RescoreError(ValueError):
+    """Raised when a saved eval can't be scored again against the current cases."""
+
+
+def rescore(run: EvalRun, cases: Sequence[Case], judge: ThemeJudge) -> EvalRun:
+    """``run`` scored against ``cases`` again, for labels fixed after it ran.
+
+    Only the scores and the cases hash change; reports, stats and costs stay as they ran. Theme
+    scores come from ``judge``'s cache, so a judged case with no cached verdict, because its
+    themes, the model or the rubric changed, raises ``RescoreError``, as do a case missing from
+    ``cases`` and a fixture that changed since the run.
+    """
+    by_name = {case.name: case for case in cases}
+    names = list(dict.fromkeys(record.case for record in run.records))
+    if missing := [name for name in names if name not in by_name]:
+        raise RescoreError(f"cases not in the cases file: {missing}")
+    changed = [repo for repo, digest in run.fixture_hashes.items() if fixture_hash(repo) != digest]
+    if changed:
+        raise RescoreError(f"fixtures changed since the run: {changed}")
+    records = [_rescored(record, by_name[record.case], judge) for record in run.records]
+    used = [by_name[name] for name in names]
+    return run.model_copy(update={"records": records, "cases_hash": cases_hash(used)})
+
+
+def _rescored(record: RunRecord, case: Case, judge: ThemeJudge) -> RunRecord:
+    if record.report is None:
+        return record
+    repo = load_repo(case.repo)
+    scores = score_run(record.report, case, {issue.number for issue in repo.issues})
+    if record.scores.theme_score is not None:
+        try:
+            scores.theme_score = judge.score(record.report, case, repo).score
+        except NotInCache as error:
+            raise RescoreError(
+                f"{case.name}: no cached verdict, so its themes, the model or the rubric changed "
+                "since it was judged"
+            ) from error
+    return record.model_copy(update={"scores": scores})
 
 
 def _judge_themes(
