@@ -226,8 +226,9 @@ nearest-rank, so it works on a single value, which `statistics.quantiles` does n
 ## Theme judge
 
 `judge.py` scores theme quality, `theme_score`, with an LLM judge. `ThemeJudge(client,
-cache_path)` takes an Anthropic client, so tests pass a stub, and `score(report, case, repo)`
-returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
+cache_path)` takes an Anthropic client, so tests pass a stub, or `None` for a judge that only
+reads its cache. `score(report, case, repo)` returns a `Judgement`: the score, 1 to 5, and
+`cost_usd`, what that call spent.
 
 - **Rubric:** `RUBRIC` is the system prompt. It asks the judge to grade the groupings, not the
   theme names or their order, against five levels from "the same groupings as the labelled
@@ -259,7 +260,9 @@ returns a `Judgement`: the score, 1 to 5, and `cost_usd`, what that call spent.
   starts, which `bakeoff eval` does before the first run, so a corrupt or hand-edited file
   raises `JudgeCacheError`, naming the file, before anything is spent. Only one eval should use
   a cache file at a time: each judge holds the whole cache in memory and rewrites the file, so
-  two at once would each drop the other's new verdicts.
+  two at once would each drop the other's new verdicts. A judge built with no client only reads
+  the cache, which is how `bakeoff rescore` gets theme scores without spending: a report it
+  hasn't judged raises `NotInCache`.
 - **Spend:** `cost_usd` prices the reply's input and output tokens with `Settings.cost` when the
   call is made, refusals included, and is 0 for a cached score or no call. `run_case` stores it
   on the run record as `judge_cost_usd`, apart from the run's `cost_usd`, which measures the
@@ -312,10 +315,27 @@ not recorded, loses that implementation's file.
 
 ## Report
 
-`bakeoff report FILES...` loads each results file and prints the comparison as Markdown tables,
-one row per file. `report.summarise(run)` turns one `EvalRun` into a `Summary`, a field per
-column, and `report.render(runs)` lays the summaries out from `TABLES`, a lookup of column
-title, `Summary` field and format. A value with no data prints as `n/a`.
+`bakeoff report FILES...` loads each results file and prints the comparison as Markdown tables.
+The Runs table has a row per file, so each file's provenance shows; the other tables have a row
+per implementation. `report.combine(runs)` merges an implementation's files into one `EvalRun`,
+so an eval run in parts, such as one repo at a time, reports as one. The files must agree on
+`SAME_FOR_AN_IMPL` (model, effort, prompt hash, page size, body limit and the implementation's
+code size, which stands in for its code being unchanged) and on the hash of any fixture they
+share, and no case may be in two of them; otherwise `IncompatibleRuns` names the
+implementation and what differs, and the command fails. The cases hash and commit may differ,
+since each part selects its own cases. `report.summarise(run)` turns one `EvalRun` into a
+`Summary`, a field per column, and `report.render(runs)` lays the summaries out from `TABLES`,
+a lookup of column title, `Summary` field and format. A value with no data prints as `n/a`.
+
+Combining can't tell whether two files were scored against the same labels, so after a label
+fix, rescore the older files first. `bakeoff rescore FILES... --out DIR` writes each file again
+into `DIR` under its own name, never over an existing file. `runner.rescore(run, cases, judge)`
+scores each record's saved report against the current cases and updates the cases hash. The
+reports, stats and costs stay as they ran. Theme scores are read from the judge's cache by a
+`ThemeJudge` with no client, so a rescore never spends: a judged case with no cached verdict,
+because its themes, the model or the rubric changed, raises `RescoreError`, as do a case missing
+from the cases file and a fixture whose hash changed since the run. The cases file must pass
+`check_cases`, as for `bakeoff eval`.
 
 | Table | Columns |
 | --- | --- |

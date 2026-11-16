@@ -115,6 +115,11 @@ The comparison tables come from the results files alone, with no model call, as 
 .venv/bin/bakeoff report results/<UTC timestamp>-*.json
 ```
 
+An eval run in parts reports as one: an implementation's files share a row, as long as they
+ran with the same model, prompt and settings on different cases. After a label fix, `bakeoff
+rescore FILES... --out DIR` scores saved runs again against the current cases into new files,
+offline: the reports stay, and theme scores come from the judge's cache.
+
 `docs/evals.md` describes the cases, the scores, the results files and the report.
 
 Implementations are registered by name in `src/bakeoff/impls/__init__.py`; `bakeoff run --help`
