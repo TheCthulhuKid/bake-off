@@ -1,12 +1,13 @@
 """Command-line entry point. Commands handle input and output only."""
 
 from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
 
 import anthropic
 import click
 
-from bakeoff.cases import load_cases
+from bakeoff.cases import Case, load_cases
 from bakeoff.fixtures import UnknownRepoError
 from bakeoff.impls import IMPLS
 from bakeoff.judge import JudgeCacheError, ThemeJudge
@@ -14,6 +15,7 @@ from bakeoff.report import IncompatibleRuns, render
 from bakeoff.runner import (
     EvalInterrupted,
     EvalRun,
+    RescoreError,
     RunRecord,
     check_cases,
     load_eval,
@@ -27,6 +29,17 @@ from bakeoff.runner import rescore as rescore_eval
 from bakeoff.settings import PROJECT_ROOT, SETTINGS
 
 EVALS = PROJECT_ROOT / "evals"
+
+cases_option = click.option(
+    "--cases",
+    "cases_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=EVALS / "cases.yaml",
+    show_default="evals/cases.yaml",
+)
+files_argument = click.argument(
+    "files", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
 
 
 @click.group()
@@ -51,8 +64,7 @@ def run(impl: str, repo: str, out: Path | None) -> None:
     if out is not None:
         out = result_path(out, impl)
         # Done before the run as well as by the "x" mode below, so a bad path costs no tokens.
-        if out.exists():
-            raise click.ClickException(f"{out} already exists")
+        _refuse_existing([out])
         out.parent.mkdir(parents=True, exist_ok=True)
     try:
         result = run_once(impl, repo)
@@ -75,13 +87,7 @@ def run(impl: str, repo: str, out: Path | None) -> None:
     help="The implementation to run, or all of them, taking turns on each case.",
 )
 @click.option("--repeats", type=click.IntRange(min=1), default=3, show_default=True)
-@click.option(
-    "--cases",
-    "cases_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    default=EVALS / "cases.yaml",
-    show_default="evals/cases.yaml",
-)
+@cases_option
 @click.option(
     "--repo",
     "repos",
@@ -104,14 +110,9 @@ def eval_(
     # Everything that can fail cheaply is checked before the first run is paid for.
     if out.suffix == ".json":
         raise click.ClickException("--out is a directory: every implementation gets its own file")
-    try:
-        cases = load_cases(cases_path)
-    except ValueError as error:
-        raise click.ClickException(str(error)) from error
     # The whole file is checked, so a broken case stops any eval, and selecting can rely on
     # every fixture loading.
-    if problems := check_cases(cases):
-        raise click.ClickException("cases do not match their fixtures:\n" + "\n".join(problems))
+    cases = _load_checked_cases(cases_path)
     if repos:
         try:
             cases = select_cases(cases, repos)
@@ -121,32 +122,18 @@ def eval_(
         raise click.ClickException(f"no cases to run in {cases_path}")
     impls = list(IMPLS) if impl == "all" else [impl]
     paths = {name: result_path(out, name) for name in impls}
-    if taken := [str(path) for path in paths.values() if path.exists()]:
-        raise click.ClickException(f"already exists: {', '.join(taken)}")
-    try:
-        theme_judge = (
-            ThemeJudge(anthropic.Anthropic(api_key=SETTINGS.api_key()), EVALS / "judge-cache.json")
-            if judge
-            else None
-        )
-    except JudgeCacheError as error:
-        raise click.ClickException(str(error)) from error
+    _refuse_existing(paths.values())
+    theme_judge = _theme_judge(anthropic.Anthropic(api_key=SETTINGS.api_key())) if judge else None
     try:
         runs = run_eval(impls, cases, repeats, judge=theme_judge, on_record=_print_record)
     except EvalInterrupted as interrupted:
         finished = [run for run in interrupted.runs if run.records]
-        _save_runs(finished, paths)
+        _save_runs((run, paths[run.impl]) for run in finished)
         saved = "the files above hold every whole case" if finished else "no case had finished"
         click.echo(f"{interrupted}; {saved}", err=True)
         # Re-raised as it was, so Ctrl-C still aborts and a bug still shows its traceback.
         raise interrupted.__cause__ from None
-    _save_runs(runs, paths)
-
-
-def _save_runs(runs: list[EvalRun], paths: dict[str, Path]) -> None:
-    for run in runs:
-        save_eval(run, paths[run.impl])
-        click.echo(f"saved {paths[run.impl]}")
+    _save_runs((run, paths[run.impl]) for run in runs)
 
 
 def _print_record(impl: str, record: RunRecord) -> None:
@@ -158,9 +145,7 @@ def _print_record(impl: str, record: RunRecord) -> None:
 
 
 @main.command()
-@click.argument(
-    "files", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path)
-)
+@files_argument
 def report(files: tuple[Path, ...]) -> None:
     """Print the comparison tables for saved eval FILES as Markdown.
 
@@ -174,16 +159,8 @@ def report(files: tuple[Path, ...]) -> None:
 
 
 @main.command()
-@click.argument(
-    "files", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path)
-)
-@click.option(
-    "--cases",
-    "cases_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    default=EVALS / "cases.yaml",
-    show_default="evals/cases.yaml",
-)
+@files_argument
+@cases_option
 @click.option(
     "--out",
     type=click.Path(file_okay=False, path_type=Path),
@@ -203,17 +180,40 @@ def rescore(files: tuple[Path, ...], cases_path: Path, out: Path) -> None:
         name for name, count in Counter(path.name for path in files).items() if count > 1
     ):
         raise click.ClickException(f"files share a name, which their copies would too: {repeated}")
-    if taken := [str(path) for path in paths if path.exists()]:
-        raise click.ClickException(f"already exists: {', '.join(taken)}")
+    _refuse_existing(paths)
+    cases = _load_checked_cases(cases_path)
+    judge = _theme_judge(None)
     try:
-        cases = load_cases(cases_path)
-        if problems := check_cases(cases):
-            raise ValueError("cases do not match their fixtures:\n" + "\n".join(problems))
-        judge = ThemeJudge(None, EVALS / "judge-cache.json")
         rescored = [rescore_eval(run, cases, judge) for run in runs]
+    except RescoreError as error:
+        raise click.ClickException(str(error)) from error
+    _save_runs(zip(rescored, paths, strict=True))
+
+
+def _load_checked_cases(path: Path) -> list[Case]:
+    try:
+        cases = load_cases(path)
     except ValueError as error:
         raise click.ClickException(str(error)) from error
-    for run, path in zip(rescored, paths, strict=True):
+    if problems := check_cases(cases):
+        raise click.ClickException("cases do not match their fixtures:\n" + "\n".join(problems))
+    return cases
+
+
+def _refuse_existing(paths: Iterable[Path]) -> None:
+    if taken := [str(path) for path in paths if path.exists()]:
+        raise click.ClickException(f"already exists: {', '.join(taken)}")
+
+
+def _theme_judge(client: anthropic.Anthropic | None) -> ThemeJudge:
+    try:
+        return ThemeJudge(client, EVALS / "judge-cache.json")
+    except JudgeCacheError as error:
+        raise click.ClickException(str(error)) from error
+
+
+def _save_runs(runs: Iterable[tuple[EvalRun, Path]]) -> None:
+    for run, path in runs:
         save_eval(run, path)
         click.echo(f"saved {path}")
 
