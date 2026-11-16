@@ -9,17 +9,18 @@ src/bakeoff/
   tools.py         list_issues, get_issue, search_issues over fixture data
   telemetry.py     per-run collector for tool calls, model requests, token usage and run limits
   impls/           one file per framework, each exposing triage(repo) -> TriageReport
-  runner.py        runs an implementation on a recorded repo or an eval case, with its stats
+  runner.py        runs an implementation on a recorded repo or an eval case, with its stats;
+                   rescores saved runs against the current cases
   cases.py         Case and load_cases: the hand-labelled eval cases (docs/evals.md)
   scoring.py       Scores, score_run and the mean and percentile helpers (docs/evals.md)
   judge.py         ThemeJudge: the LLM judge for theme quality, with its on-disk cache
   provenance.py    prompt hash, git commit and code size recorded with each eval
-  report.py        summarise and render: the comparison tables from results files
-  cli.py           bakeoff run, eval and report; input and output handling only
+  report.py        combine, summarise and render: the comparison tables from results files
+  cli.py           bakeoff run, eval, report and rescore; input and output handling only
 evals/
   repos/<name>/    recorded or derived issues, one directory per fixture repo
   derived.yaml     the spec the derived fixtures are built from
-  cases.yaml       hand-labelled ground truth per case (not labelled yet)
+  cases.yaml       hand-labelled ground truth per case
   judge-cache.json the judge's verdicts, created by the first judged eval
 results/           saved runs, never overwritten
 scripts/           record_issues.py, which records a fixture from GitHub, and
@@ -55,7 +56,7 @@ needs a source checkout or an editable install, which is what `uv sync` gives.
 | `effort` | `BAKEOFF_EFFORT` | `medium` (`low` to `max`) | implementations |
 | `max_tool_calls` | `BAKEOFF_MAX_TOOL_CALLS` | 25 | `tools.py` limit |
 | `max_model_requests` | `BAKEOFF_MAX_MODEL_REQUESTS` | 40 | `telemetry.py` request cap |
-| `run_timeout` | `BAKEOFF_RUN_TIMEOUT` | 900 seconds, still a guess | `telemetry.py` deadline, `run_case`'s timeout thread |
+| `run_timeout` | `BAKEOFF_RUN_TIMEOUT` | 900 seconds, far above the full eval's p95 of under 50 s | `telemetry.py` deadline, `run_case`'s timeout thread |
 | `body_limit` | `BAKEOFF_BODY_LIMIT` | 4000 characters | `get_issue` truncation |
 | `page_size` | `BAKEOFF_PAGE_SIZE` | 30 | `list_issues` |
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` | none | implementations, passed to the client explicitly as `Settings.api_key()` |
@@ -69,11 +70,11 @@ local `.env` or an exported `BAKEOFF_` variable can't change what the tests chec
 
 `MODELS` maps each supported model to a `ModelSpec`: input and output price per million tokens,
 and the maximum output that PydanticAI and LangChain send as `max_tokens` when none is set.
-`Settings.cost()` converts token counts to USD from it and returns zero for a model not in it,
-so an unknown model shows up as a missing cost rather than a wrong one.
+`Settings` rejects a model with no row, since every cost in the results is priced from it: add
+the row to run another model. An invalid setting of any kind stops the program on import with
+a short message rather than a traceback. `Settings.cost()` converts token counts to USD, and
 `Settings.max_output_tokens()` gives the Anthropic implementation the `max_tokens` the other two
-send, and raises `ValueError` for a model not in the table rather than guessing; add a row to
-run another model there.
+send.
 
 ## Contract
 
@@ -108,8 +109,9 @@ caller, the tools included, at `tests/fixtures/` with one monkeypatch. A fixture
 single directory name: `fixture_path` rejects `..`, path separators and absolute paths with
 `UnknownRepoError`. The tools pass the model's repo argument straight through, and issue text is
 untrusted, so without this a prompt injection could point a tool at an `issues.json` outside the
-fixture root; with it, the tool returns its usual "does not exist" error. The recording script
-writes through the same function, so it can't write outside the root either.
+fixture root; with it, the tool returns its usual "does not exist" error. Both scripts write
+with `fixtures.save_fixture(repo)`, which goes through the same function, so they can't write
+outside the root either.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
 and is run by hand. It uses `httpx2`, which is in the dev dependency group, so it needs
@@ -248,14 +250,14 @@ Registered as `pydanticai`, `langgraph` and `anthropic`.
 
 ## Running
 
-`runner.run_once(impl, repo)` checks that the recorded repo exists, imports the
-implementation, runs it once inside `collect()` and returns a `RunResult` (impl, repo, report,
-stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out` also writes it to a new
-file. `runner.result_path` picks the file: a path ending in `.json` is used as given, and any
-other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp as
-`YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists
-before the run starts, so a bad or taken path costs no tokens. Errors from the run itself,
-including `ToolLimitExceeded`, propagate.
+`runner.run_once(impl, repo)` checks that the recorded repo exists, imports the implementation, runs
+it once inside `collect()`, on the same timeout thread as an eval run, and returns a `RunResult`
+(impl, repo, report, stats). `bakeoff run <impl> <repo>` prints that result as JSON; `--out` also
+writes it to a new file. `runner.result_path` picks the file: a path ending in `.json` is used as
+given, and any other path is a directory that gets `<UTC timestamp>-<impl>.json`, with the timestamp
+as `YYYYMMDDTHHMMSSZ`. The command creates parent directories and refuses a path that exists before
+the run starts, so a bad or taken path costs no tokens. Errors from the run itself, including
+`ToolLimitExceeded`, propagate.
 
 `runner.run_case(impl, case, repeat, judge=None)` is the eval's unit: one run of an
 implementation on one case. Like `run_once` it loads the case's repo and imports the
@@ -285,8 +287,9 @@ implementation, in the order given: the impl, the model and effort from `SETTING
 in UTC and that implementation's records in run order. `on_record(impl, record)` is called as
 each record is made, so the CLI can show progress without owning the loop. `started_at` comes
 from a `now` argument, so tests can set it. Because the runs are interleaved, every
-implementation's results are held until the last run, so a crash outside a run loses all of
-them, not only one implementation's.
+implementation's results are held until the last run. A case's runs are added only once every
+implementation has finished it, and anything that stops the loop, Ctrl-C included, raises
+`EvalInterrupted` with the finished cases; the files' hashes then cover only those cases.
 
 `bakeoff eval` runs the eval. Before the first run it checks everything that can fail cheaply,
 so a mistake costs no tokens: `--out` must be a directory, the cases file must load and pass
@@ -295,21 +298,29 @@ file may exist yet. `runner.select_cases` applies `--repo`: a recorded repo's na
 own case and every case whose fixture has its `source`, which a derived fixture keeps from its
 base, while a derived fixture's name selects only that case. It then calls `run_eval` with every
 implementation (or the one `--impl` names), prints one line per run as it lands, and saves one
-file per implementation with `save_eval`. With `--judge` it builds an Anthropic client and a
-`ThemeJudge` over `evals/judge-cache.json`.
+file per implementation with `save_result`. With `--judge` it builds an Anthropic client and a
+`ThemeJudge` over `evals/judge-cache.json`. On `EvalInterrupted` it saves each implementation's
+finished cases and re-raises what stopped it.
+
+`bakeoff report` reads results files only: `report.combine` merges an implementation's files
+into one row when they agree on everything a score depends on, and `report.render` prints the
+tables. `bakeoff rescore` scores saved runs again with `runner.rescore` after a label fix,
+offline, reading theme scores from the judge's cache, into new files. `docs/evals.md` gives
+the rules for both.
 
 The run's own deadline is only checked between model requests, so `run_case` also runs
 `triage` on a daemon thread and waits at most the run's `timeout` for it with `Thread.join`.
 If the thread is still running, it sets `limit_fired = "timeout"` on the run's stats and
 records the run as failed with the deadline's `RunLimitExceeded` message; the abandoned run
-stops at its own next limit check. Without this, a request that hangs, such as one from
-`ChatAnthropic`, which sets no request timeout, would hold the eval forever.
+stops at its own next tool call or model request, which both raise once a limit has fired.
+Without this, a request that hangs, such as one from `ChatAnthropic`, which sets no request
+timeout, would hold the eval forever.
 - A daemon thread, not a `ThreadPoolExecutor`, whose worker threads are joined at interpreter
   exit, so one hung request would stop the process from ever exiting.
 - The thread runs `triage` in a `contextvars.copy_context()` of the caller, since a new thread
   starts with an empty context and would not see the run's collector or deadline.
-- The record holds a `model_copy()` of the stats, since an abandoned run keeps updating the
-  original in the background.
+- The record holds a `model_copy()` of the stats, taken as soon as the run returns or is given
+  up on, since an abandoned run keeps updating the original in the background.
 
 ## Tests
 
@@ -325,3 +336,8 @@ The tool runner talks HTTP through its client, so the `anthropic_model` fixture 
 `anthropic.Anthropic` over `ScriptedTransport`, an `httpx2.MockTransport` that answers with
 scripted streamed replies and records each request body, in place of the module-level
 `client`. A test of this implementation must use the fixture.
+
+`tests/helpers.py` holds plain values and helpers, not pytest fixtures, that several test
+modules share: the paths of the test fixtures and cases file, `load_script` for the scripts under
+`scripts/`, which aren't in the package, and `StubClient`, which stands in for the judge's
+Anthropic client.

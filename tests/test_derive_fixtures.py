@@ -1,18 +1,14 @@
-import importlib.util
 import shutil
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
+from helpers import FIXTURES, load_script
 
 from bakeoff.fixtures import Repo, load_repo
 from bakeoff.settings import PROJECT_ROOT
 
-SCRIPT = PROJECT_ROOT / "scripts" / "derive_fixtures.py"
-spec = importlib.util.spec_from_file_location("derive_fixtures", SCRIPT)
-derive_fixtures = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(derive_fixtures)
-
+derive_fixtures = load_script("derive_fixtures")
 RECORDED = PROJECT_ROOT / "evals" / "repos"
 
 
@@ -30,7 +26,7 @@ def derive(spec_text: str, spec_path: Path):
 
 
 def test_derive_applies_the_steps_to_a_copy_of_the_base(root, tmp_path):
-    shutil.copytree(Path(__file__).parent / "fixtures" / "tiny", root / "tiny")
+    shutil.copytree(FIXTURES / "tiny", root / "tiny")
     result = derive(
         """
 - name: tiny-derived
@@ -56,7 +52,7 @@ def test_derive_applies_the_steps_to_a_copy_of_the_base(root, tmp_path):
 
 
 def test_derive_refuses_to_overwrite_a_recorded_fixture(root, tmp_path):
-    shutil.copytree(Path(__file__).parent / "fixtures" / "tiny", root / "tiny")
+    shutil.copytree(FIXTURES / "tiny", root / "tiny")
     before = (root / "tiny" / "issues.json").read_bytes()
     result = derive(
         "- {name: tiny, base: tiny, steps: [{step: slice, issues: []}]}\n",

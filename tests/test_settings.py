@@ -1,3 +1,8 @@
+import os
+import subprocess
+import sys
+from contextlib import nullcontext
+
 import pytest
 from pydantic import ValidationError
 
@@ -15,10 +20,24 @@ def test_settings_read_env_and_price_runs(monkeypatch):
     assert (settings.max_tool_calls, settings.run_timeout) == (5, 0.5)
     assert settings.github_token.get_secret_value() == "tok"
     assert settings.cost(1_000_000, 100_000) == pytest.approx(3.0)
-    unknown = Settings(model="unknown", _env_file=None)
-    assert unknown.cost(10, 10) == 0.0
-    with pytest.raises(ValueError):
-        unknown.max_output_tokens()
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [("claude-haiku-5-5", nullcontext()), ("claude-new", pytest.raises(ValidationError))],
+)
+def test_settings_reject_a_model_with_no_prices(model, expected):
+    with expected:
+        Settings(model=model, _env_file=None)
+
+
+def test_an_invalid_setting_stops_the_program_with_a_message():
+    env = {**os.environ, "BAKEOFF_MODEL": "claude-new"}
+    result = subprocess.run(
+        [sys.executable, "-c", "import bakeoff.settings"], env=env, capture_output=True, text=True
+    )
+    assert result.returncode == 1 and "Traceback" not in result.stderr
+    assert "'claude-new' is not in MODELS" in result.stderr
 
 
 @pytest.mark.parametrize(

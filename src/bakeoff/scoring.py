@@ -104,12 +104,14 @@ def mean(values: Iterable[float | None]) -> float | None:
 
 
 def percentile(values: Iterable[float], p: float) -> float | None:
-    """The nearest-rank ``p``th percentile, or ``None`` for no values.
+    """The nearest-rank ``p``th percentile, or ``None`` for no values; ``p`` is 0 to 100.
 
     ``statistics.quantiles`` needs two values, and a one-repeat eval has one per case.
     """
-    if not values:
-        return None
+    if not 0 <= p <= 100:
+        raise ValueError(f"a percentile is from 0 to 100, got {p}")
     ordered = sorted(values)
+    if not ordered:
+        return None
     rank = max(math.ceil(p / 100 * len(ordered)), 1)
     return ordered[rank - 1]

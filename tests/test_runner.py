@@ -1,16 +1,17 @@
+import shutil
 import threading
 from datetime import UTC, datetime
-from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
+from helpers import FIXTURES, StubClient
 
 from bakeoff.cases import Case, Injection
 from bakeoff.contract import DuplicatePair, InvalidReport, Theme, TopIssue, TriageReport
-from bakeoff.fixtures import Repo, UnknownRepoError
+from bakeoff.fixtures import Repo, UnknownRepoError, save_fixture
 from bakeoff.judge import Judgement, ThemeJudge, Verdict
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
 from bakeoff.runner import (
+    EvalInterrupted,
     RescoreError,
     check_cases,
     load_eval,
@@ -18,12 +19,14 @@ from bakeoff.runner import (
     result_path,
     run_case,
     run_eval,
-    save_eval,
+    run_once,
+    save_result,
     select_cases,
 )
 from bakeoff.scoring import Scores
 from bakeoff.settings import SETTINGS
-from bakeoff.telemetry import record_usage
+from bakeoff.telemetry import RunLimitExceeded, record_usage
+from bakeoff.tools import list_issues
 
 CASE = Case(name="tiny-top", repo="tiny", top_issues=[1])
 REPORT = TriageReport(
@@ -100,10 +103,15 @@ def test_run_case_records_a_failed_run_and_whether_its_schema_failed(
 def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     monkeypatch.setattr(SETTINGS, "run_timeout", 0.05)
     release, done = threading.Event(), threading.Event()
+    late = []
 
     def triage(repo):
         release.wait(5)
         record_usage(100, 10)
+        try:
+            list_issues(repo)
+        except RunLimitExceeded as error:
+            late.append(str(error))
         done.set()
         return REPORT
 
@@ -116,6 +124,17 @@ def test_run_case_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     release.set()
     assert done.wait(5)
     assert record.stats.input_tokens == 0
+    # Its next tool call stops it, as its next model request would.
+    assert late == ["run timeout of 0.05 s reached"]
+
+
+def test_run_once_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
+    monkeypatch.setattr(SETTINGS, "run_timeout", 0.05)
+    release = threading.Event()
+    triage_with(lambda repo: release.wait(5) and REPORT)
+    with pytest.raises(RunLimitExceeded, match=r"run timeout of 0\.05 s reached"):
+        run_once("fake", "tiny")
+    release.set()
 
 
 def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_path):
@@ -163,41 +182,76 @@ def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_pat
     assert named == tmp_path / "20261110T090000Z-anthropic.json"
     # The results file loads back as the same run, and is never overwritten.
     path = tmp_path / "results" / "run.json"
-    save_eval(run, path)
+    save_result(run, path)
     assert load_eval(path) == run
     with pytest.raises(FileExistsError):
-        save_eval(run, path)
+        save_result(run, path)
 
 
-def test_check_cases_lists_unknown_repos_and_labels_not_in_the_fixture(tiny_root):
+def test_run_eval_keeps_only_whole_cases_when_interrupted(triage_with, tmp_path, monkeypatch):
+    # A second fixture, so the saved files can be seen to leave out the unfinished case's repo.
+    for name in ("tiny", "other"):
+        shutil.copytree(FIXTURES / "tiny", tmp_path / name)
+    monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", tmp_path)
+    calls = []
+
+    def triage(repo):
+        calls.append(repo)
+        # The second case's second run: its first run is dropped with it.
+        if len(calls) == 4:
+            raise KeyboardInterrupt
+        return REPORT
+
+    triage_with(triage)
+    cases = [CASE, Case(name="other-bare", repo="other")]
+    with pytest.raises(EvalInterrupted) as interrupted:
+        run_eval(["anthropic", "langgraph"], cases, repeats=1)
+    assert (interrupted.value.case, interrupted.value.dropped) == ("other-bare", 1)
+    assert isinstance(interrupted.value.__cause__, KeyboardInterrupt)
+    for run in interrupted.value.runs:
+        assert [record.case for record in run.records] == ["tiny-top"]
+        # The file describes the cases it holds, so it combines with a later run of the rest.
+        assert (run.cases_hash, list(run.fixture_hashes)) == (cases_hash([CASE]), ["tiny"])
+
+
+def test_check_cases_lists_each_case_that_does_not_fit_its_fixture(tiny_root):
+    both = [Theme(name="Crashes", issues=[1]), Theme(name="Features", issues=[2])]
+    injection = Injection(issue=2, forbidden_label="urgent")
     cases = [
         CASE,
+        Case(name="fits", repo="tiny", themes=both, labels={2: ["enhancement"]}),
         Case(name="stray", repo="tiny", duplicates=[(1, 7)], labels={9: ["bug"]}),
         # tiny labels #1 "bug"; labels are compared regardless of case, as they are scored.
         Case(name="planted", repo="tiny", injection=Injection(issue=2, forbidden_label="Bug")),
         Case(name="full", repo="tiny", expect_empty=True),
         Case(name="lost", repo="missing"),
+        Case(name="themed", repo="tiny", themes=[both[0], both[0]]),
+        Case(name="relabelled", repo="tiny", labels={1: ["bug"]}),
+        Case(name="ranked", repo="tiny", top_issues=[2], injection=injection),
     ]
-    [stray, planted, full, lost] = check_cases(cases)
+    [stray, planted, full, lost, unthemed, twice, relabelled, ranked] = check_cases(cases)
     assert stray == "stray: issues not in tiny: [7, 9]"
     assert planted == "planted: forbidden label 'Bug' is already used in tiny"
     assert full == "full: expects an empty report, but tiny has 2 issues"
     assert lost.startswith("lost: no recorded repo 'missing'")
+    assert (unthemed, twice) == (
+        "themed: issues in no theme: [2]",
+        "themed: issues in more than one theme: [1]",
+    )
+    assert relabelled == "relabelled: expected labels on issues tiny already labels: [1]"
+    assert ranked == "ranked: injected issue #2 is an accepted top issue"
 
 
 def test_select_cases_brings_a_recorded_repo_s_derived_cases(tmp_path, monkeypatch):
     monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", tmp_path)
-    tiny = Repo.model_validate_json(
-        (Path(__file__).parent / "fixtures" / "tiny" / "issues.json").read_text()
-    )
+    tiny = Repo.model_validate_json((FIXTURES / "tiny" / "issues.json").read_text())
     fixtures = {
         "tiny": tiny,
         "tiny-slice": tiny.model_copy(update={"name": "tiny-slice", "synthetic": True}),
         "other": tiny.model_copy(update={"name": "other", "source": "example/other"}),
     }
-    for name, repo in fixtures.items():
-        (tmp_path / name).mkdir()
-        (tmp_path / name / "issues.json").write_text(repo.model_dump_json())
+    for repo in fixtures.values():
+        save_fixture(repo)
     cases = [Case(name=name, repo=name) for name in fixtures]
     assert [case.name for case in select_cases(cases, ["tiny"])] == ["tiny", "tiny-slice"]
     assert [case.name for case in select_cases(cases, ["tiny-slice"])] == ["tiny-slice"]
@@ -214,11 +268,7 @@ def test_rescore_updates_scores_from_current_labels_and_keeps_theme_scores(triag
         suggested_labels=[],
     )
     triage_with(lambda repo: report)
-    verdict = SimpleNamespace(
-        parsed_output=Verdict(reason="Clear.", score=4),
-        usage=SimpleNamespace(input_tokens=1, output_tokens=1),
-    )
-    client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **kwargs: verdict))
+    client = StubClient(Verdict(reason="Clear.", score=4))
     cache = tmp_path / "cache.json"
     case = Case(name="tiny-pair", repo="tiny", themes=themes, duplicates=[])
     [run] = run_eval(["anthropic"], [case], repeats=1, judge=ThemeJudge(client, cache))

@@ -86,11 +86,17 @@ def collect(
 
 
 def record_tool_call() -> None:
-    """Count one tool call, raising ``ToolLimitExceeded`` once the limit is used up."""
+    """Count one tool call, raising ``ToolLimitExceeded`` once the limit is used up.
+
+    Once any limit has fired, every later call raises that limit's error instead, so a run
+    abandoned at its timeout stops at its next tool call as well as at its next request.
+    """
     stats = _current.get()
     if stats is None:
         return
     with _count_lock:
+        if stats.limit_fired:
+            raise _limit_exceeded(stats)
         if stats.tool_calls >= stats.max_tool_calls:
             _fire(stats, "tool_calls")
         stats.tool_calls += 1

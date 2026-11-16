@@ -24,7 +24,9 @@ Only `name` and `repo` are required. Every other field defaults to empty, or to 
 integer, so `labels` keys are issue numbers as written.
 
 A duplicate pair must name two different issues, as in the contract's `DuplicatePair`, and no
-two cases in a file may share a `name`, since results are reported by case name. `load_cases`
+two cases in a file may share a `name`, since results are reported by case name. A file that
+isn't YAML, a case that doesn't validate and a repeated name each raise `ValueError`, naming the
+file, which `bakeoff eval` and `bakeoff rescore` print as a one-line error. `load_cases`
 doesn't check that `repo` exists, since that depends on the fixtures rather than the cases file.
 `runner.check_cases(cases)` does that check against the fixtures, so an eval can stop before
 its first run: it lists each case whose repo has no fixture, and each issue number a case labels
@@ -33,7 +35,10 @@ would otherwise cap a score below 1 with nothing to say why. It also lists an in
 forbidden label the fixture already uses, compared as the scores compare labels: the injection
 counts as obeyed if that label is suggested anywhere, so an honest suggestion would look like
 an obeyed injection. Choose another forbidden label for that repo. It also lists a case that
-sets `expect_empty` on a fixture with issues, whose report could never stay empty.
+sets `expect_empty` on a fixture with issues, whose report could never stay empty, a fixture
+issue in no theme or in two, expected labels on an issue the fixture already labels, which the
+agent is never asked to label, and an injected issue among the accepted top issues, which would
+reward ranking it first.
 
 The issue numbers in this example are illustrative, not labelled data.
 
@@ -221,7 +226,8 @@ For most fields an empty value means "not labelled". `duplicates` is the excepti
 the repo has no duplicates, so any pair the report finds scores precision 0.
 
 `mean(values)` skips `None` and returns `None` when nothing is left. `percentile(values, p)` is
-nearest-rank, so it works on a single value, which `statistics.quantiles` does not.
+nearest-rank, so it works on a single value, which `statistics.quantiles` does not; `p` must
+be from 0 to 100.
 
 ## Theme judge
 
@@ -304,14 +310,19 @@ results file holds. Besides the records, it says what produced them:
 The hash, commit and code size are taken before the first run, so they describe the code and
 prompts that ran.
 
-`save_eval(run, path)` writes one `EvalRun` as indented JSON to a new file, creating parent
+`save_result(run, path)` writes one `EvalRun` as indented JSON to a new file, creating parent
 directories, and opens it in `"x"` mode, so an existing results file is never overwritten.
 `runner.result_path` names a file in a directory `<UTC timestamp>-<impl>.json`, as for
 `bakeoff run`. `load_eval(path)` reads a file back as the same `EvalRun`. Every score, the
 judge's included, and every cost is stored in the records, so reporting needs only the files,
 not the cases, the fixtures or a model. The file holds a whole `EvalRun`, so it is written once
-all of an implementation's runs are done: a crash outside a run, which unlike a failed run is
-not recorded, loses that implementation's file.
+all of an implementation's runs are done. A failed run is recorded and the eval goes on; anything
+else that stops the loop, such as Ctrl-C or a crash outside a run, makes `run_eval` raise
+`EvalInterrupted`, holding each implementation's finished cases, and `bakeoff eval` saves those
+before re-raising what stopped it. The case in progress is dropped, its runs included, so a later
+`--repo` run of the rest combines with these files in one report. Their `cases_hash` and
+`fixture_hashes` cover only the finished cases. An implementation with no finished case gets no
+file.
 
 ## Report
 
@@ -320,18 +331,20 @@ The Runs table has a row per file, so each file's provenance shows; the other ta
 per implementation. `report.combine(runs)` merges an implementation's files into one `EvalRun`,
 so an eval run in parts, such as one repo at a time, reports as one. The files must agree on
 `SAME_FOR_AN_IMPL` (model, effort, prompt hash, page size, body limit and the implementation's
-code size, which stands in for its code being unchanged) and on the hash of any fixture they
-share, and no case may be in two of them; otherwise `IncompatibleRuns` names the
-implementation and what differs, and the command fails. The cases hash and commit may differ,
+code size, which stands in for its code being unchanged), on the run limits in their records'
+stats (tool-call cap, request cap and timeout) and on the hash of any fixture they share, and
+no case may be in two of them; otherwise `IncompatibleRuns` names the implementation and what
+differs, and the command fails. The cases hash and commit may differ,
 since each part selects its own cases. `report.summarise(run)` turns one `EvalRun` into a
 `Summary`, a field per column, and `report.render(runs)` lays the summaries out from `TABLES`,
 a lookup of column title, `Summary` field and format. A value with no data prints as `n/a`.
 
 Combining can't tell whether two files were scored against the same labels, so after a label
 fix, rescore the older files first. `bakeoff rescore FILES... --out DIR` writes each file again
-into `DIR` under its own name, never over an existing file. `runner.rescore(run, cases, judge)`
-scores each record's saved report against the current cases and updates the cases hash. The
-reports, stats and costs stay as they ran. Theme scores are read from the judge's cache by a
+into `DIR` under its own name, never over an existing file, and refuses two files with one
+name before rescoring any. `runner.rescore(run, cases, judge)` scores each record's saved
+report against the current cases and updates the cases hash. The reports, stats and costs
+stay as they ran. Theme scores are read from the judge's cache by a
 `ThemeJudge` with no client, so a rescore never spends: a judged case with no cached verdict,
 because its themes, the model or the rubric changed, raises `RescoreError`, as do a case missing
 from the cases file and a fixture whose hash changed since the run. The cases file must pass

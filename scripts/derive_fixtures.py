@@ -5,7 +5,6 @@ Every derived fixture is rebuilt from the spec, so the same spec always gives th
 A recorded fixture is never overwritten.
 """
 
-from collections import Counter
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -13,7 +12,8 @@ import click
 import yaml
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
-from bakeoff.fixtures import Issue, Repo, fixture_path, load_repo
+from bakeoff.contract import repeated
+from bakeoff.fixtures import Issue, Repo, fixture_path, load_repo, save_fixture
 from bakeoff.settings import PROJECT_ROOT
 
 SPEC = PROJECT_ROOT / "evals" / "derived.yaml"
@@ -125,9 +125,8 @@ def load_spec(path: Path) -> list[Derived]:
     entries = TypeAdapter(list[Derived]).validate_python(
         yaml.safe_load(path.read_text(encoding="utf-8"))
     )
-    counts = Counter(entry.name for entry in entries)
-    if repeated := sorted(name for name, count in counts.items() if count > 1):
-        raise ValueError(f"repeated fixture names in {path}: {repeated}")
+    if names := repeated(entry.name for entry in entries):
+        raise ValueError(f"repeated fixture names in {path}: {names}")
     return entries
 
 
@@ -151,9 +150,7 @@ def write(repo: Repo) -> Path:
     path = fixture_path(repo.name)
     if path.exists() and not load_repo(repo.name).synthetic:
         raise ValueError(f"{path} is a recorded fixture; a derived one never replaces it")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(repo.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    return path
+    return save_fixture(repo)
 
 
 def _check_known(numbers: list[int], issues: list[Issue]) -> None:

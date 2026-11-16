@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 import click
 import httpx2
 
-from bakeoff.fixtures import Comment, Issue, Repo, fixture_path
+from bakeoff.fixtures import Comment, Issue, Repo, fixture_path, save_fixture
 from bakeoff.settings import SETTINGS
 
 API = "https://api.github.com"
@@ -66,7 +66,13 @@ def _author(comment: dict) -> str:
 @click.command()
 @click.argument("source")
 @click.option("--name", required=True, help="Fixture directory name under evals/repos.")
-@click.option("--limit", default=80, show_default=True, help="Maximum issues to record.")
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    default=80,
+    show_default=True,
+    help="Maximum issues to record.",
+)
 @click.option("--force", is_flag=True, help="Replace an existing fixture.")
 def main(source: str, name: str, limit: int, force: bool) -> None:
     """Fetch open issues and comments for SOURCE (owner/repo) into a fixture."""
@@ -92,8 +98,7 @@ def main(source: str, name: str, limit: int, force: bool) -> None:
                 for item in raw
             ],
         )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(repo.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    save_fixture(repo)
     click.echo(f"recorded {len(repo.issues)} issues from {source} to {path}")
 
 

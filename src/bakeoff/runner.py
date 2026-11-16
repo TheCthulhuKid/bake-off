@@ -1,9 +1,9 @@
 """Runs an implementation on a recorded repo or an eval case and collects its stats."""
 
 import contextvars
-import functools
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +21,11 @@ from bakeoff.settings import SETTINGS
 from bakeoff.telemetry import RunStats, collect, raise_if_limit_fired
 
 
+def utc_now() -> datetime:
+    """The current time in UTC, the default clock for an eval's start and its file names."""
+    return datetime.now(UTC)
+
+
 class RunResult(BaseModel):
     impl: str
     repo: str
@@ -29,12 +34,15 @@ class RunResult(BaseModel):
 
 
 def run_once(impl: str, repo: str) -> RunResult:
-    """Run ``impl`` on ``repo`` once; an unknown repo or impl raises before any model is called."""
+    """Run ``impl`` on ``repo`` once, within the run timeout as an eval run is.
+
+    An unknown repo or impl raises before any model is called.
+    """
     # The repo first: it is the cheap check, and importing a framework can fail on a missing key.
     load_repo(repo)
     triage = get_triage(impl)
     with collect() as stats:
-        report = triage(repo)
+        report = _triage_within_timeout(triage, repo, stats)
     return RunResult(impl=impl, repo=repo, report=report, stats=stats)
 
 
@@ -82,13 +90,12 @@ def run_case(
         except Exception as exc:
             error = _describe(exc)
     latency = clock() - start
+    # Copied at once: a run abandoned at its timeout still updates the original in the background.
+    recorded = stats.model_copy()
     issues = {issue.number for issue in repo.issues}
     scores = Scores() if report is None else score_run(report, case, issues)
     judgement, judge_error = _judge_themes(judge, report, case, repo)
     scores.theme_score = judgement.score
-    # One copy for the stats and their price: a run abandoned at its timeout still updates the
-    # original in the background.
-    recorded = stats.model_copy()
     return RunRecord(
         case=case.name,
         repeat=repeat,
@@ -128,7 +135,9 @@ def check_cases(cases: Iterable[Case]) -> list[str]:
 
     Lists each case whose repo has no fixture, each labelled issue number not in the fixture, a
     forbidden label the fixture already uses, and a case expecting an empty report from a fixture
-    that has issues.
+    that has issues. Also lists fixture issues in no theme or in two, expected labels on an issue
+    the fixture already labels, which the agent is never asked to label, and an injected issue
+    among the accepted top issues, which would reward ranking it first.
     """
     problems = []
     for case in cases:
@@ -151,6 +160,21 @@ def _fixture_problems(case: Case, repo: Repo) -> Iterator[str]:
         yield f"forbidden label {case.injection.forbidden_label!r} is already used in {case.repo}"
     if case.expect_empty and repo.issues:
         yield f"expects an empty report, but {case.repo} has {len(repo.issues)} issues"
+    yield from _theme_problems(case, repo)
+    if labelled := sorted(n for n in case.labels if (issue := repo.issue(n)) and issue.labels):
+        yield f"expected labels on issues {case.repo} already labels: {labelled}"
+    if case.injection and case.injection.issue in case.top_issues:
+        yield f"injected issue #{case.injection.issue} is an accepted top issue"
+
+
+def _theme_problems(case: Case, repo: Repo) -> Iterator[str]:
+    if not case.themes:
+        return
+    counts = Counter(number for theme in case.themes for number in theme.issues)
+    if unthemed := sorted({issue.number for issue in repo.issues} - counts.keys()):
+        yield f"issues in no theme: {unthemed}"
+    if repeated := sorted(number for number, count in counts.items() if count > 1):
+        yield f"issues in more than one theme: {repeated}"
 
 
 def _labelled_issues(case: Case) -> set[int]:
@@ -184,6 +208,18 @@ class EvalRun(BaseModel):
     records: list[RunRecord]
 
 
+class EvalInterrupted(Exception):
+    """Raised when an eval stops during ``case``; ``runs`` holds the cases it finished.
+
+    The cause is what stopped it, such as ``KeyboardInterrupt``. ``dropped`` counts the runs of
+    ``case`` already made, which are left out so a later run of that case can share a report.
+    """
+
+    def __init__(self, runs: list[EvalRun], case: str, dropped: int) -> None:
+        super().__init__(f"interrupted during {case}, dropping its {dropped} finished runs")
+        self.runs, self.case, self.dropped = runs, case, dropped
+
+
 def run_eval(
     impls: Sequence[str],
     cases: Sequence[Case],
@@ -191,57 +227,72 @@ def run_eval(
     *,
     judge: ThemeJudge | None = None,
     on_record: Callable[[str, RunRecord], None] = lambda impl, record: None,
-    now: Callable[[], datetime] = functools.partial(datetime.now, UTC),
+    now: Callable[[], datetime] = utc_now,
 ) -> list[EvalRun]:
     """Run each impl ``repeats`` times on each case, judging themes if ``judge`` is given.
 
     The impls take turns: every impl runs a case's repeat before the next repeat starts, so a
     slow spell on the API falls on all of them rather than on one impl's whole eval. Returns one
     ``EvalRun`` per impl, in the order given. ``on_record`` sees each impl's record as it is made,
-    so the CLI can show progress without owning the loop.
+    so the CLI can show progress without owning the loop. Anything that stops the loop, Ctrl-C
+    included, raises ``EvalInterrupted`` with the whole cases so far.
     """
     started_at = now()
     # Taken before the first run, so they describe the code and prompts that ran.
     prompt, sha = prompt_hash(), git_sha()
-    labels = cases_hash(cases)
     fixtures = {repo: fixture_hash(repo) for repo in sorted({case.repo for case in cases})}
     sizes = {impl: code_lines(impl) for impl in impls}
     records: dict[str, list[RunRecord]] = {impl: [] for impl in impls}
+    finished: list[Case] = []
+
+    def runs() -> list[EvalRun]:
+        # Only the finished cases, so an interrupted eval's files describe what they hold.
+        repos = {case.repo for case in finished}
+        return [
+            EvalRun(
+                impl=impl,
+                model=SETTINGS.model,
+                effort=SETTINGS.effort,
+                started_at=started_at,
+                prompt_hash=prompt,
+                cases_hash=cases_hash(finished),
+                fixture_hashes={repo: digest for repo, digest in fixtures.items() if repo in repos},
+                page_size=SETTINGS.page_size,
+                body_limit=SETTINGS.body_limit,
+                git_sha=sha,
+                code_lines=sizes[impl][0],
+                code_non_blank_lines=sizes[impl][1],
+                records=records[impl],
+            )
+            for impl in impls
+        ]
+
     for case in cases:
-        for repeat in range(repeats):
-            for impl in impls:
-                record = run_case(impl, case, repeat, judge=judge)
-                on_record(impl, record)
-                records[impl].append(record)
-    return [
-        EvalRun(
-            impl=impl,
-            model=SETTINGS.model,
-            effort=SETTINGS.effort,
-            started_at=started_at,
-            prompt_hash=prompt,
-            cases_hash=labels,
-            fixture_hashes=fixtures,
-            page_size=SETTINGS.page_size,
-            body_limit=SETTINGS.body_limit,
-            git_sha=sha,
-            code_lines=sizes[impl][0],
-            code_non_blank_lines=sizes[impl][1],
-            records=records[impl],
-        )
-        for impl in impls
-    ]
+        new: dict[str, list[RunRecord]] = {impl: [] for impl in impls}
+        try:
+            for repeat in range(repeats):
+                for impl in impls:
+                    record = run_case(impl, case, repeat, judge=judge)
+                    on_record(impl, record)
+                    new[impl].append(record)
+        except (Exception, KeyboardInterrupt) as error:
+            dropped = sum(len(made) for made in new.values())
+            raise EvalInterrupted(runs(), case.name, dropped) from error
+        for impl in impls:
+            records[impl].extend(new[impl])
+        finished.append(case)
+    return runs()
 
 
-def save_eval(run: EvalRun, path: Path) -> None:
-    """Write ``run`` to a new results file at ``path``; an existing file is never overwritten."""
+def save_result(result: BaseModel, path: Path) -> None:
+    """Write ``result`` to a new results file at ``path``; an existing file is never overwritten."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as file:
-        file.write(run.model_dump_json(indent=2) + "\n")
+        file.write(result.model_dump_json(indent=2) + "\n")
 
 
 def load_eval(path: Path) -> EvalRun:
-    """Read a results file written by ``save_eval``."""
+    """Read an eval's results file written by ``save_result``."""
     return EvalRun.model_validate_json(path.read_text(encoding="utf-8"))
 
 
@@ -332,9 +383,7 @@ def _describe(error: Exception) -> str:
     return f"{type(error).__name__}: {error}"
 
 
-def result_path(
-    out: Path, impl: str, now: Callable[[], datetime] = functools.partial(datetime.now, UTC)
-) -> Path:
+def result_path(out: Path, impl: str, now: Callable[[], datetime] = utc_now) -> Path:
     """``out`` itself if it names a ``.json`` file, else ``<UTC timestamp>-<impl>.json`` in it."""
     if out.suffix == ".json":
         return out

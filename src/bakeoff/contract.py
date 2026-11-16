@@ -1,6 +1,7 @@
 """The output every implementation must return. Imports nothing from the project."""
 
 from collections import Counter
+from collections.abc import Iterable
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
@@ -17,8 +18,7 @@ class DuplicatePair(BaseModel):
 
     @model_validator(mode="after")
     def _distinct_issues(self) -> "DuplicatePair":
-        if self.a == self.b:
-            raise ValueError(f"a duplicate pair needs two different issues, got #{self.a} twice")
+        require_distinct(self.a, self.b)
         return self
 
 
@@ -41,8 +41,8 @@ class TriageReport(BaseModel):
     @model_validator(mode="after")
     def _one_suggestion_per_issue(self) -> "TriageReport":
         counts = Counter(suggestion.number for suggestion in self.suggested_labels)
-        if repeated := {number for number, count in counts.items() if count > 1}:
-            raise ValueError(f"repeated issue numbers in label suggestions: {repeated}")
+        if twice := {number for number, count in counts.items() if count > 1}:
+            raise ValueError(f"repeated issue numbers in label suggestions: {twice}")
         return self
 
     def cited_issues(self) -> set[int]:
@@ -87,3 +87,14 @@ def parse_final_reply(text: str, stop_reason: str | None) -> TriageReport:
     if stop_reason in INCOMPLETE_STOPS:
         raise IncompleteReport(f"the final reply stopped at {stop_reason!r}, before a whole report")
     return parse_report(text)
+
+
+def require_distinct(a: int, b: int) -> None:
+    """Raise ``ValueError`` unless a duplicate pair's ``a`` and ``b`` are two different issues."""
+    if a == b:
+        raise ValueError(f"a duplicate pair needs two different issues, got #{a} twice")
+
+
+def repeated[T](values: Iterable[T]) -> list[T]:
+    """The values that occur more than once, sorted."""
+    return sorted(value for value, count in Counter(values).items() if count > 1)

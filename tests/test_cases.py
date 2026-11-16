@@ -1,15 +1,13 @@
 from contextlib import nullcontext
-from pathlib import Path
 
 import pytest
+from helpers import CASES
 from pydantic import ValidationError
 
 from bakeoff.cases import Case, Injection, load_cases
 from bakeoff.contract import Theme
 from bakeoff.runner import check_cases
 from bakeoff.settings import PROJECT_ROOT
-
-CASES = Path(__file__).parent / "fixtures" / "cases.yaml"
 
 
 def test_load_cases_reads_a_labelled_case_from_yaml():
@@ -38,6 +36,21 @@ def test_case_rejects_a_duplicate_pair_of_one_issue(pair, expected):
 def test_load_cases_rejects_repeated_case_names(tmp_path, second, expected):
     path = tmp_path / "cases.yaml"
     path.write_text(f"- {{name: a, repo: tiny}}\n- {{name: {second}, repo: tiny}}\n")
+    with expected:
+        load_cases(path)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("- {name: a, repo: tiny}\n", nullcontext()),
+        ("- name: [unclosed\n", pytest.raises(ValueError, match=r"cases\.yaml is not valid YAML")),
+        ("- {name: a}\n", pytest.raises(ValueError, match=r"cases\.yaml: 1 validation error")),
+    ],
+)
+def test_load_cases_names_the_file_it_cannot_read(tmp_path, text, expected):
+    path = tmp_path / "cases.yaml"
+    path.write_text(text)
     with expected:
         load_cases(path)
 

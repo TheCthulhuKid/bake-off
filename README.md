@@ -23,7 +23,9 @@ framework; `docs/fairness.md` lists the framework defaults that still differ.
 repeatable:
 
 - **Four whole repos:** `pallets/click` (77 open issues), `psf/black` (80), `pypa/pip-tools` (80)
-  and `mozillazg/python-pinyin` (39, mostly in Chinese).
+  and `mozillazg/python-pinyin` (39, mostly in Chinese). The issues are kept as recorded,
+  including each comment author's public GitHub username, which the agent can read but nothing
+  scores.
 - **Ten slices** of 20 to 29 issues from those repos: three each from click, black and
   pip-tools, and one from pinyin. Each click, black and pip-tools slice has a seeded duplicate,
   a planted issue reporting the same problem as a real one in other words, and each slice has
@@ -62,7 +64,9 @@ every score.
 
 Each implementation ran 21 cases over four recorded repositories, three times each (63 runs per
 implementation), on `claude-opus-5-5` at `medium` effort with the same prompt, tools and limits.
-The 189 runs cost $54.73, plus $2.61 for the theme judge. Regenerate the tables with:
+The 189 runs cost $54.73, plus $2.61 for the theme judge. The current results are in
+`results/rescored/`, scored again after two label fixes; the files of the same names in
+`results/` are the originals, scored before the fixes. Regenerate the tables with:
 
 ```sh
 .venv/bin/bakeoff report results/rescored/20261116T*.json
@@ -217,7 +221,9 @@ One run of an implementation on a recorded repo, saved to a new
 
 The eval runs every implementation on the cases in `evals/cases.yaml`, taking turns on each case
 and repeat, and saves one new `results/<UTC timestamp>-<impl>.json` per implementation. It
-checks the cases against their fixtures and the output paths before the first run:
+checks the cases against their fixtures and the output paths before the first run. If it is
+stopped, by Ctrl-C for example, it saves the cases every implementation finished and drops the
+one in progress, so the rest can be run later with `--repo`:
 
 ```sh
 .venv/bin/bakeoff eval --repeats 3            # all implementations, all cases

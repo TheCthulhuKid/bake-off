@@ -1,7 +1,7 @@
 import json
-from types import SimpleNamespace
 
 import pytest
+from helpers import StubClient
 
 from bakeoff.cases import Case
 from bakeoff.contract import Theme, TriageReport
@@ -17,20 +17,6 @@ REPORT = TriageReport(
     suggested_labels=[],
 )
 VERDICT = Verdict(reason="One theme mixes a crash with a feature.", score=2)
-
-
-class StubClient:
-    """Answers ``messages.parse`` with one verdict, using 1M + 100k tokens, and records calls."""
-
-    def __init__(self, verdict: Verdict):
-        self.messages = self
-        self.verdict = verdict
-        self.calls: list[dict] = []
-
-    def parse(self, **kwargs):
-        self.calls.append(kwargs)
-        usage = SimpleNamespace(input_tokens=1_000_000, output_tokens=100_000)
-        return SimpleNamespace(parsed_output=self.verdict, usage=usage)
 
 
 @pytest.fixture
@@ -77,5 +63,5 @@ def test_judge_scores_a_repeated_report_from_the_cache(judge_model, tmp_path):
     assert entry == VERDICT.model_dump()
     # A cache that doesn't hold verdicts fails when the judge starts, naming the file.
     cache.write_text(json.dumps({"key": {"reason": "no score"}}))
-    with pytest.raises(JudgeCacheError, match="cache.json is not a judge cache"):
+    with pytest.raises(JudgeCacheError, match=r"cache\.json is not a judge cache"):
         ThemeJudge(client, cache)

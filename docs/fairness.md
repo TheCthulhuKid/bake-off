@@ -97,9 +97,10 @@ implementation ends the run on it.
   limit and the runner's `max_iterations` are left as they are.
 - The run timeout is the harness's too. `run_case` runs each implementation's `triage` on a
   daemon thread and gives up after `run_timeout` (900 s), the same for all three, recording the
-  run as timed out; the deadline checked before each request stops the abandoned run at its
-  next request. For LangGraph, whose client has no request timeout, this is the only bound on a
-  hung request; for the other two it comes before their clients' second 600 s wait. An
+  run as timed out; the abandoned run stops at its next tool call or request, which both raise
+  once the timeout has fired. For LangGraph, whose client has no request timeout, this is the
+  only bound on a hung request; for the other two it comes before their clients' second 600 s
+  wait. An
   abandoned run is priced up to its last finished reply in all three, since each records its
   usage as each reply arrives.
 
