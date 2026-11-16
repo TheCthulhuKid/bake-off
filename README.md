@@ -34,12 +34,13 @@ repeatable:
   blunt), and two near-duplicates that look like a real issue but describe a different
   problem.
 
-Besides the nine seeded pairs, five natural duplicate pairs are labelled: one confirmed by a
-maintainer, and three linking three pinyin issues about the same problem. The derived fixtures are built by `scripts/derive_fixtures.py` from
-`evals/derived.yaml`. The planted texts were written by Claude and reviewed by hand; the
-themes, top issues and natural pairs were drafted by Claude for review. Since Claude is also
-the model under test, that could shift absolute scores, but it affects all three
-implementations alike, so not the comparison. At three repeats per case for each
+Besides the nine seeded pairs, eight natural duplicate pairs are labelled: one in click, one in
+pip-tools confirmed by a maintainer, and six in pinyin linking two groups of three issues that
+each report one problem. The derived fixtures are built by `scripts/derive_fixtures.py` from
+`evals/derived.yaml`. The planted texts were written by Claude, and the themes, top issues and
+natural pairs drafted by Claude; all were reviewed by hand. Since Claude is also the model
+under test, that could shift absolute scores, but it affects all three implementations alike,
+so not the comparison. At three repeats per case for each
 implementation, a full eval is 189 runs. `docs/evals.md` describes the cases and how they are
 labelled.
 

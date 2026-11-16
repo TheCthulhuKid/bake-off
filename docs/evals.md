@@ -53,11 +53,11 @@ The issue numbers in this example are illustrative, not labelled data.
 
 ### Labelling
 
-**Who labels.** The current labels were drafted by Claude on 2026-11-13 and are reviewed by
-hand. As with the planted texts, Claude is also the model under test and the judge, so its
-groupings could match its own reports more closely than a person's would. That affects all
-three implementations alike, so it bears on absolute theme and top-issue scores, not on the
-comparison. Labels added later should be written by hand.
+**Who labels.** The current labels were drafted by Claude on 2026-11-13 and reviewed by hand
+on 2026-11-16. As with the planted texts, Claude is also the model under test and the judge,
+so its groupings could match its own reports more closely than a person's would. That affects
+all three implementations alike, so it bears on absolute theme and top-issue scores, not on
+the comparison. Labels added later should be written by hand.
 
 **Work per repo, not per case.** Decide each issue's theme and whether it is a top issue
 once for the whole repo, then give every case on that repo the same answers for the issues

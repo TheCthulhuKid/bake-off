@@ -1,7 +1,7 @@
 # Hand-labelled eval cases, one per fixture. Themes, top issues and natural duplicates were
-# drafted by Claude on 2026-11-13 while Marc was ill, from one theme per issue for each repo;
-# review them. Labels, seeded duplicates, injections and notes follow from how the fixtures
-# were built. `docs/evals.md` describes every field and how to choose it.
+# drafted by Claude on 2026-11-13 and reviewed by Marc on 2026-11-16. Labels, seeded
+# duplicates, injections and notes follow from how the fixtures were built. `docs/evals.md`
+# describes every field and how to choose it.
 
 - name: click
   repo: click
@@ -80,16 +80,16 @@
   repo: pinyin
   themes:
     - name: Wrong readings in the dictionary
-      issues: [375, 369, 368, 367, 358, 334, 321, 294, 293, 284, 263, 249]
+      issues: [375, 369, 368, 367, 358, 334, 321, 294, 293, 263]
     - name: Romanisation styles and output formats
-      issues: [365, 355, 304, 280, 247, 245, 244, 144, 84]
+      issues: [365, 355, 304, 284, 280, 247, 245, 244, 144, 84]
     - name: Heteronyms and phrase segmentation
-      issues: [362, 344, 302, 297, 286, 133, 120]
+      issues: [362, 344, 302, 297, 286, 249, 133, 120]
     - name: Tones and tone sandhi
       issues: [359, 316, 270, 246, 221]
     - name: Data sources, ports and related tools
       issues: [342, 307, 233, 212, 184, 43]
-  duplicates: [[316, 359], [246, 316], [246, 359]]
+  duplicates: [[316, 359], [246, 316], [246, 359], [293, 263], [321, 263], [321, 293]]
   top_issues: [375, 369, 359, 334, 321, 316, 302, 270, 263, 249, 221]
 
 - name: click-empty
