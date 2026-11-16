@@ -1,5 +1,6 @@
 """Command-line entry point. Commands handle input and output only."""
 
+from collections import Counter
 from pathlib import Path
 
 import anthropic
@@ -195,6 +196,10 @@ def rescore(files: tuple[Path, ...], cases_path: Path, out: Path) -> None:
     """
     runs = _load_evals(files)
     paths = [out / path.name for path in files]
+    if repeated := sorted(
+        name for name, count in Counter(path.name for path in files).items() if count > 1
+    ):
+        raise click.ClickException(f"files share a name, which their copies would too: {repeated}")
     if taken := [str(path) for path in paths if path.exists()]:
         raise click.ClickException(f"already exists: {', '.join(taken)}")
     try:

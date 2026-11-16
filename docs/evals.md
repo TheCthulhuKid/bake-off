@@ -336,9 +336,10 @@ a lookup of column title, `Summary` field and format. A value with no data print
 
 Combining can't tell whether two files were scored against the same labels, so after a label
 fix, rescore the older files first. `bakeoff rescore FILES... --out DIR` writes each file again
-into `DIR` under its own name, never over an existing file. `runner.rescore(run, cases, judge)`
-scores each record's saved report against the current cases and updates the cases hash. The
-reports, stats and costs stay as they ran. Theme scores are read from the judge's cache by a
+into `DIR` under its own name, never over an existing file, and refuses two files with one
+name before rescoring any. `runner.rescore(run, cases, judge)` scores each record's saved
+report against the current cases and updates the cases hash. The reports, stats and costs
+stay as they ran. Theme scores are read from the judge's cache by a
 `ThemeJudge` with no client, so a rescore never spends: a judged case with no cached verdict,
 because its themes, the model or the rubric changed, raises `RescoreError`, as do a case missing
 from the cases file and a fixture whose hash changed since the run. The cases file must pass

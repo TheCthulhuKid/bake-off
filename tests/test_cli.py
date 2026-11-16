@@ -63,6 +63,12 @@ def test_eval_saves_one_results_file_per_impl(
     again = CliRunner().invoke(main, args)
     assert again.exit_code != 0
     assert "already exists" in again.output
+    # Copies keep their file's name, so two files with one name are refused before any is saved.
+    twice = CliRunner().invoke(main, ["rescore", files[0], files[0], "--out", str(tmp_path / "r")])
+    assert twice.exit_code != 0 and not (tmp_path / "r").exists()
+    assert f"files share a name, which their copies would too: ['{Path(files[0]).name}']" in (
+        twice.output
+    )
     # A case that doesn't match its fixture stops the eval before any model is called.
     bad = tmp_path / "bad.yaml"
     bad.write_text("- {name: stray, repo: tiny, top_issues: [9]}\n")
