@@ -62,7 +62,9 @@ every score.
 
 Each implementation ran 21 cases over four recorded repositories, three times each (63 runs per
 implementation), on `claude-opus-5-5` at `medium` effort with the same prompt, tools and limits.
-The 189 runs cost $54.73, plus $2.61 for the theme judge. Regenerate the tables with:
+The 189 runs cost $54.73, plus $2.61 for the theme judge. The current results are in
+`results/rescored/`, scored again after two label fixes; the files of the same names in
+`results/` are the originals, scored before the fixes. Regenerate the tables with:
 
 ```sh
 .venv/bin/bakeoff report results/rescored/20261116T*.json
