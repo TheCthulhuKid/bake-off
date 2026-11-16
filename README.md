@@ -23,7 +23,9 @@ framework; `docs/fairness.md` lists the framework defaults that still differ.
 repeatable:
 
 - **Four whole repos:** `pallets/click` (77 open issues), `psf/black` (80), `pypa/pip-tools` (80)
-  and `mozillazg/python-pinyin` (39, mostly in Chinese).
+  and `mozillazg/python-pinyin` (39, mostly in Chinese). The issues are kept as recorded,
+  including each comment author's public GitHub username, which the agent can read but nothing
+  scores.
 - **Ten slices** of 20 to 29 issues from those repos: three each from click, black and
   pip-tools, and one from pinyin. Each click, black and pip-tools slice has a seeded duplicate,
   a planted issue reporting the same problem as a real one in other words, and each slice has
