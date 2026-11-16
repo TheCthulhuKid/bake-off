@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 
 import httpx2
+import pytest
 from click.testing import CliRunner
 
 from bakeoff.fixtures import load_repo
@@ -62,3 +63,22 @@ def test_records_issues_skipping_pull_requests_and_pages_through_comments(monkey
     assert len(requested) == len(pages)
     forced = CliRunner().invoke(record_issues.main, ["o/r", "--name", "r", "--force"])
     assert forced.exit_code == 0, forced.output
+
+
+@pytest.mark.parametrize(("limit", "exit_code"), [("1", 0), ("0", 2)])
+def test_record_issues_needs_a_limit_of_at_least_one(monkeypatch, tmp_path, limit, exit_code):
+    monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", tmp_path)
+    issue = {
+        "number": 1,
+        "title": "Crash",
+        "body": "",
+        "labels": [],
+        "state": "open",
+        "comments": 0,
+    }
+    transport = httpx2.MockTransport(lambda request: httpx2.Response(200, json=[issue]))
+    monkeypatch.setattr(
+        record_issues, "_client", functools.partial(record_issues._client, transport)
+    )
+    result = CliRunner().invoke(record_issues.main, ["o/r", "--name", "r", "--limit", limit])
+    assert result.exit_code == exit_code, result.output

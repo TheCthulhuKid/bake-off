@@ -66,7 +66,13 @@ def _author(comment: dict) -> str:
 @click.command()
 @click.argument("source")
 @click.option("--name", required=True, help="Fixture directory name under evals/repos.")
-@click.option("--limit", default=80, show_default=True, help="Maximum issues to record.")
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    default=80,
+    show_default=True,
+    help="Maximum issues to record.",
+)
 @click.option("--force", is_flag=True, help="Replace an existing fixture.")
 def main(source: str, name: str, limit: int, force: bool) -> None:
     """Fetch open issues and comments for SOURCE (owner/repo) into a fixture."""

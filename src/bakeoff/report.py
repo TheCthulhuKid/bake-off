@@ -29,7 +29,9 @@ def combine(runs: Sequence[EvalRun]) -> list[EvalRun]:
 
     So an eval run in parts reports like one. An impl's files must agree on ``SAME_FOR_AN_IMPL``,
     on their run limits and on the hash of any fixture they share, and no case may be in two of
-    them; otherwise ``IncompatibleRuns`` names the impl and what differs.
+    them; otherwise ``IncompatibleRuns`` names the impl and what differs. A merged run keeps the
+    first file's cases hash, commit and start time, which describe that file alone, so read them
+    from each file, as the Runs table does.
     """
     by_impl: dict[str, list[EvalRun]] = {}
     for run in runs:
