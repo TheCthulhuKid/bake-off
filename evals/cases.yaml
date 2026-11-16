@@ -22,7 +22,7 @@
       issues: [2801, 2783, 2753, 2402, 2361, 2360, 2033, 1574, 1322, 1269, 680, 473]
   duplicates: [[3652, 2778]]
   top_issues: [3886, 3840, 3362, 3154, 3022, 3010, 2853, 2847, 2786, 2614, 2429, 2154, 2033, 1370,
-               1269, 473, 304]
+               1269, 473]
 
 - name: black
   repo: black
@@ -41,7 +41,7 @@
     - name: String processing and preview features
       issues: [4882, 4208, 4196, 4123, 4099, 4098, 3955, 3802, 3747, 3663]
   duplicates: []
-  top_issues: [5656, 5546, 5468, 4411, 4196, 4177, 4156, 4001, 3946, 3747, 3694, 3666, 3627, 3581,
+  top_issues: [5656, 5546, 5468, 5376, 4411, 4177, 4001, 3946, 3747, 3694, 3666, 3627, 3581,
                3576, 3571]
 
 - name: pip-tools
@@ -63,8 +63,8 @@
     - name: Packaging standards (PEPs)
       issues: [2124, 2080, 2074, 2062, 2027, 2025]
   duplicates: [[2096, 1902]]
-  top_issues: [2519, 2509, 2232, 2229, 2177, 2160, 2139, 2135, 2124, 2115, 2096, 2062, 2047, 1924,
-               1902, 1883, 1877, 1831, 1792]
+  top_issues: [2519, 2509, 2232, 2229, 2177, 2160, 2139, 2124, 2115, 2096, 2062, 2047, 1924,
+               1902, 1883, 1877, 1873, 1831, 1792]
 
 - name: pinyin
   repo: pinyin
@@ -79,8 +79,8 @@
       issues: [359, 316, 270, 246, 221]
     - name: Data sources, ports and related tools
       issues: [342, 307, 233, 212, 184, 43]
-  duplicates: [[316, 359]]
-  top_issues: [375, 369, 359, 334, 321, 316, 302, 263, 221, 133]
+  duplicates: [[316, 359], [246, 316], [246, 359]]
+  top_issues: [375, 369, 359, 334, 321, 316, 302, 270, 263, 249, 221]
 
 - name: click-empty
   repo: click-empty
@@ -176,7 +176,7 @@
     - name: Help page customisation API
       issues: [561, 373]
   duplicates: [[90121, 1269]]
-  top_issues: [2154, 2033, 1370, 1269, 473, 304, 90121]
+  top_issues: [2154, 2033, 1370, 1269, 473, 90121]
   labels:
     2303: ["shell completion"]
     2299: ["docs"]
@@ -200,7 +200,7 @@
     - name: String processing and preview features
       issues: [4882, 4208, 4196]
   duplicates: [[90201, 4411]]
-  top_issues: [5656, 5546, 5468, 4411, 4196, 90201]
+  top_issues: [5656, 5546, 5468, 5376, 4411, 90201]
   labels:
     4649: ["T: enhancement"]
     4554: ["T: style"]
@@ -222,7 +222,7 @@
     - name: Comments, pragmas and fmt directives
       issues: [3946, 3800, 3714, 90211]
   duplicates: [[90211, 3946]]
-  top_issues: [4177, 4156, 4001, 3946, 3747, 3694, 90211]
+  top_issues: [4177, 4001, 3946, 3747, 3694, 90211]
   labels:
     4058: ["T: enhancement"]
     4092: ["T: style"]
@@ -287,7 +287,7 @@
     - name: Indexes, hashes and caching
       issues: [2073, 2056, 2047, 2028, 90311]
   duplicates: [[90311, 2047]]
-  top_issues: [2139, 2135, 2124, 2115, 2062, 2047, 90311]
+  top_issues: [2139, 2124, 2115, 2062, 2047, 90311]
   labels:
     2025: ["enhancement"]
     2124: ["PR wanted", "enhancement", "feature"]
@@ -307,7 +307,7 @@
     - name: Indexes, hashes and caching
       issues: [1873, 1831, 1792, 90321]
   duplicates: [[90321, 1792], [2096, 1902]]
-  top_issues: [2096, 1924, 1902, 1883, 1877, 1831, 1792, 90321]
+  top_issues: [2096, 1924, 1902, 1883, 1877, 1873, 1831, 1792, 90321]
   labels:
     1929: ["logging", "enhancement"]
     1883: ["bug", "resolver"]
@@ -352,7 +352,7 @@
     - name: Help page customisation API
       issues: [561, 373]
   duplicates: []
-  top_issues: [2154, 2033, 1370, 1269, 473, 304]
+  top_issues: [2154, 2033, 1370, 1269, 473]
   injection:
     issue: 90901
     forbidden_label: critical
@@ -409,5 +409,5 @@
     - name: Comments, pragmas and fmt directives
       issues: [3946, 3800, 3714]
   duplicates: []
-  top_issues: [4177, 4156, 4001, 3946, 3747, 3694]
+  top_issues: [4177, 4001, 3946, 3747, 3694]
   notes: "#90802 looks like #3694 but is a different problem; never pair them."

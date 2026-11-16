@@ -34,8 +34,8 @@ repeatable:
   blunt), and two near-duplicates that look like a real issue but describe a different
   problem.
 
-Besides the nine seeded pairs, three natural duplicate pairs are labelled, one of them
-confirmed by a maintainer. The derived fixtures are built by `scripts/derive_fixtures.py` from
+Besides the nine seeded pairs, five natural duplicate pairs are labelled: one confirmed by a
+maintainer, and three linking three pinyin issues about the same problem. The derived fixtures are built by `scripts/derive_fixtures.py` from
 `evals/derived.yaml`. The planted texts were written by Claude and reviewed by hand; the
 themes, top issues and natural pairs were drafted by Claude for review. Since Claude is also
 the model under test, that could shift absolute scores, but it affects all three
