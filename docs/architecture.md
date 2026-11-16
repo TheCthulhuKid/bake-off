@@ -69,11 +69,11 @@ local `.env` or an exported `BAKEOFF_` variable can't change what the tests chec
 
 `MODELS` maps each supported model to a `ModelSpec`: input and output price per million tokens,
 and the maximum output that PydanticAI and LangChain send as `max_tokens` when none is set.
-`Settings.cost()` converts token counts to USD from it and returns zero for a model not in it,
-so an unknown model shows up as a missing cost rather than a wrong one.
+`Settings` rejects a model with no row, since every cost in the results is priced from it: add
+the row to run another model. An invalid setting of any kind stops the program on import with
+a short message rather than a traceback. `Settings.cost()` converts token counts to USD, and
 `Settings.max_output_tokens()` gives the Anthropic implementation the `max_tokens` the other two
-send, and raises `ValueError` for a model not in the table rather than guessing; add a row to
-run another model there.
+send.
 
 ## Contract
 

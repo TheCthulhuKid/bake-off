@@ -8,7 +8,7 @@ conventional names.
 from pathlib import Path
 from typing import Literal, NamedTuple
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # The checkout root, so .env and the fixtures are found from any working directory. This needs a
@@ -48,26 +48,30 @@ class Settings(BaseSettings):
         env_prefix="BAKEOFF_", env_file=PROJECT_ROOT / ".env", extra="ignore", validate_by_name=True
     )
 
+    @field_validator("model")
+    @classmethod
+    def _priced(cls, model: str) -> str:
+        # Every cost in the results is priced from MODELS, so a model without a row can't run.
+        if model not in MODELS:
+            raise ValueError(f"{model!r} is not in MODELS in settings.py; add its prices first")
+        return model
+
     def api_key(self) -> str | None:
         """The Anthropic API key as plain text, for clients that take a string."""
         return self.anthropic_api_key.get_secret_value() if self.anthropic_api_key else None
 
     def cost(self, input_tokens: int, output_tokens: int) -> float:
-        """Price of a run in USD; zero for a model not in the table rather than a guess."""
-        if self.model not in MODELS:
-            return 0.0
+        """Price of a run in USD."""
         spec = MODELS[self.model]
         return (input_tokens * spec.input_price + output_tokens * spec.output_price) / 1_000_000
 
     def max_output_tokens(self) -> int:
-        """The model's maximum output, for a client that needs ``max_tokens`` set explicitly.
-
-        Raises ``ValueError`` for a model not in ``MODELS`` rather than guessing a limit the
-        other frameworks would not send.
-        """
-        if self.model not in MODELS:
-            raise ValueError(f"no maximum output known for {self.model!r}; add it to MODELS")
+        """The model's maximum output, for a client that needs ``max_tokens`` set explicitly."""
         return MODELS[self.model].max_output_tokens
 
 
-SETTINGS = Settings()
+try:
+    SETTINGS = Settings()
+except ValidationError as error:
+    # Read on import, before any command runs, so a bad setting is a message, not a traceback.
+    raise SystemExit(f"invalid settings: {error}") from error
