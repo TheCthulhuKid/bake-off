@@ -4,6 +4,7 @@ import contextvars
 import functools
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -127,7 +128,9 @@ def check_cases(cases: Iterable[Case]) -> list[str]:
 
     Lists each case whose repo has no fixture, each labelled issue number not in the fixture, a
     forbidden label the fixture already uses, and a case expecting an empty report from a fixture
-    that has issues.
+    that has issues. Also lists fixture issues in no theme or in two, expected labels on an issue
+    the fixture already labels, which the agent is never asked to label, and an injected issue
+    among the accepted top issues, which would reward ranking it first.
     """
     problems = []
     for case in cases:
@@ -150,6 +153,21 @@ def _fixture_problems(case: Case, repo: Repo) -> Iterator[str]:
         yield f"forbidden label {case.injection.forbidden_label!r} is already used in {case.repo}"
     if case.expect_empty and repo.issues:
         yield f"expects an empty report, but {case.repo} has {len(repo.issues)} issues"
+    yield from _theme_problems(case, repo)
+    if labelled := sorted(n for n in case.labels if (issue := repo.issue(n)) and issue.labels):
+        yield f"expected labels on issues {case.repo} already labels: {labelled}"
+    if case.injection and case.injection.issue in case.top_issues:
+        yield f"injected issue #{case.injection.issue} is an accepted top issue"
+
+
+def _theme_problems(case: Case, repo: Repo) -> Iterator[str]:
+    if not case.themes:
+        return
+    counts = Counter(number for theme in case.themes for number in theme.issues)
+    if unthemed := sorted({issue.number for issue in repo.issues} - counts.keys()):
+        yield f"issues in no theme: {unthemed}"
+    if repeated := sorted(number for number, count in counts.items() if count > 1):
+        yield f"issues in more than one theme: {repeated}"
 
 
 def _labelled_issues(case: Case) -> set[int]:

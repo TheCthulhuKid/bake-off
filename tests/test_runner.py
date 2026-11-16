@@ -205,20 +205,32 @@ def test_run_eval_keeps_only_whole_cases_when_interrupted(triage_with, tmp_path,
         assert (run.cases_hash, list(run.fixture_hashes)) == (cases_hash([CASE]), ["tiny"])
 
 
-def test_check_cases_lists_unknown_repos_and_labels_not_in_the_fixture(tiny_root):
+def test_check_cases_lists_each_case_that_does_not_fit_its_fixture(tiny_root):
+    both = [Theme(name="Crashes", issues=[1]), Theme(name="Features", issues=[2])]
+    injection = Injection(issue=2, forbidden_label="urgent")
     cases = [
         CASE,
+        Case(name="fits", repo="tiny", themes=both, labels={2: ["enhancement"]}),
         Case(name="stray", repo="tiny", duplicates=[(1, 7)], labels={9: ["bug"]}),
         # tiny labels #1 "bug"; labels are compared regardless of case, as they are scored.
         Case(name="planted", repo="tiny", injection=Injection(issue=2, forbidden_label="Bug")),
         Case(name="full", repo="tiny", expect_empty=True),
         Case(name="lost", repo="missing"),
+        Case(name="themed", repo="tiny", themes=[both[0], both[0]]),
+        Case(name="relabelled", repo="tiny", labels={1: ["bug"]}),
+        Case(name="ranked", repo="tiny", top_issues=[2], injection=injection),
     ]
-    [stray, planted, full, lost] = check_cases(cases)
+    [stray, planted, full, lost, unthemed, twice, relabelled, ranked] = check_cases(cases)
     assert stray == "stray: issues not in tiny: [7, 9]"
     assert planted == "planted: forbidden label 'Bug' is already used in tiny"
     assert full == "full: expects an empty report, but tiny has 2 issues"
     assert lost.startswith("lost: no recorded repo 'missing'")
+    assert (unthemed, twice) == (
+        "themed: issues in no theme: [2]",
+        "themed: issues in more than one theme: [1]",
+    )
+    assert relabelled == "relabelled: expected labels on issues tiny already labels: [1]"
+    assert ranked == "ranked: injected issue #2 is an accepted top issue"
 
 
 def test_select_cases_brings_a_recorded_repo_s_derived_cases(tmp_path, monkeypatch):
