@@ -328,9 +328,10 @@ The Runs table has a row per file, so each file's provenance shows; the other ta
 per implementation. `report.combine(runs)` merges an implementation's files into one `EvalRun`,
 so an eval run in parts, such as one repo at a time, reports as one. The files must agree on
 `SAME_FOR_AN_IMPL` (model, effort, prompt hash, page size, body limit and the implementation's
-code size, which stands in for its code being unchanged) and on the hash of any fixture they
-share, and no case may be in two of them; otherwise `IncompatibleRuns` names the
-implementation and what differs, and the command fails. The cases hash and commit may differ,
+code size, which stands in for its code being unchanged), on the run limits in their records'
+stats (tool-call cap, request cap and timeout) and on the hash of any fixture they share, and
+no case may be in two of them; otherwise `IncompatibleRuns` names the implementation and what
+differs, and the command fails. The cases hash and commit may differ,
 since each part selects its own cases. `report.summarise(run)` turns one `EvalRun` into a
 `Summary`, a field per column, and `report.render(runs)` lays the summaries out from `TABLES`,
 a lookup of column title, `Summary` field and format. A value with no data prints as `n/a`.

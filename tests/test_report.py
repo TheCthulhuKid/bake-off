@@ -9,7 +9,7 @@ from bakeoff.scoring import Scores
 from bakeoff.telemetry import RunStats
 
 
-def _run(case: str, theme_score: int, **changes) -> EvalRun:
+def _run(case: str, theme_score: int, timeout: float = 900, **changes) -> EvalRun:
     """An anthropic results file with one run on ``case``."""
     record = RunRecord(
         case=case,
@@ -17,7 +17,7 @@ def _run(case: str, theme_score: int, **changes) -> EvalRun:
         report=None,
         error=None,
         schema_valid=True,
-        stats=RunStats(max_tool_calls=25, max_model_requests=40, timeout=900),
+        stats=RunStats(max_tool_calls=25, max_model_requests=40, timeout=timeout),
         latency_seconds=1.0,
         cost_usd=0.1,
         scores=Scores(theme_score=theme_score),
@@ -49,6 +49,7 @@ def _run(case: str, theme_score: int, **changes) -> EvalRun:
         ("tiny-later", {}, None),
         ("tiny-later", {"prompt_hash": "0123456789ab"}, "anthropic: files differ in prompt_hash"),
         ("tiny-later", {"fixture_hashes": {"tiny": "0123456789ab"}}, "different versions of tiny"),
+        ("tiny-later", {"timeout": 60}, "anthropic: files differ in run limits"),
         ("tiny-first", {}, "cases in more than one file: ['tiny-first']"),
     ],
 )

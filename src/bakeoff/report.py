@@ -27,9 +27,9 @@ class IncompatibleRuns(ValueError):
 def combine(runs: Sequence[EvalRun]) -> list[EvalRun]:
     """One run per implementation, in the order first seen, holding all its files' records.
 
-    So an eval run in parts reports like one. An impl's files must agree on ``SAME_FOR_AN_IMPL``
-    and on the hash of any fixture they share, and no case may be in two of them; otherwise
-    ``IncompatibleRuns`` names the impl and what differs.
+    So an eval run in parts reports like one. An impl's files must agree on ``SAME_FOR_AN_IMPL``,
+    on their run limits and on the hash of any fixture they share, and no case may be in two of
+    them; otherwise ``IncompatibleRuns`` names the impl and what differs.
     """
     by_impl: dict[str, list[EvalRun]] = {}
     for run in runs:
@@ -43,6 +43,16 @@ def _merge(impl: str, group: list[EvalRun]) -> EvalRun:
         for field in SAME_FOR_AN_IMPL:
             if (theirs := getattr(run, field)) != (ours := getattr(first, field)):
                 raise IncompatibleRuns(f"{impl}: files differ in {field}: {ours} and {theirs}")
+    # The request cap and timeout aren't in the prompt, so only the records' stats carry them.
+    limits = {
+        (record.stats.max_tool_calls, record.stats.max_model_requests, record.stats.timeout)
+        for run in group
+        for record in run.records
+    }
+    if len(limits) > 1:
+        raise IncompatibleRuns(
+            f"{impl}: files differ in run limits (tool calls, requests, timeout): {sorted(limits)}"
+        )
     fixtures: dict[str, str] = {}
     seen: set[str] = set()
     for run in group:
