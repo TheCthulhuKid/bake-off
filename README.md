@@ -34,7 +34,7 @@ repeatable:
   blunt), and two near-duplicates that look like a real issue but describe a different
   problem.
 
-Besides the nine seeded pairs, eight natural duplicate pairs are labelled: one in click, one in
+Besides the nine seeded pairs, nine natural duplicate pairs are labelled: two in click, one in
 pip-tools confirmed by a maintainer, and six in pinyin linking two groups of three issues that
 each report one problem. The derived fixtures are built by `scripts/derive_fixtures.py` from
 `evals/derived.yaml`. The planted texts were written by Claude, and the themes, top issues and
