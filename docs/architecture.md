@@ -109,8 +109,9 @@ caller, the tools included, at `tests/fixtures/` with one monkeypatch. A fixture
 single directory name: `fixture_path` rejects `..`, path separators and absolute paths with
 `UnknownRepoError`. The tools pass the model's repo argument straight through, and issue text is
 untrusted, so without this a prompt injection could point a tool at an `issues.json` outside the
-fixture root; with it, the tool returns its usual "does not exist" error. The recording script
-writes through the same function, so it can't write outside the root either.
+fixture root; with it, the tool returns its usual "does not exist" error. Both scripts write
+with `fixtures.save_fixture(repo)`, which goes through the same function, so they can't write
+outside the root either.
 
 `scripts/record_issues.py` writes fixtures from the GitHub REST API, skipping pull requests,
 and is run by hand. It uses `httpx2`, which is in the dev dependency group, so it needs
@@ -335,3 +336,8 @@ The tool runner talks HTTP through its client, so the `anthropic_model` fixture 
 `anthropic.Anthropic` over `ScriptedTransport`, an `httpx2.MockTransport` that answers with
 scripted streamed replies and records each request body, in place of the module-level
 `client`. A test of this implementation must use the fixture.
+
+`tests/helpers.py` holds plain values and helpers, not pytest fixtures, that several test
+modules share: the paths of the test fixtures and cases file, `load_script` for the scripts under
+`scripts/`, which aren't in the package, and `StubClient`, which stands in for the judge's
+Anthropic client.

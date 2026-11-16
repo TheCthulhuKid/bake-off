@@ -1,10 +1,10 @@
 import json
 import os
-from pathlib import Path
 
 import anthropic
 import httpx2
 import pytest
+from helpers import FIXTURES
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -179,7 +179,7 @@ class ScriptedTransport(httpx2.MockTransport):
 @pytest.fixture
 def tiny_root(monkeypatch):
     """Point every fixture lookup, the tools included, at ``tests/fixtures``."""
-    monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", Path(__file__).parent / "fixtures")
+    monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", FIXTURES)
 
 
 @pytest.fixture

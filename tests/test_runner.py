@@ -1,14 +1,13 @@
 import shutil
 import threading
 from datetime import UTC, datetime
-from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
+from helpers import FIXTURES, StubClient
 
 from bakeoff.cases import Case, Injection
 from bakeoff.contract import DuplicatePair, InvalidReport, Theme, TopIssue, TriageReport
-from bakeoff.fixtures import Repo, UnknownRepoError
+from bakeoff.fixtures import Repo, UnknownRepoError, save_fixture
 from bakeoff.judge import Judgement, ThemeJudge, Verdict
 from bakeoff.provenance import cases_hash, code_lines, fixture_hash, prompt_hash
 from bakeoff.runner import (
@@ -192,7 +191,7 @@ def test_run_eval_interleaves_the_impls_and_saves_each_once(triage_with, tmp_pat
 def test_run_eval_keeps_only_whole_cases_when_interrupted(triage_with, tmp_path, monkeypatch):
     # A second fixture, so the saved files can be seen to leave out the unfinished case's repo.
     for name in ("tiny", "other"):
-        shutil.copytree(Path(__file__).parent / "fixtures" / "tiny", tmp_path / name)
+        shutil.copytree(FIXTURES / "tiny", tmp_path / name)
     monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", tmp_path)
     calls = []
 
@@ -245,17 +244,14 @@ def test_check_cases_lists_each_case_that_does_not_fit_its_fixture(tiny_root):
 
 def test_select_cases_brings_a_recorded_repo_s_derived_cases(tmp_path, monkeypatch):
     monkeypatch.setattr("bakeoff.fixtures.FIXTURE_ROOT", tmp_path)
-    tiny = Repo.model_validate_json(
-        (Path(__file__).parent / "fixtures" / "tiny" / "issues.json").read_text()
-    )
+    tiny = Repo.model_validate_json((FIXTURES / "tiny" / "issues.json").read_text())
     fixtures = {
         "tiny": tiny,
         "tiny-slice": tiny.model_copy(update={"name": "tiny-slice", "synthetic": True}),
         "other": tiny.model_copy(update={"name": "other", "source": "example/other"}),
     }
-    for name, repo in fixtures.items():
-        (tmp_path / name).mkdir()
-        (tmp_path / name / "issues.json").write_text(repo.model_dump_json())
+    for repo in fixtures.values():
+        save_fixture(repo)
     cases = [Case(name=name, repo=name) for name in fixtures]
     assert [case.name for case in select_cases(cases, ["tiny"])] == ["tiny", "tiny-slice"]
     assert [case.name for case in select_cases(cases, ["tiny-slice"])] == ["tiny-slice"]
@@ -272,11 +268,7 @@ def test_rescore_updates_scores_from_current_labels_and_keeps_theme_scores(triag
         suggested_labels=[],
     )
     triage_with(lambda repo: report)
-    verdict = SimpleNamespace(
-        parsed_output=Verdict(reason="Clear.", score=4),
-        usage=SimpleNamespace(input_tokens=1, output_tokens=1),
-    )
-    client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **kwargs: verdict))
+    client = StubClient(Verdict(reason="Clear.", score=4))
     cache = tmp_path / "cache.json"
     case = Case(name="tiny-pair", repo="tiny", themes=themes, duplicates=[])
     [run] = run_eval(["anthropic"], [case], repeats=1, judge=ThemeJudge(client, cache))

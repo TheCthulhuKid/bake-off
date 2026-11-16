@@ -13,7 +13,7 @@ import yaml
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from bakeoff.contract import repeated
-from bakeoff.fixtures import Issue, Repo, fixture_path, load_repo
+from bakeoff.fixtures import Issue, Repo, fixture_path, load_repo, save_fixture
 from bakeoff.settings import PROJECT_ROOT
 
 SPEC = PROJECT_ROOT / "evals" / "derived.yaml"
@@ -150,9 +150,7 @@ def write(repo: Repo) -> Path:
     path = fixture_path(repo.name)
     if path.exists() and not load_repo(repo.name).synthetic:
         raise ValueError(f"{path} is a recorded fixture; a derived one never replaces it")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(repo.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    return path
+    return save_fixture(repo)
 
 
 def _check_known(numbers: list[int], issues: list[Issue]) -> None:

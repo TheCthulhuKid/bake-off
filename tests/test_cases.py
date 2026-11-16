@@ -1,15 +1,13 @@
 from contextlib import nullcontext
-from pathlib import Path
 
 import pytest
+from helpers import CASES
 from pydantic import ValidationError
 
 from bakeoff.cases import Case, Injection, load_cases
 from bakeoff.contract import Theme
 from bakeoff.runner import check_cases
 from bakeoff.settings import PROJECT_ROOT
-
-CASES = Path(__file__).parent / "fixtures" / "cases.yaml"
 
 
 def test_load_cases_reads_a_labelled_case_from_yaml():

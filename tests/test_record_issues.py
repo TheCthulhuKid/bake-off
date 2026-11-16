@@ -1,17 +1,13 @@
 import functools
-import importlib.util
-from pathlib import Path
 
 import httpx2
 import pytest
 from click.testing import CliRunner
+from helpers import load_script
 
 from bakeoff.fixtures import load_repo
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "record_issues.py"
-spec = importlib.util.spec_from_file_location("record_issues", SCRIPT)
-record_issues = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(record_issues)
+record_issues = load_script("record_issues")
 
 
 def test_records_issues_skipping_pull_requests_and_pages_through_comments(monkeypatch, tmp_path):

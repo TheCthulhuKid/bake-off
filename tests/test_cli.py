@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
+from helpers import CASES
 
 from bakeoff import runner
 from bakeoff.cli import main
@@ -23,9 +24,6 @@ def test_run_prints_and_saves_the_result_without_overwriting(pydanticai_model, t
     again = CliRunner().invoke(main, ["run", "pydanticai", "tiny", "--out", str(out)])
     assert again.exit_code != 0
     assert "already exists" in again.output
-
-
-CASES = Path(__file__).parent / "fixtures" / "cases.yaml"
 
 
 @pytest.fixture

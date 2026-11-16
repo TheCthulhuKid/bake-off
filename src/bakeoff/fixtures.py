@@ -58,3 +58,11 @@ def load_repo(name: str) -> Repo:
     if not path.is_file():
         raise UnknownRepoError(f"no recorded repo {name!r} under {FIXTURE_ROOT}")
     return Repo.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def save_fixture(repo: Repo) -> Path:
+    """Write ``repo`` as the fixture named ``repo.name``, replacing any file there."""
+    path = fixture_path(repo.name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(repo.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return path
