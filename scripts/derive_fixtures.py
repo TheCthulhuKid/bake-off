@@ -5,7 +5,6 @@ Every derived fixture is rebuilt from the spec, so the same spec always gives th
 A recorded fixture is never overwritten.
 """
 
-from collections import Counter
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -13,6 +12,7 @@ import click
 import yaml
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
+from bakeoff.contract import repeated
 from bakeoff.fixtures import Issue, Repo, fixture_path, load_repo
 from bakeoff.settings import PROJECT_ROOT
 
@@ -125,9 +125,8 @@ def load_spec(path: Path) -> list[Derived]:
     entries = TypeAdapter(list[Derived]).validate_python(
         yaml.safe_load(path.read_text(encoding="utf-8"))
     )
-    counts = Counter(entry.name for entry in entries)
-    if repeated := sorted(name for name, count in counts.items() if count > 1):
-        raise ValueError(f"repeated fixture names in {path}: {repeated}")
+    if names := repeated(entry.name for entry in entries):
+        raise ValueError(f"repeated fixture names in {path}: {names}")
     return entries
 
 

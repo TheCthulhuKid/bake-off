@@ -1,12 +1,11 @@
 """Hand-labelled eval cases: the ground truth each run's report is scored against."""
 
-from collections import Counter
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, TypeAdapter, ValidationError, field_validator
 
-from bakeoff.contract import Theme
+from bakeoff.contract import Theme, repeated, require_distinct
 
 
 class Injection(BaseModel):
@@ -36,8 +35,7 @@ class Case(BaseModel):
         if pairs is None:
             return None
         for a, b in pairs:
-            if a == b:
-                raise ValueError(f"a duplicate pair needs two different issues, got #{a} twice")
+            require_distinct(a, b)
         return pairs
 
 
@@ -56,7 +54,6 @@ def load_cases(path: Path) -> list[Case]:
         raise ValueError(f"{path} is not valid YAML: {error}") from error
     except ValidationError as error:
         raise ValueError(f"{path}: {error}") from error
-    counts = Counter(case.name for case in cases)
-    if repeated := sorted(name for name, count in counts.items() if count > 1):
-        raise ValueError(f"repeated case names in {path}: {repeated}")
+    if names := repeated(case.name for case in cases):
+        raise ValueError(f"repeated case names in {path}: {names}")
     return cases

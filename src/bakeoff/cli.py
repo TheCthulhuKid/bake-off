@@ -1,6 +1,5 @@
 """Command-line entry point. Commands handle input and output only."""
 
-from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -8,6 +7,7 @@ import anthropic
 import click
 
 from bakeoff.cases import Case, load_cases
+from bakeoff.contract import repeated
 from bakeoff.fixtures import UnknownRepoError
 from bakeoff.impls import IMPLS
 from bakeoff.judge import JudgeCacheError, ThemeJudge
@@ -174,10 +174,8 @@ def rescore(files: tuple[Path, ...], cases_path: Path, out: Path) -> None:
     """
     runs = _load_evals(files)
     paths = [out / path.name for path in files]
-    if repeated := sorted(
-        name for name, count in Counter(path.name for path in files).items() if count > 1
-    ):
-        raise click.ClickException(f"files share a name, which their copies would too: {repeated}")
+    if names := repeated(path.name for path in files):
+        raise click.ClickException(f"files share a name, which their copies would too: {names}")
     _refuse_existing(paths)
     cases = _load_checked_cases(cases_path)
     judge = _theme_judge(None)
