@@ -27,23 +27,23 @@ def test_report_round_trips_and_cites_every_number():
     assert report.cited_issues() == {1, 2, 3, 4, 5}
 
 
-def test_report_rejects_too_many_top_issues_self_pairs_and_repeated_labels():
-    with pytest.raises(ValidationError):
-        TriageReport(
-            themes=[],
-            duplicates=[],
-            top_issues=[TopIssue(number=n, reason="x") for n in range(6)],
-            suggested_labels=[],
-        )
-    with pytest.raises(ValidationError):
-        DuplicatePair(a=7, b=7, reason="same issue")
-    with pytest.raises(ValidationError):
-        TriageReport(
-            themes=[],
-            duplicates=[],
-            top_issues=[],
-            suggested_labels=[LabelSuggestion(number=7, labels=[])] * 2,
-        )
+@pytest.mark.parametrize(
+    ("b", "expected"),
+    [(8, nullcontext()), (7, pytest.raises(ValidationError, match="two different issues"))],
+)
+def test_duplicate_pair_rejects_an_issue_paired_with_itself(b, expected):
+    with expected:
+        DuplicatePair(a=7, b=b, reason="same crash")
+
+
+@pytest.mark.parametrize(
+    ("second", "expected"),
+    [(8, nullcontext()), (7, pytest.raises(ValidationError, match="repeated issue numbers"))],
+)
+def test_report_rejects_two_label_suggestions_for_one_issue(second, expected):
+    suggestions = [LabelSuggestion(number=7, labels=[]), LabelSuggestion(number=second, labels=[])]
+    with expected:
+        TriageReport(themes=[], duplicates=[], top_issues=[], suggested_labels=suggestions)
 
 
 @pytest.mark.parametrize(

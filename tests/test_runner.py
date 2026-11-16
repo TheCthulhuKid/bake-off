@@ -132,7 +132,7 @@ def test_run_once_gives_up_on_a_run_past_its_timeout(triage_with, monkeypatch):
     monkeypatch.setattr(SETTINGS, "run_timeout", 0.05)
     release = threading.Event()
     triage_with(lambda repo: release.wait(5) and REPORT)
-    with pytest.raises(RunLimitExceeded, match="run timeout of 0.05 s reached"):
+    with pytest.raises(RunLimitExceeded, match=r"run timeout of 0\.05 s reached"):
         run_once("fake", "tiny")
     release.set()
 

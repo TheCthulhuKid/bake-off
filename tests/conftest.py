@@ -18,7 +18,7 @@ from bakeoff.contract import LabelSuggestion, Theme, TopIssue, TriageReport
 # Set before bakeoff.settings is imported, so clients build without a real key.
 os.environ["ANTHROPIC_API_KEY"] = "test-key"
 
-from bakeoff.settings import SETTINGS, Settings  # noqa: E402
+from bakeoff.settings import SETTINGS, Settings
 
 # A local .env or an exported BAKEOFF_ variable must not change what the tests check, so every
 # setting but the test key goes back to its default. This runs before any test imports

@@ -63,5 +63,5 @@ def test_judge_scores_a_repeated_report_from_the_cache(judge_model, tmp_path):
     assert entry == VERDICT.model_dump()
     # A cache that doesn't hold verdicts fails when the judge starts, naming the file.
     cache.write_text(json.dumps({"key": {"reason": "no score"}}))
-    with pytest.raises(JudgeCacheError, match="cache.json is not a judge cache"):
+    with pytest.raises(JudgeCacheError, match=r"cache\.json is not a judge cache"):
         ThemeJudge(client, cache)
