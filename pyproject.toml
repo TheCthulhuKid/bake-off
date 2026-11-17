@@ -26,6 +26,9 @@ dev = [
     "pytest-xdist>=3.8.0",
     "ruff>=0.17.3",
 ]
+plots = [
+    "matplotlib>=3.11.2",
+]
 
 [build-system]
 requires = ["hatchling"]
