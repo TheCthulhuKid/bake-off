@@ -23,8 +23,9 @@ evals/
   cases.yaml       hand-labelled ground truth per case
   judge-cache.json the judge's verdicts, created by the first judged eval
 results/           saved runs, never overwritten
-scripts/           record_issues.py, which records a fixture from GitHub, and
-                   derive_fixtures.py, which builds the derived fixtures from recorded ones
+scripts/           record_issues.py, which records a fixture from GitHub,
+                   derive_fixtures.py, which builds the derived fixtures from recorded ones, and
+                   plot_results.py, which draws the README's charts from results files
 tests/             offline; frameworks run against fake models
 ```
 
@@ -128,6 +129,13 @@ is run by hand after editing the spec, and rebuilds every derived fixture, so th
 always gives the same files. It never replaces a recorded fixture. A test rebuilds them all
 into a temporary root and compares the bytes with the committed ones, so the spec and the
 fixtures can't drift apart.
+
+`scripts/plot_results.py` draws the README's two charts from results files, combined per
+implementation by `report.combine` as `bakeoff report` combines them, into `docs/img/`. It needs
+matplotlib, which is in the optional `plots` dependency group, so it imports it only when
+drawing. The tests and CI run without that group and test only `case_scores`, which arranges
+each case's scores by repeat. A fixed SVG hash salt and no date in the metadata make a redraw of
+the same files give the same bytes, so the images only change in a diff when the results do.
 
 ## Tools and telemetry
 
@@ -339,5 +347,5 @@ scripted streamed replies and records each request body, in place of the module-
 
 `tests/helpers.py` holds plain values and helpers, not pytest fixtures, that several test
 modules share: the paths of the test fixtures and cases file, `load_script` for the scripts under
-`scripts/`, which aren't in the package, and `StubClient`, which stands in for the judge's
-Anthropic client.
+`scripts/`, which aren't in the package, `eval_run`, which builds a results file with one
+run, and `StubClient`, which stands in for the judge's Anthropic client.

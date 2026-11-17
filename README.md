@@ -115,6 +115,9 @@ returned an empty report for the empty repo. None of these tell the frameworks a
 LangGraph costs about 1.6 times as much per run as the other two and takes about 60% longer.
 PydanticAI and the tool runner are level on cost and latency.
 
+![Cost against latency, one dot per run: LangGraph's runs sit higher and further right, and
+PydanticAI's and the tool runner's overlap](docs/img/cost-latency.svg)
+
 ### Spread between repeats
 
 The same case run three times by the same implementation doesn't give the same scores:
@@ -129,6 +132,13 @@ The same case run three times by the same implementation doesn't give the same s
 
 Taken together, only two differences are larger than the spread: LangGraph's cost and latency,
 and its steadier label suggestions. The duplicate, top-issue and theme gaps are within it.
+
+The chart shows every run's score on each case, a lane per implementation. A line joins a
+case's three repeats, from lowest to highest, and the top row is the mean over all cases.
+Where a case's lines are wider than the gaps between its lanes, the gap is noise.
+
+![Duplicate recall, label hit rate, top-issue precision and theme score per case, with each
+repeat shown](docs/img/scores-by-case.svg)
 
 ### What explains the differences
 
@@ -245,6 +255,14 @@ An eval run in parts reports as one: an implementation's files share a row, as l
 ran with the same model, prompt and settings on different cases. After a label fix, `bakeoff
 rescore FILES... --out DIR` scores saved runs again against the current cases into new files,
 offline: the reports stay, and theme scores come from the judge's cache.
+
+The two charts above are drawn from the same files with matplotlib, which is in the optional
+`plots` dependency group. They are written to `docs/img/`, replacing the earlier drawings:
+
+```sh
+uv sync --locked --group dev --group plots
+.venv/bin/python scripts/plot_results.py results/rescored/20261116T*.json
+```
 
 `docs/evals.md` describes the cases, the scores, the results files and the report.
 
